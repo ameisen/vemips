@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <RemoteExecutable>mipsc</RemoteExecutable>
+    <DebuggerFlavor>LocalDebugger</DebuggerFlavor>
+    <LocalExecutable>$(VEMIPS_SDK)\vemips.exe</LocalExecutable>
+    <LocalDebuggerExecutable>$(VEMIPS_SDK)\mipsdbg.exe</LocalDebuggerExecutable>
+    <LocalDebuggerServerAddress>localhost:21212</LocalDebuggerServerAddress>
+    <LocalExecutableArguments>$(ProjectDir)$(ProjectName).bin</LocalExecutableArguments>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <RemoteExecutable>D:\Projects\vemips\out\x64\Release\vemips.exe</RemoteExecutable>
+    <DebuggerFlavor>LocalDebugger</DebuggerFlavor>
+    <LocalExecutable>$(VEMIPS_SDK)\vemips.exe</LocalExecutable>
+    <LocalDebuggerExecutable>$(VEMIPS_SDK)\mipsdbg.exe</LocalDebuggerExecutable>
+    <LocalDebuggerServerAddress>localhost:21212</LocalDebuggerServerAddress>
+    <RemoteDebuggerExecutable>D:\Tools\MIPS\lldb-mi.exe</RemoteDebuggerExecutable>
+    <SecureShellExecutable>D:\Tools\MIPS\ssh\ssh.exe</SecureShellExecutable>
+    <RemoteHostName>localhost:2159</RemoteHostName>
+    <RemoteExecutableArguments>$(ProjectName).bin</RemoteExecutableArguments>
+    <LocalExecutableArguments>$(ProjectDir)$(ProjectName).bin</LocalExecutableArguments>
+  </PropertyGroup>
+</Project>

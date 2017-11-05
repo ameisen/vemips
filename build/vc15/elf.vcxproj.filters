@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="..\..\src\common.hpp" />
+    <ClInclude Include="..\..\src\elf\pch.hpp" />
+    <ClInclude Include="..\..\src\elf\elf.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\elf\pch.cpp" />
+    <ClCompile Include="..\..\src\elf\elf.cpp" />
+  </ItemGroup>
+</Project>

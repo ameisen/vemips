@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="tinyxml2\tinyxml2.cpp">
+      <Filter>tinyxml2</Filter>
+    </ClCompile>
+    <ClCompile Include="project\vc_project.cpp">
+      <Filter>project</Filter>
+    </ClCompile>
+    <ClCompile Include="project\project.cpp">
+      <Filter>project</Filter>
+    </ClCompile>
+    <ClCompile Include="parser\c_parser.cpp">
+      <Filter>parser</Filter>
+    </ClCompile>
+    <ClCompile Include="build\build.cpp">
+      <Filter>build</Filter>
+    </ClCompile>
+    <ClCompile Include="fileutils\win32\fileutils_win32.cpp">
+      <Filter>fileutils\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="async\task.cpp">
+      <Filter>async</Filter>
+    </ClCompile>
+    <ClCompile Include="process\win32\process_win32.cpp">
+      <Filter>process\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="toolchain\clang.cpp">
+      <Filter>toolchain</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="tinyxml2">
+      <UniqueIdentifier>{508d4569-86dc-45e5-a936-9896de2e3221}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="project">
+      <UniqueIdentifier>{d7bfd5eb-aeb4-467f-801c-89f705e74631}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="parser">
+      <UniqueIdentifier>{4598779c-1af4-43eb-8cfe-f9643777e4f0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="build">
+      <UniqueIdentifier>{3f169fe0-b9e9-4d33-806b-0e07d27b4705}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fileutils">
+      <UniqueIdentifier>{2940e4f2-dfc7-4454-ab44-b81bd5fa26aa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="fileutils\win32">
+      <UniqueIdentifier>{c22b5e8d-a34e-4d23-8e34-6c2b4aeca61b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="async">
+      <UniqueIdentifier>{b722ec01-ec43-4333-921a-c2d42c909b63}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="process">
+      <UniqueIdentifier>{1f6dfaad-8fe5-487a-a67a-d816ff71ab0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="process\win32">
+      <UniqueIdentifier>{cf8baa46-8612-43b1-91a0-29f27cfb3062}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="toolchain">
+      <UniqueIdentifier>{925e2f0c-ecc6-47c8-a6c5-a3d2ff8bd77e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="tinyxml2\tinyxml2.h">
+      <Filter>tinyxml2</Filter>
+    </ClInclude>
+    <ClInclude Include="project\vc_project.hpp">
+      <Filter>project</Filter>
+    </ClInclude>
+    <ClInclude Include="project\project.hpp">
+      <Filter>project</Filter>
+    </ClInclude>
+    <ClInclude Include="platform.hpp" />
+    <ClInclude Include="parser\c_parser.hpp">
+      <Filter>parser</Filter>
+    </ClInclude>
+    <ClInclude Include="build\build.hpp">
+      <Filter>build</Filter>
+    </ClInclude>
+    <ClInclude Include="fileutils\fileutils.hpp">
+      <Filter>fileutils</Filter>
+    </ClInclude>
+    <ClInclude Include="fileutils\win32\fileutils_win32.hpp">
+      <Filter>fileutils\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="async\task.hpp">
+      <Filter>async</Filter>
+    </ClInclude>
+    <ClInclude Include="configuration.hpp" />
+    <ClInclude Include="process\process.hpp">
+      <Filter>process</Filter>
+    </ClInclude>
+    <ClInclude Include="process\win32\process_win32.hpp">
+      <Filter>process\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="toolchain\clang.hpp">
+      <Filter>toolchain</Filter>
+    </ClInclude>
+    <ClInclude Include="toolchain\toolchain.hpp">
+      <Filter>toolchain</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

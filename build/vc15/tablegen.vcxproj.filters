@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="mips">
+      <UniqueIdentifier>{c870094a-8abb-4f06-8792-4f26ec4049d3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mips\processor">
+      <UniqueIdentifier>{cf9e3fc9-c9f6-480a-b1ce-6174fd0c4566}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mips\instructions">
+      <UniqueIdentifier>{e5ee083e-0756-495c-9c6b-b8f5673c9545}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mips\coprocessor">
+      <UniqueIdentifier>{d6bb28ca-d9eb-4c1d-8661-1e5162c7cdf9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="mips\coprocessor\coprocessor1">
+      <UniqueIdentifier>{5665ac4d-b651-4a4b-8913-f663cca788f3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\mips\instructions\coprocessor1_inst.cpp">
+      <Filter>mips\instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\instructions.cpp">
+      <Filter>mips\instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\processor_inst.cpp">
+      <Filter>mips\instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\processor.cpp">
+      <Filter>mips\processor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\coprocessor\coprocessor1\coprocessor1.cpp">
+      <Filter>mips\coprocessor\coprocessor1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\tablegen\tablegen.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\mips\instructions\coprocessor1_inst.hpp">
+      <Filter>mips\instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\coprocessor1_support.hpp">
+      <Filter>mips\instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\instructions.hpp">
+      <Filter>mips\instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\instructions_common.hpp">
+      <Filter>mips\instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\processor_inst.hpp">
+      <Filter>mips\instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\instructions_old.hpp">
+      <Filter>mips\processor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\processor.hpp">
+      <Filter>mips\processor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\coprocessor\coprocessor.hpp">
+      <Filter>mips\coprocessor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\coprocessor\coprocessor1\coprocessor1.hpp">
+      <Filter>mips\coprocessor\coprocessor1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\config.hpp">
+      <Filter>mips</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

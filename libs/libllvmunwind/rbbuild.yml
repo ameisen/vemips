@@ -1,0 +1,9 @@
+---
+name: libllvmunwind
+include: [include, src, include\tdep, ..\libcxxabi\include, ..\libcxx\include]
+source: [src]
+exclude_dir_token: []
+exclude_file_token: [Apple]
+cpp_cmd: -fasynchronous-unwind-tables -funwind-tables -fstrict-aliasing -D__ELF__=1 -D_LIBUNWIND_IS_NATIVE_ONLY=1 -D_LIBUNWIND_TARGET_MIPS32=1 -D__linux__=1 -DLIBCXXRT=1 -D__mips__=1 -DHAVE_CONFIG_H=1 -D_GNU_SOURCE=1 -DUNW_LOCAL_ONLY=1 -g -mips32r6
+c_cmd: -fasynchronous-unwind-tables -funwind-tables -D__ELF__=1 -D_LIBUNWIND_IS_NATIVE_ONLY=1 -D_LIBUNWIND_TARGET_MIPS32=1 -D__linux__=1 -DLIBCXXRT=1 -D__mips__=1 -DHAVE_CONFIG_H=1 -D_GNU_SOURCE=1 -DUNW_LOCAL_ONLY=1 -g -mips32r6
+...

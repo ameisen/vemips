@@ -1,0 +1,13 @@
+---
+name: default
+cpp_cmd: -std=c++14 -ffunction-sections -fdata-sections -ffreestanding -fno-builtin -nobuiltininc -c
+c_cmd: -ffreestanding -ffunction-sections -fdata-sections -fno-builtin -nobuiltininc -c
+asm_cmd: -ffreestanding -ffunction-sections -fdata-sections -fno-builtin -nobuiltininc -c
+tool_paths: [..\common\tools]
+cpp_tool: mipsc.exe
+c_tool: mipsc.exe
+ar_tool: ar.exe
+asm_tool: mipsc.exe
+intermediate: obj
+includes: [..\common\inc]
+...

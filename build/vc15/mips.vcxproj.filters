@@ -1,0 +1,196 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="..\..\src\common.hpp" />
+    <ClInclude Include="..\..\src\mips\pch.hpp" />
+    <ClInclude Include="..\..\src\mips\coprocessor\coprocessor.hpp">
+      <Filter>coprocessor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\coprocessor\coprocessor1\coprocessor1.hpp">
+      <Filter>coprocessor\coprocessor1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\coprocessor1_inst.hpp">
+      <Filter>instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\coprocessor1_support.hpp">
+      <Filter>instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\instructions.hpp">
+      <Filter>instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\instructions_common.hpp">
+      <Filter>instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\processor_inst.hpp">
+      <Filter>instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\config.hpp" />
+    <ClInclude Include="..\..\src\mips\exception.hpp" />
+    <ClInclude Include="..\..\src\mips\memory_source.hpp" />
+    <ClInclude Include="..\..\src\mips\mips.hpp" />
+    <ClInclude Include="..\..\src\mips\mips_common.hpp" />
+    <ClInclude Include="..\..\src\sparsehash\template_util.h">
+      <Filter>sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\sparsehash\type_traits.h">
+      <Filter>sparsehash</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\sparsehash\internal\densehashtable.h">
+      <Filter>sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\sparsehash\internal\hashtable-common.h">
+      <Filter>sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\sparsehash\internal\libc_allocator_with_realloc.h">
+      <Filter>sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\sparsehash\internal\sparseconfig.h">
+      <Filter>sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\sparsehash\internal\sparsehashtable.h">
+      <Filter>sparsehash\internal</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\avx_type.hpp">
+      <Filter>processor\jit\xbyak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak.h">
+      <Filter>processor\jit\xbyak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_bin2hex.h">
+      <Filter>processor\jit\xbyak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_mnemonic.h">
+      <Filter>processor\jit\xbyak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_util.h">
+      <Filter>processor\jit\xbyak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\jit1\codegen.hpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\system.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\processor.hpp">
+      <Filter>processor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\mmu.hpp" />
+    <ClInclude Include="..\..\src\mips\platform\platform.hpp">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\platform\win32\host_mmu.hpp">
+      <Filter>platform\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp">
+      <Filter>platform\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\debugger.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\mips\pch.cpp" />
+    <ClCompile Include="..\..\src\mips\coprocessor\coprocessor1\coprocessor1.cpp">
+      <Filter>coprocessor\coprocessor1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\coprocessor1_inst.cpp">
+      <Filter>instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\instructions.cpp">
+      <Filter>instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\instructions_test.cpp">
+      <Filter>instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\processor_inst.cpp">
+      <Filter>instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\processor.cpp">
+      <Filter>processor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1.cpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_instructions.cpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_compact_branches.cpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_delay_branches.cpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_memory.cpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_traps.cpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\system.cpp" />
+    <ClCompile Include="..\..\src\mips\platform\win32\host_mmu.cpp">
+      <Filter>platform\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\debugger.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="coprocessor">
+      <UniqueIdentifier>{10dd6ba3-6ee2-4fc5-a8fd-31b79349deae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="coprocessor\coprocessor1">
+      <UniqueIdentifier>{240c1127-7667-40e4-a0c4-4d7ac5a48823}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="instructions">
+      <UniqueIdentifier>{d6757b49-f9ab-42ba-952e-34e689086813}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="sparsehash">
+      <UniqueIdentifier>{985188db-c028-4b74-9c3c-0d480ab10a54}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="sparsehash\internal">
+      <UniqueIdentifier>{9521e488-61a9-48e5-9a36-73b93d047f5e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="processor">
+      <UniqueIdentifier>{9ec3c768-a694-4d95-b973-9f12d575ea84}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="processor\jit">
+      <UniqueIdentifier>{05184313-33e2-40f7-98c3-6629221bc5be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="processor\jit\jit1">
+      <UniqueIdentifier>{e7f77c18-3077-43e6-856b-2b153683671f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="processor\jit\xbyak">
+      <UniqueIdentifier>{5f325e9e-253e-426b-b045-90e8f3026194}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform">
+      <UniqueIdentifier>{2104b282-884e-4875-b2f4-0cec9ddcc66e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform\win32">
+      <UniqueIdentifier>{f7c076f1-84d9-4723-bb79-f1b5ca34a311}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\sparsehash\dense_hash_map">
+      <Filter>sparsehash</Filter>
+    </None>
+    <None Include="..\..\src\sparsehash\dense_hash_set">
+      <Filter>sparsehash</Filter>
+    </None>
+    <None Include="..\..\src\sparsehash\sparsetable">
+      <Filter>sparsehash</Filter>
+    </None>
+    <None Include="..\..\src\sparsehash\sparse_hash_map">
+      <Filter>sparsehash</Filter>
+    </None>
+    <None Include="..\..\src\sparsehash\sparse_hash_set">
+      <Filter>sparsehash</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\..\src\mips\processor\jit\jit1\jit1_springboard.s">
+      <Filter>processor\jit\jit1</Filter>
+    </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\src\mips\processor\jit\jit1\jit1_register_assignments.txt">
+      <Filter>processor\jit\jit1</Filter>
+    </Text>
+  </ItemGroup>
+</Project>

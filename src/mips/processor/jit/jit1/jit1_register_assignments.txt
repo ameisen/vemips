@@ -1,0 +1,8 @@
+rdi		= accumulating pc count.
+rsi/esi = branch-delay target.
+rbp		= processor ptr + 128
+r13     = reserved for instruction use
+r12     = coprocessor ptr + 128
+rbx		= flags
+r14		= reserved for ticked use, control instruction
+r15		= frame pointer
