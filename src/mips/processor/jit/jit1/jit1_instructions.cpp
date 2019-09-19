@@ -822,7 +822,12 @@ void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // add [rs] and [rt] to [rd]
       mov(eax, get_register_op32(rs));
-      add(eax, get_register_op32(rt));
+			if (rs.get_register() == rt.get_register()) {
+				add(eax, eax);
+			}
+			else {
+				add(eax, get_register_op32(rt));
+			}
       mov(get_register_op32(rd), eax);
    }
 }
@@ -865,7 +870,12 @@ void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // add [rs] and [rt] to [rd]
       mov(eax, get_register_op32(rs));
-      add(eax, get_register_op32(rt));
+			if (rs.get_register() == rt.get_register()) {
+				add(eax, eax);
+			}
+			else {
+				add(eax, get_register_op32(rt));
+			}
       jo("intrinsic_ov_ex", T_NEAR);
       mov(get_register_op32(rd), eax);
    }
