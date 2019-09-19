@@ -19,6 +19,13 @@ using namespace mips;
 #define JIT_INSTRUCTION_SEPARATE 0
 #define JIT_INSERT_IDENTIFIERS 0
 
+#define IS_INSTRUCTION(instr, ref) \
+	[&]() -> bool { \
+		extern const mips::instructions::InstructionInfo StaticProc_ ## ref; \
+		return &StaticProc_ ## ref == instr; \
+	}()
+
+
 // this can and should be global to all JITs.
 namespace
 {
@@ -132,7 +139,7 @@ jit1::jit1(processor & __restrict _processor) : m_processor(_processor)
          cg.mov(cg.qword[cg.rbp + ic_offset], cg.rdi);      // save instruction count
          cg.mov(cg.dword[cg.rbp + flags_offset], cg.ebx);
          cg.mov(cg.dword[cg.rbp + dbt_offset], cg.esi);  // set it in the interpreter
-         cg.mov(cg.dword[cg.rbp + (gp_offset + (Jit1_CodeGen::mips_fp * 4))], cg.r15d);
+         cg.mov(cg.dword[cg.rbp + (int64(gp_offset) + (Jit1_CodeGen::mips_fp * 4))], cg.r15d);
          cg.mov(cg.rax, int64(jit1_drop_signal));
          cg.jmp(cg.rax);
       }
@@ -426,24 +433,24 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
                      // C6 42 7F 00 
                      // mov byte [rdx + 0x7F], 0
 
-                     and(ebx, ~processor::flag_bit(processor::flag::no_cti));
+                     and_(ebx, ~processor::flag_bit(processor::flag::no_cti));
                   }
                }
 
                // Was the instruction a memory-altering instruction?
                if (
-                  strcmp(instruction_info_ptr->Name, "PROC_SB") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SBE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SC") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SCE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SCWP") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SCWPE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SH") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SHE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SW") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_SWE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "COP1_SDC1") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "COP1_SWC1") == 0
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SB) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SBE) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SC) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SCE) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SCWP) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SCWPE) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SH) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SHE) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SW) ||
+								IS_INSTRUCTION(instruction_info_ptr, PROC_SWE) ||
+								IS_INSTRUCTION(instruction_info_ptr, COP1_SDC1_v) ||
+								IS_INSTRUCTION(instruction_info_ptr, COP1_SWC1_v)
                )
                {
                   if (write_STORE(chunk_offset, current_address, instruction, *instruction_info_ptr))
@@ -459,23 +466,23 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
                   alters_memory = true;
                }
                else if (
-                  strcmp(instruction_info_ptr->Name, "PROC_LB") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LBE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LBU") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LBUE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LH") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LHE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LHU") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LHUE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LL") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LLE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LLWP") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LLWPE") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LW") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LWE") == 0 ||
-                  //strcmp(instruction_info_ptr->Name, "COP1_LDC1") == 0 ||
-                  //strcmp(instruction_info_ptr->Name, "COP1_LWC1") == 0 ||
-                  strcmp(instruction_info_ptr->Name, "PROC_LWPC") == 0
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LB) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LBE) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LBU) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LBUE) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LH) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LHE) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LHU) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LHUE) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LL) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LLE)||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LLWP) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LLWPE) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LW) ||
+                  IS_INSTRUCTION(instruction_info_ptr, PROC_LWE) ||
+                  //IS_INSTRUCTION(instruction_info_ptr, COP1_LDC1) ||
+                  //IS_INSTRUCTION(instruction_info_ptr, COP1_LWC1) ||
+								 IS_INSTRUCTION(instruction_info_ptr, PROC_LWPC)
                )
                {
                   if (write_LOAD(chunk_offset, current_address, instruction, *instruction_info_ptr))
@@ -493,209 +500,209 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
                {
                   exceptions_handled = !write_delay_branch(terminate_instruction, chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_NOP") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_NOP))
                {
                   // nop
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SUBU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SUBU))
                {
                   write_PROC_SUBU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SUB") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SUB))
                {
                   write_PROC_SUB(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_OR") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_OR))
                {
                   write_PROC_OR(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_NOR") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_NOR))
                {
                   write_PROC_NOR(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_AND") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_AND))
                {
                   write_PROC_AND(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_ORI") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ORI))
                {
                   write_PROC_ORI(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_ANDI") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ANDI))
                {
                   write_PROC_ANDI(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_MOVE") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_MOVE))
                {
                   write_PROC_MOVE(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_ADDIU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ADDIU))
                {
                   write_PROC_ADDIU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_ADDI") == 0)
-               {
-                  write_PROC_ADDI(chunk_offset, current_address, instruction, *instruction_info_ptr);
-               }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_ADDU") == 0)
+               //else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ADDI))
+               //{
+               //   write_PROC_ADDI(chunk_offset, current_address, instruction, *instruction_info_ptr);
+               //}
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ADDU))
                {
                   write_PROC_ADDU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_ADD") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ADD))
                {
                   write_PROC_ADD(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_AUI") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_AUI))
                {
                   write_PROC_AUI(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SELEQZ") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SELEQZ))
                {
                   write_PROC_SELEQZ(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SELNEZ") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SELNEZ))
                {
                   write_PROC_SELNEZ(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SLT") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLT))
                {
                   write_PROC_SLT(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SLTU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLTU))
                {
                   write_PROC_SLTU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SLTI") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLTI))
                {
                   write_PROC_SLTI(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SLTIU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLTIU))
                {
                   write_PROC_SLTIU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "COP1_MFC1") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, COP1_MFC1_v))
                {
                   write_COP1_MFC1(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "COP1_MTC1") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, COP1_MTC1_v))
                {
                   write_COP1_MTC1(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "COP1_MFHC1") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, COP1_MFHC1_v))
                {
                   write_COP1_MFHC1(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "COP1_MTHC1") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, COP1_MTHC1_v))
                {
                   write_COP1_MTHC1(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "COP1_SEL") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, COP1_SEL_f) || IS_INSTRUCTION(instruction_info_ptr, COP1_SEL_d))
                {
                   write_COP1_SEL(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_MUL") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_MUL))
                {
                   write_PROC_MUL(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_MUH") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_MUH))
                {
                   write_PROC_MUH(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_MULU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_MULU))
                {
                   write_PROC_MULU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_MUHU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_MUHU))
                {
                   write_PROC_MUHU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_DIV") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_DIV))
                {
                   write_PROC_DIV(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_MOD") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_MOD))
                {
                   write_PROC_MOD(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_DIVU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_DIVU))
                {
                   write_PROC_DIVU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_MODU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_MODU))
                {
                   write_PROC_MODU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_XOR") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_XOR))
                {
                   write_PROC_XOR(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_XORI") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_XORI))
                {
                   write_PROC_XORI(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SEB") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SEB))
                {
                   write_PROC_SEB(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SEH") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SEH))
                {
                   write_PROC_SEH(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SLL") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLL))
                {
                   write_PROC_SLL(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SRL") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SRL))
                {
                   write_PROC_SRL(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SRA") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SRA))
                {
                   write_PROC_SRA(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_RDHWR") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_RDHWR))
                {
                   write_PROC_RDHWR(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SLLV") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLLV))
                {
                   write_PROC_SLLV(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SRLV") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SRLV))
                {
                   write_PROC_SRLV(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
 
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SYNC") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SYNC))
                {
                   write_PROC_SYNC(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
 
-               else if (strcmp(instruction_info_ptr->Name, "PROC_TEQ") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TEQ))
                {
                   write_PROC_TEQ(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_TGE") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TGE))
                {
                   write_PROC_TGE(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_TGEU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TGEU))
                {
                   write_PROC_TGEU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_TLT") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TLT))
                {
                   write_PROC_TLT(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_TLTU") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TLTU))
                {
                   write_PROC_TLTU(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_TNE") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TNE))
                {
                   write_PROC_TNE(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-               else if (strcmp(instruction_info_ptr->Name, "PROC_SYSCALL") == 0)
+               else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SYSCALL))
                {
                   write_PROC_SYSCALL(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
@@ -807,14 +814,14 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
             test(ebx, processor::flag_bit(processor::flag::pc_changed));
             jz(no_change);
-            and(ebx, ~processor::flag_bit(processor::flag::pc_changed));
+            and_(ebx, ~processor::flag_bit(processor::flag::pc_changed));
             mov(eax, dword[rbp + pc_offset]);
 
             mov(ecx, eax);
-            and(ecx, ~(jit1::ChunkSize - 1));
+            and_(ecx, ~(jit1::ChunkSize - 1));
             cmp(ecx, base_address);
             jne(not_within);
-            and(eax, (jit1::ChunkSize - 1));
+            and_(eax, (jit1::ChunkSize - 1));
 
             mov(rcx, uint64(chunk_offset.data()));
             mov(eax, dword[rcx + rax]);
@@ -968,7 +975,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
       mov(qword[rbp + ic_offset], rdi);      // save instruction count
       mov(dword[rbp + flags_offset], ebx);
       mov(dword[rbp + dbt_offset], esi);  // set it in the interpreter
-      mov(dword[rbp + (gp_offset + (mips_fp * 4))], r15d);
+      mov(dword[rbp + (int64(gp_offset) + (mips_fp * 4))], r15d);
       ret();
 
       L("save_return");

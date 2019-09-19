@@ -1,9 +1,6 @@
 require "FileUtils"
 
-cfg = "Release"
-if (ARGV[0] != nil && ARGV[0] != "")
-  cfg = ARGV[0]
-end
+cfg = ARGV[0] or "Release"
 
 CONFIG = "%_TARGET_%"
 

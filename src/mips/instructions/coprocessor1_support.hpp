@@ -9,7 +9,9 @@ extern void set_current_coprocessor(mips::coprocessor * __restrict cop);
 #if defined(_MSC_VER)
 #  define FPU_EXCEPTION_SUPPORT 1
 #endif
-#pragma message("improve rounding support when using emscripten")
+#ifdef EMSCRIPTEN
+#	pragma message("improve rounding support when using emscripten")
+#endif
 
 namespace mips::instructions
 {
@@ -37,12 +39,21 @@ namespace mips::instructions
    constexpr uint32 ConvertSignalToPlatform(ExceptBits bits)
    {
 #if FPU_EXCEPTION_SUPPORT
-      return
-         ((((uint32(bits) & uint32(ExceptBits::Inexact)) != 0) != 0) ? _EM_INEXACT : 0) |
-         ((((uint32(bits) & uint32(ExceptBits::Underflow)) != 0) != 0) ? _EM_UNDERFLOW : 0) |
-         ((((uint32(bits) & uint32(ExceptBits::Overflow)) != 0) != 0) ? _EM_OVERFLOW : 0) |
-         ((((uint32(bits) & uint32(ExceptBits::DivZero)) != 0) != 0) ? _EM_ZERODIVIDE : 0) |
-         ((((uint32(bits) & uint32(ExceptBits::InvalidOp)) != 0) != 0) ? _EM_INVALID : 0);
+		 if constexpr (
+			 uint32(ExceptBits::Inexact) == _EM_INEXACT &&
+			 uint32(ExceptBits::Underflow) == _EM_UNDERFLOW &&
+			 uint32(ExceptBits::Overflow) == _EM_OVERFLOW &&
+			 uint32(ExceptBits::DivZero) == _EM_ZERODIVIDE &&
+			 uint32(ExceptBits::InvalidOp) == _EM_INVALID
+			)
+			 return uint32(bits);
+		 else
+			return
+					(((uint32(bits) & uint32(ExceptBits::Inexact)) != 0) ? _EM_INEXACT : 0) |
+					(((uint32(bits) & uint32(ExceptBits::Underflow)) != 0) ? _EM_UNDERFLOW : 0) |
+					(((uint32(bits) & uint32(ExceptBits::Overflow)) != 0) ? _EM_OVERFLOW : 0) |
+					(((uint32(bits) & uint32(ExceptBits::DivZero)) != 0) ? _EM_ZERODIVIDE : 0) |
+					(((uint32(bits) & uint32(ExceptBits::InvalidOp)) != 0) ? _EM_INVALID : 0);
 #else
       return 0;
 #endif
@@ -557,69 +568,72 @@ namespace mips::instructions
 #if FPU_EXCEPTION_SUPPORT
       if (uint32(Flags & OpFlags::Signals_All))
       {
+				auto fpu = (coprocessor1 * __restrict)get_current_coprocessor();
+
          // Set the cause bits
          if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
          {
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Flags |= uint32(ExceptBits::Inexact);
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause |= uint32(ExceptBits::Inexact);
+            fpu->get_FCSR().Flags |= uint32(ExceptBits::Inexact);
+            fpu->get_FCSR().Cause |= uint32(ExceptBits::Inexact);
          }
          if (exStatus & _SW_UNDERFLOW && uint32(Flags & OpFlags::Signals_Underflow))
          {
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Flags |= uint32(ExceptBits::Underflow);
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause |= uint32(ExceptBits::Underflow);
+            fpu->get_FCSR().Flags |= uint32(ExceptBits::Underflow);
+            fpu->get_FCSR().Cause |= uint32(ExceptBits::Underflow);
          }
          if (exStatus & _SW_OVERFLOW && uint32(Flags & OpFlags::Signals_Overflow))
          {
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Flags |= uint32(ExceptBits::Overflow);
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause |= uint32(ExceptBits::Overflow);
+            fpu->get_FCSR().Flags |= uint32(ExceptBits::Overflow);
+            fpu->get_FCSR().Cause |= uint32(ExceptBits::Overflow);
          }
          if (exStatus & _SW_ZERODIVIDE && uint32(Flags & OpFlags::Signals_DivZero))
          {
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Flags |= uint32(ExceptBits::DivZero);
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause |= uint32(ExceptBits::DivZero);
+            fpu->get_FCSR().Flags |= uint32(ExceptBits::DivZero);
+            fpu->get_FCSR().Cause |= uint32(ExceptBits::DivZero);
          }
          if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp))
          {
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Flags |= uint32(ExceptBits::InvalidOp);
-            ((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause |= uint32(ExceptBits::InvalidOp);
+            fpu->get_FCSR().Flags |= uint32(ExceptBits::InvalidOp);
+            fpu->get_FCSR().Cause |= uint32(ExceptBits::InvalidOp);
          }
 
-
-         if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
-         {
-            if (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::Inexact))
-            {
-                throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause) };
-            }
-         }
-         if (exStatus & _SW_UNDERFLOW && uint32(Flags & OpFlags::Signals_Underflow))
-         {
-            if (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::Underflow))
-            {
-                throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause) };
-            }
-         }
-         if (exStatus & _SW_OVERFLOW && uint32(Flags & OpFlags::Signals_Overflow))
-         {
-            if (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::Overflow))
-            {
-                throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause) };
-            }
-         }
-         if (exStatus & _SW_ZERODIVIDE && uint32(Flags & OpFlags::Signals_DivZero))
-         {
-            if (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::DivZero))
-            {
-                throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause) };
-            }
-         }
-         if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp))
-         {
-            if (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp))
-            {
-                throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause) };
-            }
-         }
+				 if (fpu->get_FCSR().Enables) {
+					 if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
+					 {
+						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Inexact))
+						 {
+							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						 }
+					 }
+					 if (exStatus & _SW_UNDERFLOW && uint32(Flags & OpFlags::Signals_Underflow))
+					 {
+						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Underflow))
+						 {
+							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						 }
+					 }
+					 if (exStatus & _SW_OVERFLOW && uint32(Flags & OpFlags::Signals_Overflow))
+					 {
+						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Overflow))
+						 {
+							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						 }
+					 }
+					 if (exStatus & _SW_ZERODIVIDE && uint32(Flags & OpFlags::Signals_DivZero))
+					 {
+						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::DivZero))
+						 {
+							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						 }
+					 }
+					 if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp))
+					 {
+						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp))
+						 {
+							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						 }
+					 }
+				 }
       }
 #endif
    }
@@ -634,30 +648,21 @@ namespace mips::instructions
 
    inline void raise_any_signals()
    {
-      if ((((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause & uint32_t(ExceptBits::Inexact)) && (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::Inexact)))
-      {
-         throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::Inexact) };
-      }
-      if ((((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause & uint32_t(ExceptBits::Underflow)) && (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::Underflow)))
-      {
-         throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::Underflow) };
-      }
-      if ((((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause & uint32_t(ExceptBits::Overflow)) && (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::Overflow)))
-      {
-         throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::Overflow) };
-      }
-      if ((((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause & uint32_t(ExceptBits::DivZero)) && (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::DivZero)))
-      {
-         throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::DivZero) };
-      }
-      if ((((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause & uint32_t(ExceptBits::InvalidOp)) && (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp)))
-      {
-         throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::InvalidOp) };
-      }
-      if ((((coprocessor1 *)get_current_coprocessor())->get_FCSR().Cause & uint32_t(ExceptBits::UnsupportedOp)))
-      {
-         throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::UnsupportedOp) };
-      }
+			const auto fpu = (coprocessor1 * __restrict)get_current_coprocessor();
+			if (!fpu->get_FCSR().Cause) {
+				return;
+			}
+			if (fpu->get_FCSR().Enables) {
+				for (auto ex : { ExceptBits::Inexact, ExceptBits::Underflow, ExceptBits::Overflow, ExceptBits::DivZero, ExceptBits::InvalidOp }) {
+					if ((fpu->get_FCSR().Enables & uint32_t(ex)) && (fpu->get_FCSR().Cause & uint32_t(ex))) {
+						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ex) };
+					}
+				}
+			}
+			if ((fpu->get_FCSR().Cause & uint32_t(ExceptBits::UnsupportedOp)))
+			{
+				throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::UnsupportedOp) };
+			}
    }
 
    template <typename reg_t, typename format_t, OpFlags Flags>

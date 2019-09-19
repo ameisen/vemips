@@ -185,7 +185,7 @@ void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, ui
       // or dword eax, [rdx + 0xFF] ; FF = 'rs' offset
       // mov dword [rdx + 0xEE], eax ; EE = 'rd' offset
       mov(eax, get_register_op32(rt));
-      or (eax, get_register_op32(rs));
+      or_(eax, get_register_op32(rs));
       mov(get_register_op32(rd), eax);
    }
 }
@@ -216,14 +216,14 @@ void Jit1_CodeGen::write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // just move ~rt to rd
       mov(eax, get_register_op32(rt));
-      not(eax);
+      not_(eax);
       mov(get_register_op32(rd), eax);
    }
    else if (rt.get_register() == 0)
    {
       // just move ~rs to rd
       mov(eax, get_register_op32(rs));
-      not(eax);
+      not_(eax);
       mov(get_register_op32(rd), eax);
    }
    else
@@ -234,8 +234,8 @@ void Jit1_CodeGen::write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, u
       // or dword eax, [rdx + 0xFF] ; FF = 'rs' offset
       // mov dword [rdx + 0xEE], eax ; EE = 'rd' offset
       mov(eax, get_register_op32(rt));
-      or (eax, get_register_op32(rs));
-      not(eax);
+      or_(eax, get_register_op32(rs));
+      not_(eax);
       mov(get_register_op32(rd), eax);
    }
 }
@@ -281,7 +281,7 @@ void Jit1_CodeGen::write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, u
       // or dword eax, [rdx + 0xFF] ; FF = 'rs' offset
       // mov dword [rdx + 0xEE], eax ; EE = 'rd' offset
       mov(eax, get_register_op32(rt));
-      and(eax, get_register_op32(rs));
+      and_(eax, get_register_op32(rs));
       mov(get_register_op32(rd), eax);
    }
 }
@@ -324,7 +324,7 @@ void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // actually perform OR
       mov(eax, get_register_op32(rs));
-      or (eax, int32(offset));
+      or_(eax, int32(offset));
       mov(get_register_op32(rt), eax);
    }
 }
@@ -349,7 +349,7 @@ void Jit1_CodeGen::write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // actually perform AND
       mov(eax, get_register_op32(rs));
-      and(eax, int32(offset));
+      and_(eax, int32(offset));
       mov(get_register_op32(rt), eax);
    }
 }
@@ -385,14 +385,14 @@ void Jit1_CodeGen::write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset
          mov(ecx, get_register_op32(rt));
          cmp(ecx, 1); // Set carry flag if zero
          sbb(eax, eax);                  // if carry flag is zero, sets 0, otherwise sets 0xFFFFFFFF
-         and(eax, ecx);
+         and_(eax, ecx);
          mov(get_register_op32(rd), eax);
       }
       else
       {
          cmp(get_register_op32(rt), 1); // Set carry flag if zero
          sbb(eax, eax);                  // if carry flag is zero, sets 0, otherwise sets 0xFFFFFFFF
-         and(eax, get_register_op32(rs));
+         and_(eax, get_register_op32(rs));
          mov(get_register_op32(rd), eax);
       }
    }
@@ -429,7 +429,7 @@ void Jit1_CodeGen::write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset
          cmp(ecx, 1);                     // Set carry flag if zero
          cmc();
          sbb(eax, eax);                  // if carry flag is zero, sets 0, otherwise sets 0xFFFFFFFF
-         and(eax, ecx);
+         and_(eax, ecx);
          mov(get_register_op32(rd), eax);
       }
       else
@@ -437,7 +437,7 @@ void Jit1_CodeGen::write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset
          cmp(get_register_op32(rt), 1); // Set carry flag if zero
          cmc();
          sbb(eax, eax);                  // if carry flag is zero, sets 0, otherwise sets 0xFFFFFFFF
-         and(eax, get_register_op32(rs));
+         and_(eax, get_register_op32(rs));
          mov(get_register_op32(rd), eax);
       }
    }
@@ -947,7 +947,7 @@ void Jit1_CodeGen::write_PROC_SLT(jit1::ChunkOffset & __restrict chunk_offset, u
    else
    {
       mov(eax, get_register_op32(rs));
-      xor(ecx, ecx);
+      xor_(ecx, ecx);
       cmp(eax, get_register_op32(rt));
       setl(cl);
       mov(get_register_op32(rd), ecx);
@@ -977,7 +977,7 @@ void Jit1_CodeGen::write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, 
    else
    {
       mov(eax, get_register_op32(rs));
-      xor(ecx, ecx);
+      xor_(ecx, ecx);
       cmp(eax, get_register_op32(rt));
       setb(cl);
       mov(get_register_op32(rd), ecx);
@@ -1010,7 +1010,7 @@ void Jit1_CodeGen::write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, 
    }
    else
    {
-      xor(ecx, ecx);
+      xor_(ecx, ecx);
       cmp(get_register_op32(rs), immediate);
       setl(cl);
       mov(get_register_op32(rt), ecx);
@@ -1043,7 +1043,7 @@ void Jit1_CodeGen::write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset,
    }
    else
    {
-      xor(ecx, ecx);
+      xor_(ecx, ecx);
       cmp(get_register_op32(rs), immediate);
       setb(cl);
       mov(get_register_op32(rt), ecx);
@@ -1155,13 +1155,13 @@ void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, u
       // float
       // fd = fd.bit[0] ? ft : fs
       mov(eax, dword[r12 + fd_offset]);
-      xor(ecx, ecx);
-      and(eax, 1);
+      xor_(ecx, ecx);
+      and_(eax, 1);
       sub(ecx, eax);
       dec(eax);
-      and(ecx, dword[r12 + ft_offset]);
-      and(eax, dword[r12 + fs_offset]);
-      or(ecx, eax);
+      and_(ecx, dword[r12 + ft_offset]);
+      and_(eax, dword[r12 + fs_offset]);
+      or_(ecx, eax);
       mov(dword[r12 + fd_offset], ecx);
    }
    else
@@ -1169,13 +1169,13 @@ void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, u
       // double
       // fd = fd.bit[0] ? ft : fs
       mov(eax, dword[r12 + fd_offset]);
-      xor(ecx, ecx);
-      and(eax, 1);
+      xor_(ecx, ecx);
+      and_(eax, 1);
       sub(rcx, rax);
       dec(rax);
-      and(rcx, qword[r12 + ft_offset]);
-      and(rax, qword[r12 + fs_offset]);
-      or(rcx, rax);
+      and_(rcx, qword[r12 + ft_offset]);
+      and_(rax, qword[r12 + fs_offset]);
+      or_(rcx, rax);
       mov(qword[r12 + fd_offset], rcx);
    }
 }
@@ -1369,11 +1369,11 @@ void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // move [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(eax, eax);
+      xor_(eax, eax);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rd));
-      xor (edx, edx);
+      xor_(edx, edx);
       idiv(ecx);
       L(divzero);
       mov(get_register_op32(rd), eax);
@@ -1382,11 +1382,11 @@ void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // add [rs] and [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(eax, eax);
+      xor_(eax, eax);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rs));
-      xor (edx, edx);
+      xor_(edx, edx);
       idiv(ecx);
       L(divzero);
       mov(get_register_op32(rd), eax);
@@ -1427,11 +1427,11 @@ void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // move [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(eax, eax);
+      xor_(eax, eax);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rd));
-      xor (edx, edx);
+      xor_(edx, edx);
       div(ecx);
       L(divzero);
       mov(get_register_op32(rd), eax);
@@ -1440,11 +1440,11 @@ void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // add [rs] and [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(eax, eax);
+      xor_(eax, eax);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rs));
-      xor (edx, edx);
+      xor_(edx, edx);
       div(ecx);
       L(divzero);
       mov(get_register_op32(rd), eax);
@@ -1485,11 +1485,11 @@ void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // move [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(eax, eax);
+      xor_(eax, eax);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rd));
-      xor (edx, edx);
+      xor_(edx, edx);
       idiv(ecx);
       L(divzero);
       mov(get_register_op32(rd), eax);
@@ -1498,11 +1498,11 @@ void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // add [rs] and [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(eax, eax);
+      xor_(eax, eax);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rs));
-      xor (edx, edx);
+      xor_(edx, edx);
       idiv(ecx);
       L(divzero);
       mov(get_register_op32(rd), eax);
@@ -1543,11 +1543,11 @@ void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // move [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(edx, edx);
+      xor_(edx, edx);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rd));
-      xor (edx, edx);
+      xor_(edx, edx);
       div(ecx);
       L(divzero);
       mov(get_register_op32(rd), edx);
@@ -1556,11 +1556,11 @@ void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // add [rs] and [rt] to [rd]
       mov(ecx, get_register_op32(rt));
-      xor(edx, edx);
+      xor_(edx, edx);
       test(ecx, ecx);
       jz(divzero);
       mov(eax, get_register_op32(rs));
-      xor (edx, edx);
+      xor_(edx, edx);
       div(ecx);
       L(divzero);
       mov(get_register_op32(rd), edx);
@@ -1604,7 +1604,7 @@ void Jit1_CodeGen::write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, u
    else
    {
       mov(eax, get_register_op32(rt));
-      xor(eax, get_register_op32(rs));
+      xor_(eax, get_register_op32(rs));
       mov(get_register_op32(rd), eax);
    }
 }
@@ -1647,7 +1647,7 @@ void Jit1_CodeGen::write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // actually perform OR
       mov(eax, get_register_op32(rs));
-      xor(eax, int32(offset));
+      xor_(eax, int32(offset));
       mov(get_register_op32(rt), eax);
    }
 }
@@ -1870,7 +1870,7 @@ void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       mov(ecx, get_register_op32(rs));
       mov(eax, ecx);
-      and(ecx, int32(instructions::Bits(5)));
+      and_(ecx, int32(instructions::Bits(5)));
       shl(eax, cl);
       mov(get_register_op32(rd), eax);
    }
@@ -1878,7 +1878,7 @@ void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       mov(ecx, get_register_op32(rs));
       mov(eax, get_register_op32(rt));
-      and(ecx, int32(instructions::Bits(5)));
+      and_(ecx, int32(instructions::Bits(5)));
       shl(eax, cl);
       mov(get_register_op32(rd), eax);
    }
@@ -1911,7 +1911,7 @@ void Jit1_CodeGen::write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       mov(ecx, get_register_op32(rs));
       mov(eax, ecx);
-      and(ecx, int32(instructions::Bits(5)));
+      and_(ecx, int32(instructions::Bits(5)));
       shr(eax, cl);
       mov(get_register_op32(rd), eax);
    }
@@ -1919,7 +1919,7 @@ void Jit1_CodeGen::write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       mov(ecx, get_register_op32(rs));
       mov(eax, get_register_op32(rt));
-      and(ecx, int32(instructions::Bits(5)));
+      and_(ecx, int32(instructions::Bits(5)));
       shr(eax, cl);
       mov(get_register_op32(rd), eax);
    }

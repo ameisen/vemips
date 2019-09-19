@@ -371,22 +371,10 @@ system::system(const options &init_options, const elf::binary & __restrict binar
 
 system::~system()
 {
-   if (m_debugger)
-   {
-      delete m_debugger;
-   }
-   if (m_processor)
-   {
-      delete m_processor;
-   }
-   if (m_memory_source)
-   {
-      delete m_memory_source;
-   }
-   if (m_host_mmu)
-   {
-      delete m_host_mmu;
-   }
+   delete m_debugger;
+   delete m_processor;
+   delete m_memory_source;
+   delete m_host_mmu;
 }
 
 void system::clock(uint64 clocks) __restrict

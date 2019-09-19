@@ -12,6 +12,12 @@ using namespace mips;
 extern jit1::jit_instructionexec_t jit1_get_instruction(jit1 * __restrict _this, uint32 address);
 static constexpr uint32 MaxShortJumpLookAhead = 2;
 
+#define IS_INSTRUCTION(instr, ref) \
+	[&]() -> bool { \
+		extern const mips::instructions::InstructionInfo StaticProc_ ## ref; \
+		return &StaticProc_ ## ref == &instr; \
+	}()
+
 bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &terminate_instruction, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict
 {
    const uint32 chunk_begin = address & ~(jit1::ChunkSize - 1);
@@ -92,7 +98,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
       jmp(rax);
    };
 
-   if (std::string(instruction_info.Name) == "PROC_BALC")
+	 if (IS_INSTRUCTION(instruction_info, PROC_BALC))
    {
       const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
       const uint32 target_address = address + 4 + immediate;
@@ -115,7 +121,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          patch_jump(target_address);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BC")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BC))
    {
       const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
       const uint32 target_address = address + 4 + immediate;
@@ -137,7 +143,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          patch_jump(target_address);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BLEZALC") // branch rt <= 0 and link
+	 else if (IS_INSTRUCTION(instruction_info, PROC_BLEZALC)) // branch rt <= 0 and link
    {
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -170,7 +176,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -179,7 +185,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_POP06")
+   else if (IS_INSTRUCTION(instruction_info, PROC_POP06))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -214,7 +220,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BGEUC - branch rs >= rt
       {
@@ -241,7 +247,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -250,7 +256,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BGTZALC") // branch rt > 0 and link
+   else if (IS_INSTRUCTION(instruction_info, PROC_BGTZALC)) // branch rt > 0 and link
    {
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -283,7 +289,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -292,7 +298,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_POP07")
+   else if (IS_INSTRUCTION(instruction_info, PROC_POP07))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -327,7 +333,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BLTUC - branch rs < rt
       {
@@ -354,7 +360,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -363,7 +369,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_POP10")
+   else if (IS_INSTRUCTION(instruction_info, PROC_POP10))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -398,7 +404,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BEQC - branch rt == rs
       {
@@ -425,7 +431,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() >= rt.get_register()) // BOVC - branch if rs + rt overflows (signed)
       {
@@ -452,7 +458,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -461,7 +467,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_POP30")
+   else if (IS_INSTRUCTION(instruction_info, PROC_POP30))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -496,7 +502,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BNEC - branch rt != rs
       {
@@ -523,7 +529,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() >= rt.get_register()) // BNVC - branch if rs + rt not overflows (signed)
       {
@@ -550,7 +556,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -559,7 +565,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BLEZC") // branch rt <= 0
+   else if (IS_INSTRUCTION(instruction_info, PROC_BLEZC)) // branch rt <= 0
    {
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -590,7 +596,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -599,7 +605,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_POP26")
+   else if (IS_INSTRUCTION(instruction_info, PROC_POP26))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -631,7 +637,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BGEC / BLEC - branch [rs] >= [rt]
       {
@@ -658,7 +664,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -667,7 +673,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BGTZC") // branch rt > 0
+   else if (IS_INSTRUCTION(instruction_info, PROC_BGTZC)) // branch rt > 0
    {
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -698,7 +704,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -707,7 +713,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_POP27")
+   else if (IS_INSTRUCTION(instruction_info, PROC_POP27))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -739,7 +745,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BLTC / BGTC - branch [rs] < [rt]
       {
@@ -766,7 +772,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -775,7 +781,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BEQZC") // branch [rs] == 0
+   else if (IS_INSTRUCTION(instruction_info, PROC_BEQZC)) // branch [rs] == 0
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<23>(instruction << 2).sextend<int32>();
@@ -806,7 +812,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-        or (ebx, processor::flag_bit(processor::flag::no_cti));
+        or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -815,7 +821,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BNEZC") // branch [rs] != 0
+   else if (IS_INSTRUCTION(instruction_info, PROC_BNEZC)) // branch [rs] != 0
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<23>(instruction << 2).sextend<int32>();
@@ -848,7 +854,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or (ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -857,7 +863,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          jmp("intrinsic_ri_ex", T_NEAR);
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_JIC") // branch [rt] + offset
+   else if (IS_INSTRUCTION(instruction_info, PROC_JIC)) // branch [rt] + offset
    {
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
@@ -869,10 +875,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
       add(eax, offset);
 
       mov(ecx, eax);
-      and(ecx, ~(jit1::ChunkSize - 1));
+      and_(ecx, ~(jit1::ChunkSize - 1));
       cmp(ecx, chunk_begin);
       jne(not_within);
-      and(eax, (jit1::ChunkSize - 1));
+      and_(eax, (jit1::ChunkSize - 1));
 
       mov(rcx, uint64(chunk_offset.data()));
       mov(eax, dword[rcx + rax]);
@@ -889,7 +895,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
       
       jmp(rax);
    }
-   else if (std::string(instruction_info.Name) == "PROC_JIALC") // branch [rt] + offset and link
+   else if (IS_INSTRUCTION(instruction_info, PROC_JIALC)) // branch [rt] + offset and link
    {
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
       const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
@@ -903,10 +909,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
       add(eax, offset);
 
       mov(ecx, eax);
-      and(ecx, ~(jit1::ChunkSize - 1));
+      and_(ecx, ~(jit1::ChunkSize - 1));
       cmp(ecx, chunk_begin);
       jne(not_within);
-      and(eax, (jit1::ChunkSize - 1));
+      and_(eax, (jit1::ChunkSize - 1));
 
       mov(rcx, uint64(chunk_offset.data()));
       mov(eax, dword[rcx + rax]);

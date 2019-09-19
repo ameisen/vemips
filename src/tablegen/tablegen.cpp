@@ -230,7 +230,7 @@ int main()
    indented_print("}\n");
    for (auto &Procs : ProcInfos)
    {
-      indented_print("static const mips::instructions::InstructionInfo %s %s;\n", GetStaticProcName(*Procs).c_str(), BuildProcedureLink(*Procs).c_str());
+      indented_print("__declspec(dllexport) const mips::instructions::InstructionInfo %s %s;\n", GetStaticProcName(*Procs).c_str(), BuildProcedureLink(*Procs).c_str());
    }
    //indented_print("\nstatic const mips::instructions::InstructionInfo * __restrict LookupTable[] = {\n");
    //++indent;

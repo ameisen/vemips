@@ -11,6 +11,12 @@
 
 using namespace mips;
 
+#define IS_INSTRUCTION(instr, ref) \
+	[&]() -> bool { \
+		extern const mips::instructions::InstructionInfo StaticProc_ ## ref; \
+		return &StaticProc_ ## ref == &instr; \
+	}()
+
 uintptr_t mem_write_jit(processor * __restrict proc, uint32 address, uint32 size)
 {
    return proc->get_mem_write_jit(address, size);
@@ -41,57 +47,57 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
    bool fpu = false;
    bool e = false;
 
-   if (strcmp(instruction_info.Name, "PROC_SB") == 0)
+   if (IS_INSTRUCTION(instruction_info, PROC_SB))
    {
       store_size = 1;
    }
-   else if(strcmp(instruction_info.Name, "PROC_SBE") == 0)
+   else if(IS_INSTRUCTION(instruction_info, PROC_SBE))
    {
       e = true;
       store_size = 1;
    }
-   else if(strcmp(instruction_info.Name, "PROC_SC") == 0)
+   else if(IS_INSTRUCTION(instruction_info, PROC_SC))
    {
       return true;
    }
-   else if(strcmp(instruction_info.Name, "PROC_SCE") == 0)
-   {
-      e = true;
-      return true;
-   }
-   else if(strcmp(instruction_info.Name, "PROC_SCWP") == 0)
-   {
-      return true;
-   }
-   else if(strcmp(instruction_info.Name, "PROC_SCWPE") == 0)
+   else if(IS_INSTRUCTION(instruction_info, PROC_SCE))
    {
       e = true;
       return true;
    }
-   else if(strcmp(instruction_info.Name, "PROC_SH") == 0)
+   else if(IS_INSTRUCTION(instruction_info, PROC_SCWP))
+   {
+      return true;
+   }
+   else if(IS_INSTRUCTION(instruction_info, PROC_SCWPE))
+   {
+      e = true;
+      return true;
+   }
+   else if(IS_INSTRUCTION(instruction_info, PROC_SH))
    {
       store_size = 2;
    }
-   else if(strcmp(instruction_info.Name, "PROC_SHE") == 0)
+   else if(IS_INSTRUCTION(instruction_info, PROC_SHE))
    {
       e = true;
       store_size = 2;
    }
-   else if(strcmp(instruction_info.Name, "PROC_SW") == 0)
+   else if(IS_INSTRUCTION(instruction_info, PROC_SW))
    {
       store_size = 4;
    }
-   else if(strcmp(instruction_info.Name, "PROC_SWE") == 0)
+   else if(IS_INSTRUCTION(instruction_info, PROC_SWE))
    {
       e = true;
       store_size = 4;
    }
-   else if(strcmp(instruction_info.Name, "COP1_SDC1") == 0)
+   else if(IS_INSTRUCTION(instruction_info, COP1_SDC1_v))
    {
       store_size = 8;
       fpu = true;
    }
-   else if(strcmp(instruction_info.Name, "COP1_SWC1") == 0)
+   else if(IS_INSTRUCTION(instruction_info, COP1_SWC1_v))
    {
       store_size = 4;
       fpu = true;
@@ -123,7 +129,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
       // 'rcx' is the first parameter (processor ptr)
       if (offset == 0)
       {
-         xor(edx, edx);
+         xor_(edx, edx);
       }
       else if (offset >= -128 && offset < 127)
       {
@@ -442,7 +448,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
          // 'rcx' is the first parameter (processor ptr)
          if (offset == 0)
          {
-            xor (edx, edx);
+            xor_(edx, edx);
          }
          else
          {
@@ -566,7 +572,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
    {
       try
       {
-         if (strcmp(instruction_info.Name, "PROC_LB") == 0)
+         if (IS_INSTRUCTION(instruction_info, PROC_LB))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1))
             {
@@ -576,7 +582,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, byte[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LBE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LBE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1))
             {
@@ -586,7 +592,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, byte[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LBU") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LBU))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1))
             {
@@ -596,7 +602,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, byte[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LBUE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LBUE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1))
             {
@@ -606,7 +612,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, byte[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LH") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LH))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2))
             {
@@ -616,7 +622,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, word[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LHE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LHE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2))
             {
@@ -626,7 +632,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, word[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LHU") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LHU))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2))
             {
@@ -636,7 +642,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, word[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LHUE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LHUE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2))
             {
@@ -646,23 +652,23 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, word[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LL") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LL))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LLE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LLE))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LLWP") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LLWP))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LLWPE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LLWPE))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LW") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LW))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4))
             {
@@ -672,7 +678,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(eax, dword[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LWE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LWE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 4))
             {
@@ -682,7 +688,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(eax, dword[r13]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "COP1_LDC1") == 0)
+         else if (IS_INSTRUCTION(instruction_info, COP1_LDC1_v))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4))
             {
@@ -696,7 +702,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(rax, qword[r13]);
             mov(qword[r12 + ft_offset], rax);
          }
-         else if (strcmp(instruction_info.Name, "COP1_LWC1") == 0)
+         else if (IS_INSTRUCTION(instruction_info, COP1_LWC1_v))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4))
             {
@@ -710,7 +716,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(eax, dword[r13]);
             mov(dword[r12 + ft_offset], eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LWPC") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LWPC))
          {
             // load word PC relative - gets special offset handling.
             const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
@@ -740,7 +746,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
    {
       try
       {
-         if (strcmp(instruction_info.Name, "PROC_LB") == 0)
+         if (IS_INSTRUCTION(instruction_info, PROC_LB))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1))
             {
@@ -750,7 +756,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, byte[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LBE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LBE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1))
             {
@@ -760,7 +766,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, byte[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LBU") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LBU))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1))
             {
@@ -770,7 +776,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, byte[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LBUE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LBUE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1))
             {
@@ -780,7 +786,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, byte[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LH") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LH))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2))
             {
@@ -790,7 +796,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, word[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LHE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LHE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2))
             {
@@ -800,7 +806,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movsx(eax, word[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LHU") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LHU))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2))
             {
@@ -810,7 +816,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, word[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LHUE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LHUE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2))
             {
@@ -820,23 +826,23 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             movzx(eax, word[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LL") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LL))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LLE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LLE))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LLWP") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LLWP))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LLWPE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LLWPE))
          {
             return true;
          }
-         else if (strcmp(instruction_info.Name, "PROC_LW") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LW))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4))
             {
@@ -846,7 +852,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(eax, dword[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LWE") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LWE))
          {
             if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 4))
             {
@@ -856,7 +862,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(eax, dword[rdx + rax]);
             mov(get_register_op32(rt), eax);
          }
-         else if (strcmp(instruction_info.Name, "COP1_LDC1") == 0)
+         else if (IS_INSTRUCTION(instruction_info, COP1_LDC1_v))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4))
             {
@@ -870,7 +876,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(rax, qword[rdx + rax]);
             mov(qword[r12 + ft_offset], rax);
          }
-         else if (strcmp(instruction_info.Name, "COP1_LWC1") == 0)
+         else if (IS_INSTRUCTION(instruction_info, COP1_LWC1_v))
          {
             if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4))
             {
@@ -884,7 +890,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
             mov(eax, dword[rdx + rax]);
             mov(dword[r12 + ft_offset], eax);
          }
-         else if (strcmp(instruction_info.Name, "PROC_LWPC") == 0)
+         else if (IS_INSTRUCTION(instruction_info, PROC_LWPC))
          {
             // load word PC relative - gets special offset handling.
             const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);

@@ -94,7 +94,7 @@
     <ProjectCapability Include="Linux" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="interpreter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Header.h" />

@@ -15,33 +15,34 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{75A6D7BD-5854-4C74-A277-6FDE8BE37BA3}</ProjectGuid>
+    <ProjectGuid>{69122B01-51C7-45E8-96E8-782A0E497142}</ProjectGuid>
     <RootNamespace>mips</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-Clang|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140_clang_c2</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
   </ImportGroup>
   <ImportGroup Label="Shared">
   </ImportGroup>
@@ -69,32 +70,36 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\elf;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
       <AdditionalOptions>/std:c++latest %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <DisableSpecificWarnings>4514;4710</DisableSpecificWarnings>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FloatingPointModel>Strict</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
+      <ConformanceMode>true</ConformanceMode>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
-      <Optimization>Full</Optimization>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>
       </SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\elf;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <AdditionalOptions>/std:c++latest /Ob3 /favor:INTEL64 %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <InlineFunctionExpansion>
+      </InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
@@ -103,10 +108,9 @@
       <ControlFlowGuard>false</ControlFlowGuard>
       <FloatingPointModel>Strict</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <CppLanguageStandard>gnu++1y</CppLanguageStandard>
-      <StrictAliasing>true</StrictAliasing>
-      <AdditionalOptions>/std:c++latest %(AdditionalOptions)</AdditionalOptions>
-      <DisableSpecificWarnings>4514;4710</DisableSpecificWarnings>
+      <ConformanceMode>true</ConformanceMode>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -116,27 +120,15 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-Clang|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <Optimization>Full</Optimization>
+      <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\elf;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>$(ProjectDir)..\..\src\elf\pch.hpp</PrecompiledHeaderFile>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <OmitFramePointers>true</OmitFramePointers>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
-      <StringPooling>true</StringPooling>
-      <BufferSecurityCheck>false</BufferSecurityCheck>
-      <ControlFlowGuard>false</ControlFlowGuard>
-      <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
-      <CppLanguageStandard>gnu++1y</CppLanguageStandard>
-      <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <StrictAliasing>true</StrictAliasing>
       <AdditionalOptions>-Wno-unused-variable %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -145,18 +137,78 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\common.hpp" />
-    <ClInclude Include="..\..\src\elf\elf.hpp" />
-    <ClInclude Include="..\..\src\elf\pch.hpp" />
+    <ClInclude Include="..\..\src\mips\config.hpp" />
+    <ClInclude Include="..\..\src\mips\coprocessor\coprocessor.hpp" />
+    <ClInclude Include="..\..\src\mips\coprocessor\coprocessor1\coprocessor1.hpp" />
+    <ClInclude Include="..\..\src\mips\debugger.hpp" />
+    <ClInclude Include="..\..\src\mips\exception.hpp" />
+    <ClInclude Include="..\..\src\mips\instructions\coprocessor1_inst.hpp" />
+    <ClInclude Include="..\..\src\mips\instructions\coprocessor1_support.hpp" />
+    <ClInclude Include="..\..\src\mips\instructions\instructions.hpp" />
+    <ClInclude Include="..\..\src\mips\instructions\instructions_common.hpp" />
+    <ClInclude Include="..\..\src\mips\instructions\processor_inst.hpp" />
+    <ClInclude Include="..\..\src\mips\memory_source.hpp" />
+    <ClInclude Include="..\..\src\mips\mips.hpp" />
+    <ClInclude Include="..\..\src\mips\mips_common.hpp" />
+    <ClInclude Include="..\..\src\mips\mmu.hpp" />
+    <ClInclude Include="..\..\src\mips\pch.hpp" />
+    <ClInclude Include="..\..\src\mips\platform\platform.hpp" />
+    <ClInclude Include="..\..\src\mips\platform\win32\host_mmu.hpp" />
+    <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\jit1\codegen.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\avx_type.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak.h" />
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_bin2hex.h" />
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_mnemonic.h" />
+    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_util.h" />
+    <ClInclude Include="..\..\src\mips\processor\processor.hpp" />
+    <ClInclude Include="..\..\src\mips\system.hpp" />
+    <ClInclude Include="..\..\src\sparsehash\internal\densehashtable.h" />
+    <ClInclude Include="..\..\src\sparsehash\internal\hashtable-common.h" />
+    <ClInclude Include="..\..\src\sparsehash\internal\libc_allocator_with_realloc.h" />
+    <ClInclude Include="..\..\src\sparsehash\internal\sparseconfig.h" />
+    <ClInclude Include="..\..\src\sparsehash\internal\sparsehashtable.h" />
+    <ClInclude Include="..\..\src\sparsehash\template_util.h" />
+    <ClInclude Include="..\..\src\sparsehash\type_traits.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\src\elf\elf.cpp" />
-    <ClCompile Include="..\..\src\elf\pch.cpp">
+    <ClCompile Include="..\..\src\mips\coprocessor\coprocessor1\coprocessor1.cpp" />
+    <ClCompile Include="..\..\src\mips\debugger.cpp" />
+    <ClCompile Include="..\..\src\mips\instructions\coprocessor1_inst.cpp" />
+    <ClCompile Include="..\..\src\mips\instructions\instructions.cpp" />
+    <ClCompile Include="..\..\src\mips\instructions\instructions_test.cpp" />
+    <ClCompile Include="..\..\src\mips\instructions\processor_inst.cpp" />
+    <ClCompile Include="..\..\src\mips\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-Clang|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="..\..\src\mips\platform\win32\host_mmu.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_compact_branches.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_delay_branches.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_instructions.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_memory.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_traps.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\processor.cpp" />
+    <ClCompile Include="..\..\src\mips\system.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\..\src\mips\processor\jit\jit1\jit1_springboard.s">
+      <FileType>Document</FileType>
+    </MASM>
+    <None Include="..\..\src\sparsehash\dense_hash_map" />
+    <None Include="..\..\src\sparsehash\dense_hash_set" />
+    <None Include="..\..\src\sparsehash\sparsetable" />
+    <None Include="..\..\src\sparsehash\sparse_hash_map" />
+    <None Include="..\..\src\sparsehash\sparse_hash_set" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\..\src\mips\processor\jit\jit1\jit1_register_assignments.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
   </ImportGroup>
 </Project>

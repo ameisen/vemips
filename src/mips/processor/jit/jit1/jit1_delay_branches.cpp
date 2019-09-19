@@ -14,6 +14,12 @@ using namespace mips;
 extern jit1::jit_instructionexec_t jit1_get_instruction(jit1 * __restrict _this, uint32 address);
 static constexpr uint32 MaxShortJumpLookAhead = 2;
 
+#define IS_INSTRUCTION(instr, ref) \
+	[&]() -> bool { \
+		extern const mips::instructions::InstructionInfo StaticProc_ ## ref; \
+		return &StaticProc_ ## ref == &instr; \
+	}()
+
 bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict
 {
    const uint32 this_address = address;
@@ -32,7 +38,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
    const auto no_jump = GetUniqueLabel();
 
-   if (std::string(instruction_info.Name) == "COP1_BC1EQZ")
+   if (IS_INSTRUCTION(instruction_info, COP1_BC1EQZ_v))
    {
       static const int16 fp_offset = sword_assert(offset_of(&coprocessor1::m_registers) - 128);
       const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*m_jit.m_processor.get_coprocessor(1));
@@ -45,11 +51,11 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       test(dword[r12 + ft_offset], 1); // ZF set to 1 if [ft] & 1 == 0
       jnz(no_jump);
       mov(esi, int32(target_address));
-      or(ebx, processor::flag_bit(processor::flag::branch_delay));
+      or_(ebx, processor::flag_bit(processor::flag::branch_delay));
       L(no_jump);
-      or(ebx, processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "COP1_BC1NEZ")
+   else if (IS_INSTRUCTION(instruction_info, COP1_BC1NEZ_v))
    {
       static const int16 fp_offset = sword_assert(offset_of(&coprocessor1::m_registers) - 128);
       const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*m_jit.m_processor.get_coprocessor(1));
@@ -62,11 +68,11 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       test(dword[r12 + ft_offset], 1); // ZF set to 1 if [ft] & 1 == 0
       jz(no_jump);
       mov(esi, int32(target_address));
-      or(ebx, processor::flag_bit(processor::flag::branch_delay));
+      or_(ebx, processor::flag_bit(processor::flag::branch_delay));
       L(no_jump);
-      or(ebx, processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_BAL")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BAL))
    {
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
@@ -75,10 +81,10 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
       mov(dword[rbp + r31], int32(link_address));
       mov(esi, int32(target_address));
-      or(ebx, processor::flag_bit(processor::flag::branch_delay));
-      or(ebx, processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+      or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_BEQ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BEQ))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -92,7 +98,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       if (rs.get_register() == 0 && rt.get_register() == 0)
       {
          mov(esi, int32(target_address)); // 0 == 0
-         or(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -111,12 +117,12 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          }
          jne(no_jump);
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
-         or(ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BGEZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BGEZ))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -128,19 +134,19 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       if (rs.get_register() == 0) // 0 >= 0
       {
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
          cmp(get_register_op32(rs), 0);
          jl(no_jump);
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
-         or(ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BGTZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BGTZ))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -158,12 +164,12 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          cmp(get_register_op32(rs), 0);
          jle(no_jump);
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
       }
-      or(ebx, processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_BLEZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BLEZ))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -175,19 +181,19 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       if (rs.get_register() == 0) // 0 <= 0
       {
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
          cmp(get_register_op32(rs), 0);
          jg(no_jump);
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
-         or(ebx, processor::flag_bit(processor::flag::no_cti));
+         or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BLTZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BLTZ))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -205,12 +211,12 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          cmp(get_register_op32(rs), 0);
          jge(no_jump);
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
       }
-      or(ebx, processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_BNE")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BNE))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
@@ -242,21 +248,21 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          }
          je(no_jump);
          mov(esi, int32(target_address));
-         or(ebx, processor::flag_bit(processor::flag::branch_delay));
+         or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
       }
-      or(ebx, processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_J")
+   else if (IS_INSTRUCTION(instruction_info, PROC_J))
    {
       const uint32 instr_index = instructions::TinyInt<28>(instruction << 2).zextend<uint32>();
 
       const uint32 target_address = (address & instructions::HighBits(4)) | instr_index;
 
       mov(esi, int32(target_address));
-      or(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_JAL")
+   else if (IS_INSTRUCTION(instruction_info, PROC_JAL))
    {
       const uint32 instr_index = instructions::TinyInt<28>(instruction << 2).zextend<uint32>();
 
@@ -266,9 +272,9 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
       mov(dword[rbp + r31], int32(link_address));
       mov(esi, int32(target_address));
-      or(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+      or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_JALR")
+   else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<11, 5> rd(instruction, m_jit.m_processor);
@@ -277,18 +283,18 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
       if (rd.get_register() != 0)
       {
-         mov(dword[rbp + (gp_offset + rd.get_register() * 4)], int32(link_address));
+         mov(dword[rbp + (int64(gp_offset) + int64(rd.get_register()) * 4)], int32(link_address));
       }
-      mov(esi, dword[rbp + (gp_offset + rs.get_register() * 4)]);
-      or(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+      mov(esi, dword[rbp + (gp_offset + int64(rs.get_register()) * 4)]);
+      or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
    }
-   else if (std::string(instruction_info.Name) == "PROC_JR")
+   else if (IS_INSTRUCTION(instruction_info, PROC_JR))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
       const instructions::GPRegister<11, 5> rd(instruction, m_jit.m_processor);
 
-      mov(esi, dword[rbp + (gp_offset + rs.get_register() * 4)]);
-      or(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+      mov(esi, dword[rbp + (int64(gp_offset) + int64(rs.get_register()) * 4)]);
+      or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
    }
    else
    {
@@ -375,7 +381,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
       }
    };
 
-   if (std::string(instruction_info.Name) == "COP1_BC1EQZ")
+   if (IS_INSTRUCTION(instruction_info, COP1_BC1EQZ_v))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 offset = instructions::TinyInt<18>(instruction << 2U).sextend<int32>();
@@ -390,7 +396,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "COP1_BC1NEZ")
+   else if (IS_INSTRUCTION(instruction_info, COP1_BC1NEZ_v))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 offset = instructions::TinyInt<18>(instruction << 2U).sextend<int32>();
@@ -405,7 +411,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BAL")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BAL))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -420,7 +426,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BEQ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BEQ))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -435,7 +441,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BGEZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BGEZ))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -450,7 +456,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BGTZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BGTZ))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -465,7 +471,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BLEZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BLEZ))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -480,7 +486,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BLTZ")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BLTZ))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -495,7 +501,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_BNE")
+   else if (IS_INSTRUCTION(instruction_info, PROC_BNE))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
@@ -510,7 +516,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_J")
+   else if (IS_INSTRUCTION(instruction_info, PROC_J))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const uint32 instr_index = instructions::TinyInt<28>(instruction << 2).zextend<uint32>();
@@ -525,7 +531,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_JAL")
+   else if (IS_INSTRUCTION(instruction_info, PROC_JAL))
    {
       const coprocessor1 & __restrict cop1 = *(const coprocessor1 * __restrict)m_jit.m_processor.get_coprocessor(1);
       const uint32 instr_index = instructions::TinyInt<28>(instruction << 2).zextend<uint32>();
@@ -540,7 +546,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          branchtype = branch_type::far_branch;
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_JALR")
+   else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
 
@@ -562,7 +568,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          }
       }
    }
-   else if (std::string(instruction_info.Name) == "PROC_JR")
+   else if (IS_INSTRUCTION(instruction_info, PROC_JR))
    {
       const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
 
@@ -597,11 +603,11 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          const auto no_branch = GetUniqueLabel();
          test(ebx, processor::flag_bit(processor::flag::branch_delay));
          je(no_branch);
-         and(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+         and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
          // what is the offset of the target address?
          const uint32 target_offset = (target_address - chunk_begin) / 4u;
          const auto target_label = GetIndexLabel(target_offset);
-         xor(esi, esi);
+         xor_(esi, esi);
          safejmp(target_label, target_offset);
          L(no_branch);
       } break;
@@ -610,8 +616,8 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          const auto no_branch = GetUniqueLabel();
          test(ebx, processor::flag_bit(processor::flag::branch_delay));
          je(no_branch);
-         xor(esi, esi);
-         and(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+         xor_(esi, esi);
+         and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
          const auto patch = patch_preprolog();
 
          mov(edx, int32(target_address));
@@ -633,15 +639,15 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 
          test(ebx, processor::flag_bit(processor::flag::branch_delay));
          je(no_branch);
-         and(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+         and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
          mov(eax, esi);
-         xor(esi, esi);
+         xor_(esi, esi);
 
          mov(ecx, eax);
-         and(ecx, ~(jit1::ChunkSize - 1));
+         and_(ecx, ~(jit1::ChunkSize - 1));
          cmp(ecx, chunk_begin);
          jne(not_within);
-         and(eax, (jit1::ChunkSize - 1));
+         and_(eax, (jit1::ChunkSize - 1));
 
          mov(rcx, uint64(chunk_offset.data()));
          mov(eax, dword[rcx + rax]);
@@ -661,7 +667,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          const auto no_branch = GetUniqueLabel();
          test(ebx, processor::flag_bit(processor::flag::branch_delay));
          jz(no_branch);
-         and(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+         and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
          mov(eax, int32(target_address));
          mov(dword[rbp + pc_offset], eax);
 
@@ -677,7 +683,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          const auto no_branch = GetUniqueLabel();
          test(ebx, processor::flag_bit(processor::flag::branch_delay));
          jz(no_branch);
-         and(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+         and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
          mov(eax, int32(target_address));
          mov(dword[rbp + pc_offset], eax);
 
@@ -696,15 +702,15 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 
          test(ebx, processor::flag_bit(processor::flag::branch_delay));
          jz(no_branch);
-         and(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+         and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
          mov(eax, dword[rbp + dbt_offset]);
          mov(dword[rbp + pc_offset], eax);
 
          mov(ecx, eax);
-         and(ecx, ~(jit1::ChunkSize - 1));
+         and_(ecx, ~(jit1::ChunkSize - 1));
          cmp(ecx, chunk_begin);
          jne(not_within);
-         and(eax, (jit1::ChunkSize - 1));
+         and_(eax, (jit1::ChunkSize - 1));
 
          mov(rcx, uint64(chunk_offset.data()));
          mov(eax, dword[rcx + rax]);

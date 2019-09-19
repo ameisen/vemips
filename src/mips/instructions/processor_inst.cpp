@@ -131,7 +131,7 @@ namespace mips::instructions
       const GPRegister<16, 5> rt(instruction, processor);
       GPRegister<11, 5> rd(instruction, processor);
 
-      const int64 result = rs.value<int32>() + rt.value<int32>();
+      const int64 result = int64(rs.value<int32>()) + rt.value<int32>();
       if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
       {
          throw CPU_Exception{ CPU_Exception::Type::Ov, processor.get_program_counter() };
@@ -588,7 +588,7 @@ namespace mips::instructions
       }
       else if (rs.get_register() >= rt.get_register()) // BOVC
       {
-         const int64 result = rs.value<int32>() + rt.value<int32>();
+         const int64 result = int64(rs.value<int32>()) + rt.value<int32>();
          const bool overflow = (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min());
 
          if (overflow)
@@ -648,7 +648,7 @@ namespace mips::instructions
       }
       else if (rs.get_register() >= rt.get_register()) // BNVC
       {
-         const int64 result = rs.value<int32>() + rt.value<int32>();
+         const int64 result = int64(rs.value<int32>()) + rt.value<int32>();
          const bool overflow = (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min());
 
          if (!overflow)
@@ -2331,7 +2331,7 @@ namespace mips::instructions
       const GPRegister<16, 5> rt(instruction, processor);
       GPRegister<11, 5> rd(instruction, processor);
 
-      const int64 result = rs.value<int32>() - rt.value<int32>();
+      const int64 result = int64(rs.value<int32>()) - rt.value<int32>();
       if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
       {
          throw CPU_Exception{ CPU_Exception::Type::Ov, processor.get_program_counter() };

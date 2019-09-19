@@ -9,11 +9,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#if !USE_STATIC_INSTRUCTION_SEARCH
-#include "sparsehash/dense_hash_map"
-#include "sparsehash/sparse_hash_map"
-#endif
-
 namespace mips
 {
    class processor;

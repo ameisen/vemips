@@ -872,7 +872,7 @@ public:
 		const uint8 *p = getCode();
 		size_t bufSize = getSize();
 		size_t remain = bufSize;
-		for (int i = 0; i < 4; i++) {
+		for (int64 i = 0; i < 4; i++) {
 			size_t disp = 16;
 			if (remain < 16) {
 				disp = remain;

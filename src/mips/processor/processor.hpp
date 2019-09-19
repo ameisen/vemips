@@ -89,7 +89,7 @@ namespace mips
       system                                    *m_guest_system = nullptr;
       bool                                      m_debugging = false;
 
-      void processor::ExecuteInstruction(bool branch_delay) __restrict;
+      void ExecuteInstruction(bool branch_delay) __restrict;
 
    public:
       void compare(const processor & __restrict other, uint32 /*previous_pc*/)

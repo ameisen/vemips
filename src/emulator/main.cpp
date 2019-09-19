@@ -57,9 +57,9 @@ static uint64 GetHostFrequency()
 #  include "base64.hpp"
 #endif
 
-static constexpr uint32_t VerMajor = 0;
-static constexpr uint32_t VerMinor = 9;
-static constexpr uint32_t VerBuild = 27;
+static constexpr uint32_t VerMajor = 1;
+static constexpr uint32_t VerMinor = 0;
+static constexpr uint32_t VerBuild = 0;
 
 void version();
 void help();
@@ -267,79 +267,59 @@ static const std::vector<Option> Options{
 
 void changes()
 {
-   printf("Changelist:\n");
-   printf("\t0.9.27\n");
-   printf(
-      "Improved performance.\n"
-      "Added further support for Linux ABIs for runtime libraries\n"
-      "Added JIT jump patching. CURRENTLY DOES NOT SUPPORT SELF-MODIFYING CODE.\n"
-   );
-   printf("\t0.9.25\n");
-   printf(
-      "Added loads and stores to the JIT.\n"
-      "Added full delay branch support to the JIT.\n"
-      "Added some more basic instructions to the JIT.\n"
-      "Improved load instructions and a few others.\n"
-      "Added a few more basic COP1 instructions to JIT.\n"
-      "Fixed a major bug in ticked mode in JIT.\n"
-      "Improved stack usage in JIT.\n"
-   );
-   printf("\t0.9.23\n");
-   printf(
-      "Fixed errors in instruction counting in JIT.\n"
-      "Added ticked execution mode.\n"
-   );
-   printf("\t0.9.21\n");
-   printf(
-      "All compact branches integrated into JIT.\n"
-      "Added a springboard to make more registers available to the JIT.\n"
-      "Compacted exceptions into intrinsic jumps.\n"
-      "Added optimized delay branch suffixes.\n"
-      "Fixed NAL - added NoCTI flag.\n"
-      "Added a few more JIT operations.\n"
-   );
-   printf("\t0.9.19\n");
-   printf(
-      "Replaced hex-based jit with xbyak. A little slower, but far easier to use.\n"
-   );
-   printf("\t0.9.17\n");
-   printf(
-      "Added the ability for subroutine compact jumps to handle the entire jump within the JIT without a flush.\n"
-      "Added the ability for subroutine branch delay jumps to handle the entire jump within the JIT without a flush.\n"
-      "Added end-of-cluster implicit jumps. They currently do not patch, though.\n"
-      "Made it so the instruction counts reported for interpreted mode and JIT match.\n"
-   );
-   printf("\t0.9.15\n");
-   printf(
-      "Moved control over CTI detection to the JIT.\n"
-      "Fixed some JIT jump length errors caused by 0.9.13's reduction of direct offset size.\n"
-   );
-   printf("\t0.9.14\n");
-   printf(
-      "Fixed a bug where certain branches couldn't get hit due to an incorrect bitmask on one of the POPsets.\n"
-      "Split off several POPsets into their own instructions to improve performance.\n"
-   );
-   printf("\t0.9.13\n");
-   printf(
-      "Fixed potential JIT crash.\n"
-      "Adjusted most direct offsets in JIT to be 1-byte instead of 4-byte.\n"
-      "Fixed a MAJOR bug which was generating incorrect bitmasks for FPU operations, causing some FPU ops to fail.\n"
-   );
-   printf("\t0.9.12\n");
-   printf(
-      "Fixed potential issue if processor offsets were > 256 B.\n"
-      "Very slightly improved the efficiency of some JIT addiu translations.\n"
-   );
-   printf("\t0.9.11\n");
-   printf(
-      "Fixed potential JIT crash when altering memory that is currently executing.\n"
-      "Further cleanups to the options system.\n"
-   );
-   printf("\t0.9.9\n");
-   printf(
-      "Removed old, inefficient JIT attempts in favor of functional JIT.\nMade the JIT work correctly with multiple chunk sizes (internal).\n"
-      "Made the JIT honor self-modifying code correctly (needs a lot of optimization).\nAdded --rox flag to disable support for self-modifying code.\n"
-   );
+	puts(
+		"Changelist:\n"
+		"\t1.0.0\n"
+		"Code cleanup, mostly migrated to VS2019.\n"
+		"\t0.9.27\n"
+		"Improved performance.\n"
+		"Added further support for Linux ABIs for runtime libraries\n"
+		"Added JIT jump patching. CURRENTLY DOES NOT SUPPORT SELF-MODIFYING CODE.\n"
+		"\t0.9.25\n"
+		"Added loads and stores to the JIT.\n"
+		"Added full delay branch support to the JIT.\n"
+		"Added some more basic instructions to the JIT.\n"
+		"Improved load instructions and a few others.\n"
+		"Added a few more basic COP1 instructions to JIT.\n"
+		"Fixed a major bug in ticked mode in JIT.\n"
+		"Improved stack usage in JIT.\n"
+		"\t0.9.23\n"
+		"Fixed errors in instruction counting in JIT.\n"
+		"Added ticked execution mode.\n"
+		"\t0.9.21\n"
+		"All compact branches integrated into JIT.\n"
+		"Added a springboard to make more registers available to the JIT.\n"
+		"Compacted exceptions into intrinsic jumps.\n"
+		"Added optimized delay branch suffixes.\n"
+		"Fixed NAL - added NoCTI flag.\n"
+		"Added a few more JIT operations.\n"
+		"\t0.9.19\n"
+		"Replaced hex-based jit with xbyak. A little slower, but far easier to use.\n"
+		"\t0.9.17\n"
+		"Added the ability for subroutine compact jumps to handle the entire jump within the JIT without a flush.\n"
+		"Added the ability for subroutine branch delay jumps to handle the entire jump within the JIT without a flush.\n"
+		"Added end-of-cluster implicit jumps. They currently do not patch, though.\n"
+		"Made it so the instruction counts reported for interpreted mode and JIT match.\n"
+		"\t0.9.15\n"
+		"Moved control over CTI detection to the JIT.\n"
+		"Fixed some JIT jump length errors caused by 0.9.13's reduction of direct offset size.\n"
+		"\t0.9.14\n"
+		"Fixed a bug where certain branches couldn't get hit due to an incorrect bitmask on one of the POPsets.\n"
+		"Split off several POPsets into their own instructions to improve performance.\n"
+		"\t0.9.13\n"
+		"Fixed potential JIT crash.\n"
+		"Adjusted most direct offsets in JIT to be 1-byte instead of 4-byte.\n"
+		"Fixed a MAJOR bug which was generating incorrect bitmasks for FPU operations, causing some FPU ops to fail.\n"
+		"\t0.9.12\n"
+		"Fixed potential issue if processor offsets were > 256 B.\n"
+		"Very slightly improved the efficiency of some JIT addiu translations.\n"
+		"\t0.9.11\n"
+		"Fixed potential JIT crash when altering memory that is currently executing.\n"
+		"Further cleanups to the options system.\n"
+		"\t0.9.9\n"
+		"Removed old, inefficient JIT attempts in favor of functional JIT.\nMade the JIT work correctly with multiple chunk sizes (internal).\n"
+		"Made the JIT honor self-modifying code correctly (needs a lot of optimization).\nAdded --rox flag to disable support for self-modifying code."
+	);
 }
 
 void version()
