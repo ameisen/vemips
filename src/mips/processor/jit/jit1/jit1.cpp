@@ -185,7 +185,6 @@ struct base_fixup
    base_fixup(uint32 _offset) :
       offset(_offset) {}
 };
-
 template <typename T>
 struct fixup : public base_fixup
 {
@@ -662,7 +661,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
                }
                else if (IS_INSTRUCTION(instruction_info_ptr, PROC_RDHWR))
                {
-                  write_PROC_RDHWR(chunk_offset, current_address, instruction, *instruction_info_ptr);
+                  write_PROC_RDHWR(chunk_offset, terminate_instruction, current_address, instruction, *instruction_info_ptr);
                }
                else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLLV))
                {
@@ -672,12 +671,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
                {
                   write_PROC_SRLV(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-
                else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SYNC))
                {
                   write_PROC_SYNC(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-
                else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TEQ))
                {
                   write_PROC_TEQ(chunk_offset, current_address, instruction, *instruction_info_ptr);

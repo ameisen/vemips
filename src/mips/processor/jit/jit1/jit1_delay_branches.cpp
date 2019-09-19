@@ -95,7 +95,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
       const uint32 target_address = address + 4 + immediate;
 
-      if (rs.get_register() == 0 && rt.get_register() == 0)
+      if (rs.get_register() == rt.get_register())
       {
          mov(esi, int32(target_address)); // 0 == 0
          or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
@@ -227,7 +227,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
       const uint32 target_address = address + 4 + immediate;
 
-      if (rs.get_register() == 0 && rt.get_register() == 0)
+      if (rs.get_register() == rt.get_register())
       {
          //nop
       }
@@ -341,8 +341,8 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
       auto &patch_pair = chunk.m_patches.back();
       uint32 &patch_target = patch_pair.target;
 
-      static constexpr uint8 patch_nop[] = { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 };
-      for (uint8 octet : patch_nop) db(octet);
+      // no-op patch
+      for (uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) db(octet);
 
       mov(rcx, int64(&patch_target));
       mov(dword[rcx], edx);

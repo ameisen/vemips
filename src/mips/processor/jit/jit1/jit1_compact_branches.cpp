@@ -42,8 +42,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
       auto &patch_pair = chunk.m_patches.back();
       uint32 &patch_target = patch_pair.target;
 
-      static constexpr uint8 patch_nop[] = { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 };
-      for (uint8 octet : patch_nop) db(octet);
+      // patch no-op
+      for (uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) db(octet);
 
       mov(rcx, int64(&patch_target));
       mov(dword[rcx], edx);

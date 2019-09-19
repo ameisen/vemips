@@ -286,32 +286,27 @@ void processor::execute(uint64 clocks) __restrict
          {
             cti_delay_updater.m_Processor = this;
          }
-      }
 
-      // EXECUTE INSTRUCTION
-
-      if (m_jit_type == JitType::None)
-      {
          ++m_instruction_count;
          clear_flags(flag_bit(flag::branch_delay));
       }
       else
       {
-         if (m_from_exception && get_flags(flag_bit(flag::branch_delay)))
-         {
-            m_program_counter = m_branch_target;
-            clear_flags(flag_bit(flag::branch_delay));
-         }
-         else if (m_from_exception)
-         {
-            m_program_counter += 4;
-         }
-         m_from_exception = false;
+				if (m_from_exception) {
+					if (get_flags(flag_bit(flag::branch_delay)))
+					{
+						m_program_counter = m_branch_target;
+						clear_flags(flag_bit(flag::branch_delay));
+					}
+					else
+					{
+						m_program_counter += 4;
+					}
+					m_from_exception = false;
+				}
       }
 
       ExecuteInstruction(false);
-
-      // ~EXECUTE INSTRUCTION
 
       // If the program counter has changed through a compact branch, then do NOT increment the program counter.
       if (get_flags(flag_bit(flag::pc_changed)))

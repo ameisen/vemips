@@ -127,31 +127,35 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
       mov(rcx, rbp);
       add(rcx, int8(-128));
       // 'rcx' is the first parameter (processor ptr)
-      if (offset == 0)
-      {
-         xor_(edx, edx);
-      }
-      else if (offset >= -128 && offset < 127)
-      {
-         mov(edx, int8(offset));
-      }
-      else
-      {
-         mov(edx, int32(offset));
-      }
 
-      if (base.get_register() != 0)
-      {
-         // The effective address is '[base] + offset'
-         if (offset == 0)
-         {
-            mov(edx, get_register_op32(base));
-         }
-         else
-         {
-            add(edx, get_register_op32(base));
-         }
-      }
+			if (base.get_register() != 0) {
+				// The effective address is '[base] + offset'
+				mov(edx, get_register_op32(base));
+				if (offset != 0) {
+					if (offset >= -128 && offset < 127)
+					{
+						add(edx, int8(offset));
+					}
+					else
+					{
+						add(edx, int32(offset));
+					}
+				}
+			}
+			else {
+				if (offset == 0)
+				{
+					xor_(edx, edx);
+				}
+				else if (offset >= -128 && offset < 127)
+				{
+					mov(edx, int8(offset));
+				}
+				else
+				{
+					mov(edx, int32(offset));
+				}
+			}
       // 'edx' is the second parameter (address)
       mov(r8d, int8(store_size));
       mov(r13d, edx); // store to non-volatile for after call if there's an exception.
@@ -159,8 +163,6 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
       call(rax);
       // rax now has our destination pointer.
       mov(r13, rax); // save the pointer off to non-volatile r13.
-      //cmp(rax, 0);
-      //jne(valid_ptr);
       test(rax, rax);
       jnz(valid_ptr);
       mov(eax, ecx);
@@ -269,38 +271,71 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
       {
          if (rt.get_register() == 0)
          {
-            switch (store_size)
-            {
-               case 1:
-                  mov(byte[rdx + rax], 0); break;
-               case 2:
-                  mov(word[rdx + rax], 0); break;
-               case 4:
-                  mov(dword[rdx + rax], 0); break;
-               case 8:
-                  mov(qword[rdx + rax], 0); break;
-            }
+						xor_(ecx, ecx);
+						switch (store_size)
+						{
+						case 1:
+							mov(byte[rdx + rax], cl); break;
+						case 2:
+							mov(word[rdx + rax], cx); break;
+						case 4:
+							mov(dword[rdx + rax], ecx); break;
+						case 8:
+							mov(qword[rdx + rax], rcx); break;
+						}
          }
          else
          {
             switch (store_size)
             {
-               case 1:
-                  mov(cl, get_register_op8(rt));
-                  mov(byte[rdx + rax], cl);
-                  break;
-               case 2:
-                  mov(cx, get_register_op16(rt));
-                  mov(word[rdx + rax], cx);
-                  break;
-               case 4:
-                  mov(ecx, get_register_op32(rt));
-                  mov(dword[rdx + rax], ecx);
-                  break;
-               case 8:
-                  mov(rcx, get_register_op64(rt));
-                  mov(qword[rdx + rax], rcx);
-                  break;
+               case 1: {
+								const auto& src = get_register_op8(rt);
+								const auto& dst = byte[rdx + rax];
+								if (src.isMEM()) {
+									mov(cl, src);
+									mov(dst, cl);
+								}
+								else {
+									mov(dst, src);
+								}
+							}
+							break;
+               case 2: {
+								 const auto& src = get_register_op16(rt);
+								 const auto& dst = byte[rdx + rax];
+								 if (src.isMEM()) {
+									 mov(cx, src);
+									 mov(dst, cx);
+								 }
+								 else {
+									 mov(dst, src);
+								 }
+							 }
+								break;
+               case 4: {
+								 const auto& src = get_register_op32(rt);
+								 const auto& dst = byte[rdx + rax];
+								 if (src.isMEM()) {
+									 mov(ecx, src);
+									 mov(dst, ecx);
+								 }
+								 else {
+									 mov(dst, src);
+								 }
+							 }
+							 break;
+               case 8: {
+								 const auto& src = get_register_op64(rt);
+								 const auto& dst = byte[rdx + rax];
+								 if (src.isMEM()) {
+									 mov(rcx, src);
+									 mov(dst, rcx);
+								 }
+								 else {
+									 mov(dst, src);
+								 }
+							 }
+							 break;
             }
          }
       }
@@ -308,38 +343,71 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
       {
          if (rt.get_register() == 0)
          {
-            switch (store_size)
-            {
-               case 1:
-                  mov(byte[r13], 0); break;
-               case 2:
-                  mov(word[r13], 0); break;
-               case 4:
-                  mov(dword[r13], 0); break;
-               case 8:
-                  mov(qword[r13], 0); break;
-            }
+						xor_(ecx, ecx);
+						switch (store_size)
+						{
+								case 1:
+									mov(byte[r13], cl); break;
+								case 2:
+									mov(word[r13], cx); break;
+								case 4:
+									mov(dword[r13], ecx); break;
+								case 8:
+									mov(qword[r13], rcx); break;
+						}
          }
          else
          {
             switch (store_size)
             {
-               case 1:
-                  mov(cl, get_register_op8(rt));
-                  mov(byte[r13], cl);
-                  break;
-               case 2:
-                  mov(cx, get_register_op16(rt));
-                  mov(word[r13], cx);
-                  break;
-               case 4:
-                  mov(ecx, get_register_op32(rt));
-                  mov(dword[r13], ecx);
-                  break;
-               case 8:
-                  mov(rcx, get_register_op64(rt));
-                  mov(qword[r13], rcx);
-                  break;
+						case 1: {
+							const auto& src = get_register_op8(rt);
+							const auto& dst = byte[r13];
+							if (src.isMEM()) {
+								mov(cl, src);
+								mov(dst, cl);
+							}
+							else {
+								mov(dst, src);
+							}
+						}
+						break;
+						case 2: {
+							const auto& src = get_register_op16(rt);
+							const auto& dst = word[r13];
+							if (src.isMEM()) {
+								mov(cx, src);
+								mov(dst, cx);
+							}
+							else {
+								mov(dst, src);
+							}
+						}
+						break;
+						case 4: {
+							const auto& src = get_register_op32(rt);
+							const auto& dst = dword[r13];
+							if (src.isMEM()) {
+								mov(ecx, src);
+								mov(dst, ecx);
+							}
+							else {
+								mov(dst, src);
+							}
+						}
+						break;
+						case 8: {
+							const auto& src = get_register_op64(rt);
+							const auto& dst = qword[r13];
+							if (src.isMEM()) {
+								mov(rcx, src);
+								mov(dst, rcx);
+							}
+							else {
+								mov(dst, src);
+							}
+						}
+						break;
             }
          }
       }
@@ -446,27 +514,26 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
          mov(rcx, rbp);
          add(rcx, int8(-128));
          // 'rcx' is the first parameter (processor ptr)
-         if (offset == 0)
-         {
-            xor_(edx, edx);
-         }
-         else
-         {
-            mov(edx, int32(offset));
-         }
 
-         if (base.get_register() != 0)
-         {
-            // The effective address is '[base] + offset'
-            if (offset == 0)
-            {
-               mov(edx, get_register_op32(base));
-            }
-            else
-            {
-               add(edx, get_register_op32(base));
-            }
-         }
+				 if (base.get_register() != 0) {
+					 // The effective address is '[base] + offset'
+					mov(edx, get_register_op32(base));
+
+					 if (offset != 0) {
+						 add(edx, int32(offset));
+					 }
+				 }
+				 else {
+					 if (offset == 0)
+					 {
+						 xor_(edx, edx);
+					 }
+					 else
+					 {
+						 mov(edx, int32(offset));
+					 }
+				 }
+
          // 'edx' is the second parameter (address)
          mov(r8d, int8(load_size));
          mov(r13d, edx); // store to non-volatile for after call if there's an exception.

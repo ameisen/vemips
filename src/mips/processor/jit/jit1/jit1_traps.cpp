@@ -105,16 +105,16 @@ void Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __restrict chunk_offset, u
    const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
    // tr ? [rs] < [rt]
-   mov(eax, int32(code));
    if (rs.get_register() == rt.get_register())
    {
       // nop
    }
    else
    {
-      mov(ecx, get_register_op32(rs));
-      cmp(ecx, get_register_op32(rt));
-      jl("intrinsic_tr_ex", T_NEAR);
+		 mov(eax, int32(code));
+		 mov(ecx, get_register_op32(rs));
+		 cmp(ecx, get_register_op32(rt));
+		 jl("intrinsic_tr_ex", T_NEAR);
    }
 }
 
@@ -131,7 +131,6 @@ void Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, 
    const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
    // tr ? [rs] < [rt]
-   mov(eax, int32(code));
    if (rs.get_register() == rt.get_register())
    {
       // nop
@@ -142,9 +141,10 @@ void Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, 
    }
    else
    {
-      mov(ecx, get_register_op32(rs));
-      cmp(ecx, get_register_op32(rt));
-      jl("intrinsic_tr_ex", T_NEAR);
+		 mov(eax, int32(code));
+		 mov(ecx, get_register_op32(rs));
+		 cmp(ecx, get_register_op32(rt));
+		 jl("intrinsic_tr_ex", T_NEAR);
    }
 }
 
@@ -161,16 +161,16 @@ void Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __restrict chunk_offset, u
    const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
    // tr ? [rs] != [rt]
-   mov(eax, int32(code));
    if (rs.get_register() == rt.get_register())
    {
       // nop
    }
    else
    {
-      mov(ecx, get_register_op32(rs));
-      cmp(ecx, get_register_op32(rt));
-      jne("intrinsic_tr_ex", T_NEAR);
+		 mov(eax, int32(code));
+		 mov(ecx, get_register_op32(rs));
+		 cmp(ecx, get_register_op32(rt));
+		 jne("intrinsic_tr_ex", T_NEAR);
    }
 }
 

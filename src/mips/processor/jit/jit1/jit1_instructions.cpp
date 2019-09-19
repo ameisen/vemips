@@ -62,7 +62,7 @@ void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, 
    {
       // nop
    }
-   else if (rs.get_register() == 0 && rt.get_register() == 0)
+   else if (rs.get_register() == rt.get_register())
    {
       mov(get_register_op32(rd), 0);
    }
@@ -108,15 +108,15 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
    {
       // nop
    }
-   else if (rs.get_register() == 0 && rt.get_register() == 0)
+   else if (rs.get_register() == rt.get_register())
    {
-      mov(get_register_op32(rd), 0);
+		 mov(get_register_op32(rd), 0);
    }
    else if (rs.get_register() == 0)
    {
       // check if 'rt' is zero or not. If it's zero, we write zero to rd.
       // otherwise, we throw OV
-      cmp(get_register_op32(rt), 0);
+		 cmp(get_register_op32(rt), 0);
       jne("intrinsic_ov_ex", T_NEAR);
       mov(get_register_op32(rd), 0);
    }
@@ -293,7 +293,7 @@ void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, u
    // rd = rs | rt
    const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
    const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
-   const uint32 offset = instructions::TinyInt<16>(instruction).zextend<uint32>();
+   const uint32 immediate = instructions::TinyInt<16>(instruction).zextend<uint32>();
 
    const int8 rs_offset = sbyte_assert(gp_offset + (4 * rs.get_register()));
    const int8 rt_offset = sbyte_assert(gp_offset + (4 * rt.get_register()));
@@ -305,16 +305,16 @@ void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, u
    else if (rs.get_register() == 0)
    {
       // set rt to offset
-      if (offset == 0)
+      if (immediate == 0)
       {
          mov(get_register_op32(rt), int8(0));
       }
       else
       {
-         mov(get_register_op32(rt), int32(offset));
+         mov(get_register_op32(rt), int32(immediate));
       }
    }
-   else if (offset == 0)
+   else if (immediate == 0)
    {
       // just move rs to rt
       mov(eax, get_register_op32(rs));
@@ -323,8 +323,8 @@ void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, u
    else
    {
       // actually perform OR
-      mov(eax, get_register_op32(rs));
-      or_(eax, int32(offset));
+		 mov(eax, int32(immediate));
+		 or_(eax, get_register_op32(rs));
       mov(get_register_op32(rt), eax);
    }
 }
@@ -336,20 +336,23 @@ void Jit1_CodeGen::write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, 
    // rd = rs | rt
    const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
    const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
-   const uint32 offset = instructions::TinyInt<16>(instruction).zextend<uint32>();
+   const uint32 immediate = instructions::TinyInt<16>(instruction).zextend<uint32>();
 
    const int8 rs_offset = sbyte_assert(gp_offset + (4 * rs.get_register()));
    const int8 rt_offset = sbyte_assert(gp_offset + (4 * rt.get_register()));
 
-   if (rt.get_register() == 0 || offset == 0)
+   if (rt.get_register() == 0)
    {
       // nop
    }
+	 else if (rs.get_register() == 0 || immediate == 0) {
+		 mov(get_register_op32(rt), 0);
+	 }
    else
    {
       // actually perform AND
-      mov(eax, get_register_op32(rs));
-      and_(eax, int32(offset));
+      mov(eax, int32(immediate));
+      and_(eax, get_register_op32(rs));
       mov(get_register_op32(rt), eax);
    }
 }
@@ -571,14 +574,14 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
    }
    else if (immediate == -1)
    {
-   // decrement
-   // 8B 42 DD FF C8 89 42 EE  
-   // mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-   // dec eax
-   // mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
-   mov(eax, get_register_op32(rs));
-   dec(eax);
-   mov(get_register_op32(rt), eax);
+		 // decrement
+		 // 8B 42 DD FF C8 89 42 EE  
+		 // mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+		 // dec eax
+		 // mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+		 mov(eax, get_register_op32(rs));
+		 dec(eax);
+		 mov(get_register_op32(rt), eax);
    }
    else if (immediate >= 0 && immediate <= 128)
    {
@@ -1150,8 +1153,6 @@ void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, u
 
    if (instruction_info.Type == 'f')
    {
-      const auto not_one = GetUniqueLabel();
-
       // float
       // fd = fd.bit[0] ? ft : fs
       mov(eax, dword[r12 + fd_offset]);
@@ -1209,11 +1210,23 @@ void Jit1_CodeGen::write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, u
       imul(get_register_op32(rd));
       mov(get_register_op32(rd), eax);
    }
+	 else if (rt.get_register() == rd.get_register())
+	 {
+		 // move [rt] to [rd]
+		 mov(eax, get_register_op32(rs));
+		 imul(get_register_op32(rd));
+		 mov(get_register_op32(rd), eax);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
       mov(eax, get_register_op32(rs));
-      imul(get_register_op32(rt));
+			if (rs.get_register() == rt.get_register()) {
+				imul(eax);
+			}
+			else {
+				imul(get_register_op32(rt));
+			}
       mov(get_register_op32(rd), eax);
    }
 }
@@ -1240,18 +1253,30 @@ void Jit1_CodeGen::write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, 
       // set [rd] to 0.
       mov(get_register_op32(rd), 0);
    }
-   else if (rs.get_register() == rd.get_register())
-   {
-      // move [rt] to [rd]
-      mov(eax, get_register_op32(rt));
-      mul(get_register_op32(rd));
-      mov(get_register_op32(rd), eax);
-   }
+	 else if (rs.get_register() == rd.get_register())
+	 {
+		 // move [rt] to [rd]
+		 mov(eax, get_register_op32(rt));
+		 mul(get_register_op32(rd));
+		 mov(get_register_op32(rd), eax);
+	 }
+	 else if (rt.get_register() == rd.get_register())
+	 {
+		 // move [rt] to [rd]
+		 mov(eax, get_register_op32(rs));
+		 mul(get_register_op32(rd));
+		 mov(get_register_op32(rd), eax);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
       mov(eax, get_register_op32(rs));
-      mul(get_register_op32(rt));
+			if (rs.get_register() == rt.get_register()) {
+				mul(eax);
+			}
+			else {
+				mul(get_register_op32(rt));
+			}
       mov(get_register_op32(rd), eax);
    }
 }
@@ -1285,11 +1310,23 @@ void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, u
       imul(get_register_op32(rd));
       mov(get_register_op32(rd), edx);
    }
+	 else if (rt.get_register() == rd.get_register())
+	 {
+		 // move [rt] to [rd]
+		 mov(eax, get_register_op32(rs));
+		 imul(get_register_op32(rd));
+		 mov(get_register_op32(rd), edx);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
       mov(eax, get_register_op32(rs));
-      imul(get_register_op32(rt));
+			if (rs.get_register() == rt.get_register()) {
+				imul(eax);
+			}
+			else {
+				imul(get_register_op32(rt));
+			}
       mov(get_register_op32(rd), edx);
    }
 }
@@ -1323,11 +1360,23 @@ void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, 
       mul(get_register_op32(rd));
       mov(get_register_op32(rd), edx);
    }
+	 else if (rt.get_register() == rd.get_register())
+	 {
+		 // move [rt] to [rd]
+		 mov(eax, get_register_op32(rs));
+		 mul(get_register_op32(rd));
+		 mov(get_register_op32(rd), edx);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
       mov(eax, get_register_op32(rs));
-      mul(get_register_op32(rt));
+			if (rs.get_register() == rt.get_register()) {
+				mul(eax);
+			}
+			else {
+				mul(get_register_op32(rt));
+			}
       mov(get_register_op32(rd), edx);
    }
 }
@@ -1378,6 +1427,15 @@ void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, u
       L(divzero);
       mov(get_register_op32(rd), eax);
    }
+	 else if (rs.get_register() == rt.get_register())
+	 {
+		 // move [rt] to [rd]
+		 cmp(get_register_op32(rt), 0);
+		 je(divzero);
+		 mov(get_register_op32(rd), 1);
+		 // TODO should we throw an exception?
+		 L(divzero);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
@@ -1436,6 +1494,15 @@ void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, 
       L(divzero);
       mov(get_register_op32(rd), eax);
    }
+	 else if (rs.get_register() == rt.get_register())
+	 {
+		 // move [rt] to [rd]
+		 cmp(get_register_op32(rt), 0);
+		 je(divzero);
+		 mov(get_register_op32(rd), 1);
+		 // TODO should we throw an exception?
+		 L(divzero);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
@@ -1494,6 +1561,15 @@ void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, u
       L(divzero);
       mov(get_register_op32(rd), eax);
    }
+	 else if (rs.get_register() == rt.get_register())
+	 {
+		 // move [rt] to [rd]
+		 cmp(get_register_op32(rt), 0);
+		 je(divzero);
+		 mov(get_register_op32(rd), 0);
+		 // TODO should we throw an exception?
+		 L(divzero);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
@@ -1552,6 +1628,15 @@ void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, 
       L(divzero);
       mov(get_register_op32(rd), edx);
    }
+	 else if (rs.get_register() == rt.get_register())
+	 {
+		 // move [rt] to [rd]
+		 cmp(get_register_op32(rt), 0);
+		 je(divzero);
+		 mov(get_register_op32(rd), 0);
+		 // TODO should we throw an exception?
+		 L(divzero);
+	 }
    else
    {
       // add [rs] and [rt] to [rd]
@@ -1603,9 +1688,19 @@ void Jit1_CodeGen::write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, u
    }
    else
    {
-      mov(eax, get_register_op32(rt));
-      xor_(eax, get_register_op32(rs));
-      mov(get_register_op32(rd), eax);
+		 if (rd.get_register() == rt.get_register()) {
+			 mov(eax, get_register_op32(rs));
+			 xor_(get_register_op32(rd), eax);
+		 }
+		 else if (rd.get_register() == rs.get_register()) {
+			 mov(eax, get_register_op32(rt));
+			 xor_(get_register_op32(rd), eax);
+		 }
+		 else {
+			 mov(eax, get_register_op32(rt));
+			 xor_(eax, get_register_op32(rs));
+			 mov(get_register_op32(rd), eax);
+		 }
    }
 }
 
@@ -1639,16 +1734,23 @@ void Jit1_CodeGen::write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, 
    }
    else if (offset == 0)
    {
-      // just move rs to rt
-      mov(eax, get_register_op32(rs));
-      mov(get_register_op32(rt), eax);
+		 if (rs.get_register() != rt.get_register()) {
+			 // just move rs to rt
+			 mov(eax, get_register_op32(rs));
+			 mov(get_register_op32(rt), eax);
+		 }
    }
    else
    {
       // actually perform OR
-      mov(eax, get_register_op32(rs));
-      xor_(eax, int32(offset));
-      mov(get_register_op32(rt), eax);
+		 if (rt.get_register() == rs.get_register()) {
+			 xor_(get_register_op32(rt), int32(offset));
+		 }
+		 else {
+			 mov(eax, get_register_op32(rs));
+			 xor_(eax, int32(offset));
+			 mov(get_register_op32(rt), eax);
+		 }
    }
 }
 
@@ -1931,26 +2033,27 @@ void Jit1_CodeGen::write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, 
 }
 
 
-void Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict
+void Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, bool& terminate_instruction, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict
 {
-   static const int8 uv_offset =  sbyte_assert(offset_of(&processor::m_user_value) - 128);
+	static const int8 uv_offset =  sbyte_assert(offset_of(&processor::m_user_value) - 128);
 
-   const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
-   const instructions::GPRegister<11, 5> rd(instruction, m_jit.m_processor);
-   const uint32 selector = instructions::TinyInt<3>(instruction >> 6).zextend<uint32>();
-   const uint32 reg_number = rd.get_register();
+	const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+	const instructions::GPRegister<11, 5> rd(instruction, m_jit.m_processor);
+	const uint32 selector = instructions::TinyInt<3>(instruction >> 6).zextend<uint32>();
+	const uint32 reg_number = rd.get_register();
 
-   if (reg_number == 29 && selector == 0)
-   {
-      mov(eax, dword[rbp + uv_offset]);
-      mov(get_register_op32(rt), eax);
-   }
-   else if (reg_number == 1 && selector == 0)
-   {
-      mov(get_register_op32(rt), 0x100);
-   }
-   else
-   {
-      assert(false);
-   }
+	if (selector == 0) {
+		switch (reg_number) {
+		case 29:
+			mov(eax, dword[rbp + uv_offset]);
+			mov(get_register_op32(rt), eax);
+			return;
+		case 1:
+			mov(get_register_op32(rt), 0x100);
+			return;
+		}
+	}
+	terminate_instruction = true;
+	mov(eax, int32(address));
+	jmp("intrinsic_ri_ex", T_NEAR);
 }

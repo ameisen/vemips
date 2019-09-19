@@ -17,6 +17,7 @@ namespace mips
    inline uint8 byte_assert(T value)
    {
       assert(value <= 127);
+			__assume(value <= 127);
       return uint8(value);
    }
 
@@ -24,6 +25,7 @@ namespace mips
    inline uint32 dword_assert(T value)
    {
       assert(value <= 2147483647);
+			__assume(value <= 2147483647);
       return uint32(value);
    }
 
@@ -32,6 +34,7 @@ namespace mips
    {
       const typename std::make_signed<T>::type value = _value;
       assert(value >= -32768 && value <= 32767);
+			__assume(value >= -32768 && value <= 32767);
       return int16(value);
    }
 
@@ -39,7 +42,8 @@ namespace mips
    inline int8 sbyte_assert(T _value)
    {
       const typename std::make_signed<T>::type value = _value;
-      assert(value >= -128 && value <= 127);
+			assert(value >= -128 && value <= 127);
+			__assume(value >= -128 && value <= 127);
       return int8(value);
    }
 

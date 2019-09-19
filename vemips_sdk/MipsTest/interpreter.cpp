@@ -826,7 +826,7 @@ int main()
             case '-':
                --*ptr; break;
             case '.':
-               putchar(*ptr); break;
+               putchar(*ptr); fflush(stdout); break;
             case ',':
                // don't handle yet.
                break;
@@ -916,92 +916,92 @@ int main()
                break;
             case 'w':
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 'x':
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 's': // s = special case [->n+<n] (*(ptr + n) += *ptr; *ptr = 0
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 't': // t = special case [->n+<n] (*(ptr - n) += *ptr; *ptr = 0
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 'u': // u = special case [->n+<n] (*(ptr + n) -= *ptr; *ptr = 0
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 'v': // v = special case [->n+<n] (*(ptr - n) -= *ptr; *ptr = 0
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 'b': // > sequence special case
             {
-               putchar('?');putchar('?');putchar('?');putchar('?');
+               putchar('?');putchar('?');putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 4;
             } break;
             case 'c': // < sequence special case
             {
-               putchar('?');putchar('?');putchar('?');putchar('?');
+               putchar('?');putchar('?');putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 4;
             } break;
             case 'd': // + sequence special case
             {
-               putchar('?');putchar('?');putchar('?');putchar('?');
+               putchar('?');putchar('?');putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 4;
             } break;
             case 'e': // - sequence special case
             {
-               putchar('?');putchar('?');putchar('?');putchar('?');
+               putchar('?');putchar('?');putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 4;
             } break;
             case 'f': // > sequence special case
             {
-               putchar('?');putchar('?');
+               putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 2;
             } break;
             case 'g': // < sequence special case
             {
-               putchar('?');putchar('?');
+               putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 2;
             } break;
             case 'h': // + sequence special case
             {
-               putchar('?');putchar('?');
+               putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 2;
             } break;
             case 'i': // - sequence special case
             {
-               putchar('?');putchar('?');
+               putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 2;
             } break;
             case 'j': // > sequence special case
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 'k': // < sequence special case
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 'l': // + sequence special case
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case 'm': // - sequence special case
             {
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
             } break;
             case '>':
@@ -1018,23 +1018,23 @@ int main()
                // don't handle yet.
                break;
             case '[':
-               putchar('?');putchar('?');putchar('?');putchar('?');
+               putchar('?');putchar('?');putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 4;
                break;
             case ']':
-               putchar('?');putchar('?');putchar('?');putchar('?');
+               putchar('?');putchar('?');putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 4;
                break;
             case 'n':
-               putchar('?');putchar('?');
+               putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 2;
                break;
             case 'o':
-               putchar('?');
+               putchar('?');fflush(stdout);
                ++instruction_pointer;
                break;
             case 'p':
-               putchar('?');putchar('?');
+               putchar('?');putchar('?');fflush(stdout);
                instruction_pointer += 2;
                break;
             case 0:
