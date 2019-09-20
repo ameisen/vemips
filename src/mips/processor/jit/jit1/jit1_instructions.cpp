@@ -2067,3 +2067,44 @@ void Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset,
 	mov(eax, int32(address));
 	jmp("intrinsic_ri_ex", T_NEAR);
 }
+
+void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info) __restrict
+{
+	const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
+	const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+
+	auto& rs_reg = get_register_op32(rs);
+	auto& rt_reg = get_register_op32(rt);
+
+	const uint32 msbd = instructions::TinyInt<5>(instruction >> 11).zextend<uint32>();
+	const uint32 lsb = instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
+
+	if (rt.get_register() == 0) {
+		// nop
+	}
+	else {
+		if (lsb + msbd > 31) {
+			// Result is unpredictable, just push -1.
+			mov(rt_reg, -1);
+		}
+		else if (rs.get_register() == 0) {
+			// The operation would just return 0.
+			mov(rt_reg, 0);
+		}
+		else {
+			// Equivalent logic to ProcInstructionDef::EXT
+			const uint32_t mask = ((1U << (msbd + 1)) - 1) & (uint32_t(-1) >> lsb); // Optimization, mainly, to detect if the mask would always be zero.
+			if (mask == 0) {
+				mov(rt_reg, 0);
+			}
+			else {
+				mov(eax, rs_reg);
+				if (lsb > 0) {
+					shr(eax, lsb);
+				}
+				and_(eax, mask);
+				mov(rt_reg, eax);
+			}
+		}
+	}
+}

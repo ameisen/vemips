@@ -10,6 +10,7 @@
 using namespace mips;
 
 extern jit1::jit_instructionexec_t jit1_get_instruction(jit1 * __restrict _this, uint32 address);
+extern jit1::jit_instructionexec_t jit1_fetch_instruction(jit1* __restrict _this, uint32 address);
 static constexpr uint32 MaxShortJumpLookAhead = 2;
 
 #define IS_INSTRUCTION(instr, ref) \
@@ -32,7 +33,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
    static const int8 gp_offset = sbyte_assert(offset_of(&processor::m_registers) - 128);
    static const int8 r31 = gp_offset + (31 * 4);
 
-   const auto patch_preprolog = [&]() -> std::string
+   const auto patch_preprolog = [&](auto address) -> std::string
    {
       // If execution gets past the chunk, we jump to the next chunk.
       // Start with a set of nops so that we have somewhere to write patch code.
@@ -43,7 +44,16 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
       uint32 &patch_target = patch_pair.target;
 
       // patch no-op
-      for (uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) db(octet);
+			if (address == nullptr) {
+				for (uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) db(octet);
+			}
+			else {
+				static constexpr uint16 patch_prefix = 0xB848;
+				static constexpr uint16 patch_suffix = 0xE0FF;
+				dw(patch_prefix);
+				dq(uint64(address));
+				dw(patch_suffix);
+			}
 
       mov(rcx, int64(&patch_target));
       mov(dword[rcx], edx);
@@ -84,9 +94,11 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
    const auto patch_jump = [&](uint32 target_address)
    {
+		 const auto currentAddress = m_jit.fetch_instruction(target_address);
+
       // In this case, we need to find the address in order to jump to it.
       inc(rdi);
-      const auto patch = patch_preprolog();
+      const auto patch = patch_preprolog(currentAddress);
       mov(eax, target_address);
       patch_prolog();
       mov(dword[rbp + pc_offset], eax);
@@ -176,7 +188,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -220,7 +233,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BGEUC - branch rs >= rt
       {
@@ -247,7 +261,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -289,7 +304,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -333,7 +349,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BLTUC - branch rs < rt
       {
@@ -360,7 +377,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -404,7 +422,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BEQC - branch rt == rs
       {
@@ -431,7 +450,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() >= rt.get_register()) // BOVC - branch if rs + rt overflows (signed)
       {
@@ -458,7 +478,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -502,7 +523,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BNEC - branch rt != rs
       {
@@ -529,7 +551,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() >= rt.get_register()) // BNVC - branch if rs + rt not overflows (signed)
       {
@@ -556,7 +579,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -596,7 +620,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -637,7 +662,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BGEC / BLEC - branch [rs] >= [rt]
       {
@@ -664,7 +690,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -704,7 +731,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -745,7 +773,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BLTC / BGTC - branch [rs] < [rt]
       {
@@ -772,7 +801,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -812,7 +842,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-        or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {
@@ -854,7 +885,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
          }
 
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
       else
       {

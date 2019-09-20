@@ -41,6 +41,7 @@ processor::processor(const options &_options) :
    m_memory_source(_options.mem_src),
    m_readonly_exec(_options.rox),
    m_collect_stats(_options.collect_stats),
+	 m_disable_cti(_options.disable_cti),
    m_ticked(_options.ticked),
    m_mmu_type(_options.mmu_type),
    m_stack_size(_options.stack),

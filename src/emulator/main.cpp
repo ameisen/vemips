@@ -80,6 +80,7 @@ mips::JitType JitToUse = mips::JitType::Jit;
 bool use_rox = false;
 mips::mmu mmu_type = mips::mmu::emulated;
 bool instruction_Stats = false;
+bool disable_cti = false;
 bool instruction_cache = false;
 uint64 ticks = 0;
 bool debug = false;
@@ -186,6 +187,13 @@ static const std::vector<Option> Options{
          use_rox = true;
       }
    },
+	 {
+		 { "--no-cti" },
+		 "Disable CTI flag checking",
+		 [](int, const char**, int&) {
+				disable_cti = true;
+			}
+	 },
    {
       {"--mmu"},
       "Specifies which MMU to use [emulated, none, host] [default: emulated].",
@@ -526,6 +534,7 @@ int main(int argc, const char **argv)
       sys_options.jit_type = JitToUse;
       sys_options.read_only_exec = use_rox;
       sys_options.record_instruction_stats = instruction_Stats;
+			sys_options.disable_cti = disable_cti;
       sys_options.ticked = ticks != 0;
       sys_options.instruction_cache = instruction_cache;
       sys_options.mmu_type = mmu_type;

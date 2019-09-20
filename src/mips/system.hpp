@@ -35,6 +35,7 @@ namespace mips
          mips::JitType jit_type = JitType::None;
          bool read_only_exec = false;
          bool record_instruction_stats = false;
+				 bool disable_cti = false;
          bool ticked = false;
          bool instruction_cache = false;
          mmu mmu_type = mmu::emulated;

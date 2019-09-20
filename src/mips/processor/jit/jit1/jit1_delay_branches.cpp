@@ -53,7 +53,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       mov(esi, int32(target_address));
       or_(ebx, processor::flag_bit(processor::flag::branch_delay));
       L(no_jump);
-      or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!m_jit.m_processor.m_disable_cti)
+				or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
    else if (IS_INSTRUCTION(instruction_info, COP1_BC1NEZ_v))
    {
@@ -70,7 +71,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       mov(esi, int32(target_address));
       or_(ebx, processor::flag_bit(processor::flag::branch_delay));
       L(no_jump);
-      or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!m_jit.m_processor.m_disable_cti)
+				or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_BAL))
    {
@@ -82,7 +84,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
       mov(dword[rbp + r31], int32(link_address));
       mov(esi, int32(target_address));
       or_(ebx, processor::flag_bit(processor::flag::branch_delay));
-      or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!m_jit.m_processor.m_disable_cti)
+				or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_BEQ))
    {
@@ -119,7 +122,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          mov(esi, int32(target_address));
          or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_BGEZ))
@@ -143,7 +147,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          mov(esi, int32(target_address));
          or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_BGTZ))
@@ -167,7 +172,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
       }
-      or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!m_jit.m_processor.m_disable_cti)
+				or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_BLEZ))
    {
@@ -190,7 +196,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          mov(esi, int32(target_address));
          or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
-         or_(ebx, processor::flag_bit(processor::flag::no_cti));
+				 if (!m_jit.m_processor.m_disable_cti)
+					or_(ebx, processor::flag_bit(processor::flag::no_cti));
       }
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_BLTZ))
@@ -214,7 +221,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
       }
-      or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!m_jit.m_processor.m_disable_cti)
+				or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_BNE))
    {
@@ -251,7 +259,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
          or_(ebx, processor::flag_bit(processor::flag::branch_delay));
          L(no_jump);
       }
-      or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!m_jit.m_processor.m_disable_cti)
+				or_(ebx, processor::flag_bit(processor::flag::no_cti));
    }
    else if (IS_INSTRUCTION(instruction_info, PROC_J))
    {
@@ -331,7 +340,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
    static const int8 gp_offset = sbyte_assert(offset_of(&processor::m_registers) - 128);
    static const int8 r31 = gp_offset + (31 * 4);
 
-   const auto patch_preprolog = [&]() -> std::string
+   const auto patch_preprolog = [&](auto address) -> std::string
    {
       // If execution gets past the chunk, we jump to the next chunk.
       // Start with a set of nops so that we have somewhere to write patch code.
@@ -341,8 +350,17 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
       auto &patch_pair = chunk.m_patches.back();
       uint32 &patch_target = patch_pair.target;
 
-      // no-op patch
-      for (uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) db(octet);
+			// patch no-op
+			if (address == nullptr) {
+				for (uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) db(octet);
+			}
+			else {
+				static constexpr uint16 patch_prefix = 0xB848;
+				static constexpr uint16 patch_suffix = 0xE0FF;
+				dw(patch_prefix);
+				dq(uint64(address));
+				dw(patch_suffix);
+			}
 
       mov(rcx, int64(&patch_target));
       mov(dword[rcx], edx);
@@ -618,7 +636,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
          je(no_branch);
          xor_(esi, esi);
          and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
-         const auto patch = patch_preprolog();
+         const auto patch = patch_preprolog(m_jit.fetch_instruction(target_address));
 
          mov(edx, int32(target_address));
 

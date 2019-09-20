@@ -136,10 +136,10 @@ namespace mips
          }
          __forceinline MapLevel1 & __restrict operator [] (uint32 idx) __restrict
          {
-            MapLevel1 * __restrict result = m_Data[idx];
+            MapLevel1 * __restrict &result = m_Data[idx];
             if (!result)
             {
-               m_Data[idx] = result = new MapLevel1;
+               result = new MapLevel1;
             }
             return *result;
          }
@@ -166,10 +166,10 @@ namespace mips
          }
          __forceinline MapLevel2 & __restrict operator [] (uint32 idx) __restrict
          {
-            MapLevel2 * __restrict result = m_Data[idx];
+            MapLevel2 * __restrict &result = m_Data[idx];
             if (!result)
             {
-               m_Data[idx] = result = new MapLevel2;
+               result = new MapLevel2;
             }
             return *result;
          }
@@ -194,7 +194,8 @@ namespace mips
       ~jit1();
 
       __forceinline void execute_instruction(uint32 address) __restrict;
-      __forceinline jit_instructionexec_t get_instruction(uint32 address) __restrict;
+			__forceinline jit_instructionexec_t get_instruction(uint32 address) __restrict;
+			__forceinline jit_instructionexec_t fetch_instruction(uint32 address) __restrict;
       Chunk * get_chunk(uint32 address) __restrict;
       bool memory_touched(uint32 address) __restrict;
 

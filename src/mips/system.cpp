@@ -328,6 +328,7 @@ system::system(const options &init_options, const elf::binary & __restrict binar
    cpu_options.jit_type = init_options.jit_type;
    cpu_options.rox = init_options.read_only_exec;
    cpu_options.collect_stats = init_options.record_instruction_stats;
+	 cpu_options.disable_cti = init_options.disable_cti;
    cpu_options.ticked = init_options.ticked;
    cpu_options.mmu_type = init_options.mmu_type;
    cpu_options.icache = init_options.instruction_cache;

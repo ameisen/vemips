@@ -132,11 +132,7 @@ static constexpr const char program[] =
 #include <vector>
 #include <algorithm>
 
-#if _WIN32
-#define __not_reach __assume(0)
-#else
 #define __not_reach __builtin_unreachable()
-#endif
 
 std::vector<uint8_t> recode(const char * __restrict code, const uint32_t code_len)
 {
@@ -660,17 +656,13 @@ std::vector<uint8_t> recode(const char * __restrict code, const uint32_t code_le
 
 int main()
 {
-
-#if MANDELBROT
    const char * __restrict code = program;
    const size_t code_len = sizeof(program);
+#if MANDELBROT
    puts("Generating Mandelbrot via Brainfsck");
 #else
-   const char * __restrict code = program;
-   const size_t code_len = sizeof(program);
    puts("Generating Hello World via Brainfsck");
 #endif
-
    const std::vector<uint8_t> recoded = recode(code, code_len);
 
    // b == > seq 4b

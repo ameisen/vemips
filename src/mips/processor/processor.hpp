@@ -82,6 +82,7 @@ namespace mips
       bool                                      m_readonly_exec;
       bool                                      m_ticked;
       bool                                      m_collect_stats;
+			bool																			m_disable_cti;
       std::unordered_map<const char *, size_t>  m_instruction_stats;
 
       bool                                      m_from_exception = false;
@@ -155,6 +156,7 @@ namespace mips
          JitType jit_type = JitType::Jit;
          bool rox = false;
          bool collect_stats = false;
+				 bool disable_cti = false;
          bool ticked = false;
          mips::mmu mmu_type = mips::mmu::emulated;
          bool icache = false;

@@ -85,6 +85,11 @@ jit1::jit_instructionexec_t jit1_get_instruction(jit1 * __restrict _this, uint32
    return _this->get_instruction(address);
 }
 
+jit1::jit_instructionexec_t jit1_fetch_instruction(jit1* __restrict _this, uint32 address)
+{
+	return _this->fetch_instruction(address);
+}
+
 namespace
 {
    void RI_Exception (instruction_t, processor & __restrict _processor)
@@ -413,7 +418,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
                compact_branch = ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::CompactBranch)) != 0);
                delay_branch = ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::DelayBranch)) != 0);
 
-               if (cti_test)
+               if (cti_test && !m_jit.m_processor.m_disable_cti)
                {
                   // CTI instruction prefix.
                   if ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::ControlInstruction)) != 0)
@@ -703,7 +708,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
                {
                   write_PROC_SYSCALL(chunk_offset, current_address, instruction, *instruction_info_ptr);
                }
-
+							 else if (IS_INSTRUCTION(instruction_info_ptr, PROC_EXT))
+							 {
+									write_PROC_EXT(chunk_offset, current_address, instruction, *instruction_info_ptr);
+							 }
                else
                {
                   insert_procedure_ecx(current_address, uint64(instruction_info_ptr->Proc), instruction, *instruction_info_ptr);
@@ -861,7 +869,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
       start_address += 4;
    }
 
-   const auto patch_preprolog = [&]() -> std::string
+   const auto patch_preprolog = [&](auto address) -> std::string
    {
       // If execution gets past the chunk, we jump to the next chunk.
       // Start with a set of nops so that we have somewhere to write patch code.
@@ -871,8 +879,17 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
       auto &patch_pair = chunk.m_patches.back();
       uint32 &patch_target = patch_pair.target;
 
-      static constexpr uint8 patch_nop[] = { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 };
-      for (uint8 octet : patch_nop) db(octet);
+			// patch no-op
+			if (address == nullptr) {
+				for (uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) db(octet);
+			}
+			else {
+				static constexpr uint16 patch_prefix = 0xB848;
+				static constexpr uint16 patch_suffix = 0xE0FF;
+				dw(patch_prefix);
+				dq(uint64(address));
+				dw(patch_suffix);
+			}
 
       mov(rcx, int64(&patch_target));
       mov(dword[rcx], edx);
@@ -899,7 +916,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
       mov(word[rcx + 10], int16_t(patch_suffix));
    };
 
-   const auto patch = patch_preprolog();
+   const auto patch = patch_preprolog(m_jit.fetch_instruction(uint32(last_address + 1)));
 
    mov(edx, uint32(last_address + 1));
 
@@ -1158,15 +1175,11 @@ __forceinline jit1::jit_instructionexec_t jit1::get_instruction(uint32 address) 
       auto & __restrict cml2 = m_JitMap[address >> (32 - RemainingLog2)];
       auto & __restrict cml1 = cml2[(address >> (32 - RemainingLog2 - 8)) & 0xFF];
 
-      if (cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF))
-      {
-         chunk = &cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
-         chunk_offset = &cml1.get_offsets((address >> (32 - RemainingLog2 - 16)) & 0xFF);
-      }
-      else
-      {
-         chunk = &cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
-         chunk_offset = &cml1.get_offsets((address >> (32 - RemainingLog2 - 16)) & 0xFF);
+			const bool chunk_exists = cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF);
+			chunk = &cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
+			chunk_offset = &cml1.get_offsets((address >> (32 - RemainingLog2 - 16)) & 0xFF);
+
+      if (!chunk_exists) {
          populate_chunk(*chunk_offset, *chunk, mapped_address, false);
       }
 
@@ -1178,6 +1191,43 @@ __forceinline jit1::jit_instructionexec_t jit1::get_instruction(uint32 address) 
    const auto & __restrict chunk_instruction = chunk->m_data + (*chunk_offset)[address_offset];
    
    return jit_instructionexec_t(chunk_instruction);
+}
+
+__forceinline jit1::jit_instructionexec_t jit1::fetch_instruction(uint32 address) __restrict
+{
+	const uint32 mapped_address = address & ~(ChunkSize - 1);
+	const uint32 address_offset = (address - mapped_address) / 4u;
+
+	Chunk* __restrict chunk = nullptr;
+	ChunkOffset* __restrict chunk_offset = nullptr;
+
+	if (m_LastChunkAddress == mapped_address)
+	{
+		chunk = m_LastChunk;
+		chunk_offset = m_LastChunkOffset;
+	}
+	else
+	{
+		// Traverse the map to end up at the proper chunk.
+		/* This is only hit once ever in the current benchmark because the chunks are huge */
+		auto& __restrict cml2 = m_JitMap[address >> (32 - RemainingLog2)];
+		auto& __restrict cml1 = cml2[(address >> (32 - RemainingLog2 - 8)) & 0xFF];
+
+		if (!cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF)) {
+			return jit_instructionexec_t(nullptr);
+		}
+
+		chunk = &cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
+		chunk_offset = &cml1.get_offsets((address >> (32 - RemainingLog2 - 16)) & 0xFF);
+
+		m_LastChunk = chunk;
+		m_LastChunkOffset = chunk_offset;
+		m_LastChunkAddress = mapped_address;
+	}
+
+	const auto& __restrict chunk_instruction = chunk->m_data + (*chunk_offset)[address_offset];
+
+	return jit_instructionexec_t(chunk_instruction);
 }
 
 jit1::Chunk * jit1::get_chunk(uint32 address) __restrict
