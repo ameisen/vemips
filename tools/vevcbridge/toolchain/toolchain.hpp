@@ -2,7 +2,7 @@
 
 namespace buildcarbide::toolchain
 {
-   class toolchain
-   {
-   };
+	class toolchain
+	{
+	};
 }

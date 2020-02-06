@@ -66,6 +66,9 @@
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <EnableModules>
+      </EnableModules>
     </ClCompile>
     <Link>
       <AdditionalDependencies>$(OutDir)elf.lib;$(OutDir)mips.lib;PowrProf.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -110,6 +113,8 @@
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnableModules>
+      </EnableModules>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>

@@ -4,11 +4,11 @@
 
 namespace buildcarbide
 {
-   struct configuration
-   {
-      std::string target;
-      std::string config;
-      std::string base_path;
-      std::string intermediate_dir;
-   };
+	struct configuration
+	{
+		std::string target;
+		std::string config;
+		std::string base_path;
+		std::string intermediate_dir;
+	};
 }

@@ -4,12 +4,12 @@
 
 namespace buildcarbide
 {
-   class vc_project : public project
-   {
-   public:
-      vc_project(const std::string & __restrict filename);
-      virtual ~vc_project();
+	class vc_project : public project
+	{
+	public:
+		vc_project(const std::string & __restrict filename);
+		virtual ~vc_project();
 
-      static project * __restrict create_or_null(const std::string & __restrict filename);
-   };
+		static project * __restrict create_or_null(const std::string & __restrict filename);
+	};
 }

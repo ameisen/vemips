@@ -1,0 +1,5 @@
+build/
+out/
+tools/vevcbridge/Int/
+*.bin
+vemips_sdk/MipsTest/obj/interpreter.cpp.o

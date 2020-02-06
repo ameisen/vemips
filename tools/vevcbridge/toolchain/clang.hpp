@@ -8,7 +8,7 @@
 
 namespace buildcarbide::toolchain
 {
-   class clang : public toolchain
-   {
-   };
+	class clang : public toolchain
+	{
+	};
 }

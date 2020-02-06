@@ -29,27 +29,6 @@
     <ClInclude Include="..\..\src\mips\memory_source.hpp" />
     <ClInclude Include="..\..\src\mips\mips.hpp" />
     <ClInclude Include="..\..\src\mips\mips_common.hpp" />
-    <ClInclude Include="..\..\src\sparsehash\template_util.h">
-      <Filter>sparsehash</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\sparsehash\type_traits.h">
-      <Filter>sparsehash</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\sparsehash\internal\densehashtable.h">
-      <Filter>sparsehash\internal</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\sparsehash\internal\hashtable-common.h">
-      <Filter>sparsehash\internal</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\sparsehash\internal\libc_allocator_with_realloc.h">
-      <Filter>sparsehash\internal</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\sparsehash\internal\sparseconfig.h">
-      <Filter>sparsehash\internal</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\sparsehash\internal\sparsehashtable.h">
-      <Filter>sparsehash\internal</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\avx_type.hpp">
       <Filter>processor\jit\xbyak</Filter>
     </ClInclude>
@@ -141,12 +120,6 @@
     <Filter Include="instructions">
       <UniqueIdentifier>{d6757b49-f9ab-42ba-952e-34e689086813}</UniqueIdentifier>
     </Filter>
-    <Filter Include="sparsehash">
-      <UniqueIdentifier>{985188db-c028-4b74-9c3c-0d480ab10a54}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="sparsehash\internal">
-      <UniqueIdentifier>{9521e488-61a9-48e5-9a36-73b93d047f5e}</UniqueIdentifier>
-    </Filter>
     <Filter Include="processor">
       <UniqueIdentifier>{9ec3c768-a694-4d95-b973-9f12d575ea84}</UniqueIdentifier>
     </Filter>
@@ -165,23 +138,6 @@
     <Filter Include="platform\win32">
       <UniqueIdentifier>{f7c076f1-84d9-4723-bb79-f1b5ca34a311}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\src\sparsehash\dense_hash_map">
-      <Filter>sparsehash</Filter>
-    </None>
-    <None Include="..\..\src\sparsehash\dense_hash_set">
-      <Filter>sparsehash</Filter>
-    </None>
-    <None Include="..\..\src\sparsehash\sparsetable">
-      <Filter>sparsehash</Filter>
-    </None>
-    <None Include="..\..\src\sparsehash\sparse_hash_map">
-      <Filter>sparsehash</Filter>
-    </None>
-    <None Include="..\..\src\sparsehash\sparse_hash_set">
-      <Filter>sparsehash</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="..\..\src\mips\processor\jit\jit1\jit1_springboard.s">

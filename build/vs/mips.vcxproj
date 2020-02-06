@@ -65,6 +65,9 @@
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <EnableModules>
+      </EnableModules>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -93,6 +96,8 @@
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnableModules>
+      </EnableModules>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -128,13 +133,6 @@
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_util.h" />
     <ClInclude Include="..\..\src\mips\processor\processor.hpp" />
     <ClInclude Include="..\..\src\mips\system.hpp" />
-    <ClInclude Include="..\..\src\sparsehash\internal\densehashtable.h" />
-    <ClInclude Include="..\..\src\sparsehash\internal\hashtable-common.h" />
-    <ClInclude Include="..\..\src\sparsehash\internal\libc_allocator_with_realloc.h" />
-    <ClInclude Include="..\..\src\sparsehash\internal\sparseconfig.h" />
-    <ClInclude Include="..\..\src\sparsehash\internal\sparsehashtable.h" />
-    <ClInclude Include="..\..\src\sparsehash\template_util.h" />
-    <ClInclude Include="..\..\src\sparsehash\type_traits.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\mips\coprocessor\coprocessor1\coprocessor1.cpp" />
@@ -161,11 +159,6 @@
     <MASM Include="..\..\src\mips\processor\jit\jit1\jit1_springboard.s">
       <FileType>Document</FileType>
     </MASM>
-    <None Include="..\..\src\sparsehash\dense_hash_map" />
-    <None Include="..\..\src\sparsehash\dense_hash_set" />
-    <None Include="..\..\src\sparsehash\sparsetable" />
-    <None Include="..\..\src\sparsehash\sparse_hash_map" />
-    <None Include="..\..\src\sparsehash\sparse_hash_set" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\..\src\mips\processor\jit\jit1\jit1_register_assignments.txt" />
