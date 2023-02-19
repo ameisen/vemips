@@ -872,22 +872,15 @@ namespace mips::instructions
 
 		if (Negated)
 		{
-			const uint32 cbits = condn & 0111;
-			switch (cbits)
+			if ((condn & 0b111) == 0 || (condn & 0b100) != 0)
 			{
-				case 0b000:
-				case 0b100:
-				case 0b101:
-				case 0b110:
-				case 0b111:
-					throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+				throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
 			}
 		}
 
 		if (is_signalling_nan(fs_val) || is_signalling_nan(ft_val) || (Throws && (isnan(fs_val) || isnan(ft_val))))
 		{
-			coprocessor.get_FCSR().Flags |= uint32_t(ExceptBits::InvalidOp);
-			if (coprocessor.get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp))
+			if (coprocessor.get_FCSR().set_flag(uint32_t(ExceptBits::InvalidOp)))
 			{
 				// TODO update cause?
 				throw CPU_Exception{ CPU_Exception::Type::FPE, processor.get_program_counter(), uint32_t(ExceptBits::InvalidOp) };
@@ -895,11 +888,6 @@ namespace mips::instructions
 		}
 
 		// Handle predicates
-		const bool GreaterThan = fs_val > ft_val;
-		const bool LessThan = fs_val < ft_val;
-		const bool Equal = fs_val == ft_val;
-		const bool Unordered = isnan(fs_val) || isnan(ft_val);
-
 		bool TestGreaterThan = false;
 		bool TestLessThan = (Relation & 0b10) != 0;
 		bool TestEqual = (Relation & 0b01) != 0;
@@ -916,19 +904,19 @@ namespace mips::instructions
 		bool result = false;
 		if (TestUnordered)
 		{
-			result = result || Unordered;
+			result = result || (isnan(fs_val) || isnan(ft_val));
 		}
 		if (TestGreaterThan)
 		{
-			result = result || GreaterThan;
+			result = result || (fs_val > ft_val);
 		}
 		if (TestLessThan)
 		{
-			result = result || LessThan;
+			result = result || (fs_val < ft_val);
 		}
 		if (TestEqual)
 		{
-			result = result || Equal;
+			result = result || (fs_val == ft_val);
 		}
 
 		using result_t = typename uint_equiv<float_t>::type;

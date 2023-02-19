@@ -93,7 +93,7 @@ namespace mips
 
 		struct InstructionInfo
 		{
-			const char * __restrict Name;
+			const char * Name;
 			instructionexec_t Proc;
 			uint32 CoprocessorIdx;
 			uint32 OpFlags;
@@ -102,7 +102,7 @@ namespace mips
 
 			InstructionInfo() = default;
 			InstructionInfo(const char * __restrict _Name, bool _CT, uint32 coprocessor, instructionexec_t proc, uint32 _OpFlags, char type = 'n') :
-				Name(_Name), Proc(proc), CoprocessorIdx(coprocessor), ControlInstruction(_CT), OpFlags(_OpFlags), Type(type) {}
+				Name(_Name), Proc(proc), CoprocessorIdx(coprocessor), OpFlags(_OpFlags), ControlInstruction(_CT), Type(type) {}
 		};
 
 #if !USE_STATIC_INSTRUCTION_SEARCH

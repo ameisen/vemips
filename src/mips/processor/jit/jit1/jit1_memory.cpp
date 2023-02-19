@@ -5,17 +5,12 @@
 #include "coprocessor/coprocessor1/coprocessor1.hpp"
 #include "instructions/instructions.hpp"
 #include "instructions/instructions_common.hpp"
+#include "instructions/instructions_table.hpp"
 #include "instructions/coprocessor1_support.hpp"
 #include <cassert>
 #include "codegen.hpp"
 
 using namespace mips;
-
-#define IS_INSTRUCTION(instr, ref) \
-	[&]() -> bool { \
-		extern const mips::instructions::InstructionInfo StaticProc_ ## ref; \
-		return &StaticProc_ ## ref == &instr; \
-	}()
 
 uintptr_t mem_write_jit(processor * __restrict proc, uint32 address, uint32 size) {
 	return proc->get_mem_write_jit(address, size);
@@ -29,7 +24,7 @@ uint32 memory_touched_jit(processor * __restrict proc, uint32 address) {
 	return proc->m_jit1->memory_touched(address) ? 1 : 0;
 }
 
-bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 	static const int8 memp_offset = value_assert<int8>(offset_of(&processor::m_memory_ptr) - 128);
 	static const int8 mems_offset = value_assert<int8>(offset_of(&processor::m_memory_size) - 128);
@@ -438,7 +433,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 	return false;
 }
 
-bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 	static const int8 memp_offset = value_assert<int8>(offset_of(&processor::m_memory_ptr) - 128);
 	static const int8 mems_offset = value_assert<int8>(offset_of(&processor::m_memory_size) - 128);

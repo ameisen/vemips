@@ -3,3 +3,5 @@ out/
 tools/vevcbridge/Int/
 *.bin
 vemips_sdk/MipsTest/obj/interpreter.cpp.o
+vemips_sdk/MipsTest/.vs/
+vemips_sdk/MipsTest/obj/

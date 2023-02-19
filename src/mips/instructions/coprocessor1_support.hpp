@@ -422,7 +422,7 @@ namespace mips::instructions
 		unsigned m_State;
 
 	public:
-		ScopedFloatDenormalState(DenormalState state) __restrict : m_SetState(state)
+		ScopedFloatDenormalState(DenormalState state) : m_SetState(state)
 		{
 #if FPU_EXCEPTION_SUPPORT
 			if (enable && state != DefaultSysDenormal)
@@ -436,7 +436,7 @@ namespace mips::instructions
 #endif
 		}
 
-		~ScopedFloatDenormalState() __restrict
+		~ScopedFloatDenormalState()
 		{
 #if FPU_EXCEPTION_SUPPORT
 			if (enable && m_SetState != DefaultSysDenormal)
@@ -457,7 +457,7 @@ namespace mips::instructions
 		unsigned m_State;
 
 	public:
-		ScopedFloatRoundingState(RoundingState state) __restrict : m_SetState(state)
+		ScopedFloatRoundingState(RoundingState state) : m_SetState(state)
 		{
 #if FPU_EXCEPTION_SUPPORT
 			if (enable && state != DefaultSysRounding)
@@ -474,7 +474,7 @@ namespace mips::instructions
 #endif
 		}
 
-		~ScopedFloatRoundingState() __restrict
+		~ScopedFloatRoundingState()
 		{
 #if FPU_EXCEPTION_SUPPORT
 			if (enable && m_SetState != DefaultSysRounding)

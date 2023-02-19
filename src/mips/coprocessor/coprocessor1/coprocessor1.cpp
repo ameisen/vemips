@@ -3,7 +3,7 @@
 
 using namespace mips;
 
-void coprocessor1::clock() __restrict {
+void coprocessor1::clock() {
 	m_fir.clock();
 	m_fcsr.clock();
 }
@@ -41,7 +41,7 @@ coprocessor1::FIR::FIR() {
 	FREP = 0b0;
 }
 
-void coprocessor1::FIR::clock() __restrict {
+void coprocessor1::FIR::clock() {
 	// FIR is supposed to be read-only.
 	*this = g_reference_fir;
 }
@@ -59,24 +59,24 @@ coprocessor1::FCSR::FCSR() {
 	FlushZero = 0;
 }
 
-void coprocessor1::FCSR::clock() __restrict {
+void coprocessor1::FCSR::clock() {
 	*(uint32 * __restrict)this |= uint32(g_reference_fcsr_ones);
 	*(uint32 * __restrict)this &= uint32(g_reference_fcsr_zeros);
 }
 
-uint32 coprocessor1::FCSR::get_FEXR() const __restrict {
+uint32 coprocessor1::FCSR::get_FEXR() const {
 	uint32 ret = 0;
 	((FCSR & __restrict)ret).Flags = Flags;
 	((FCSR & __restrict)ret).Cause = Cause;
 	return ret;
 }
 
-void coprocessor1::FCSR::set_FEXR(uint32 fexr) __restrict {
+void coprocessor1::FCSR::set_FEXR(uint32 fexr) {
 	Flags = ((const FCSR & __restrict)fexr).Flags;
 	Cause = ((const FCSR & __restrict)fexr).Cause;
 }
 
-uint32 coprocessor1::FCSR::get_FENR() const __restrict {
+uint32 coprocessor1::FCSR::get_FENR() const {
 	uint32 ret = 0;
 	((FCSR & __restrict)ret).RoundingMode = RoundingMode;
 	((FCSR & __restrict)ret).Enables = Enables;
@@ -84,7 +84,7 @@ uint32 coprocessor1::FCSR::get_FENR() const __restrict {
 	return ret;
 }
 
-void coprocessor1::FCSR::set_FENR(uint32 fenr) __restrict {
+void coprocessor1::FCSR::set_FENR(uint32 fenr) {
 	RoundingMode = ((const FCSR & __restrict)fenr).RoundingMode;
 	Enables = ((const FCSR & __restrict)fenr).Enables;
 	FlushZero = ((const FCSR & __restrict)fenr).FlushZero;

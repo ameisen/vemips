@@ -19,6 +19,7 @@ namespace mips {
 	enum class JitType : uint32 {
 		None,
 		Jit,
+		FunctionTable
 	};
 
 	class system;
@@ -28,6 +29,7 @@ namespace mips {
 		// remove when we have unified instructions
 		friend class CPUI;
 		friend class jit1;
+		friend class jit2;
 		friend class system;
 		friend class Jit1_CodeGen;
 
@@ -40,7 +42,7 @@ namespace mips {
 			pc_changed = 3,
 			jit_mem_flush = 4,
 		};
-		static uint32 flag_bit(flag _bit) { return 1u << uint32(_bit); }
+		static constexpr uint32 flag_bit(flag _bit) { return 1u << uint32(_bit); }
 
 	private:
 		static constexpr const size_t NumRegisters = 32;
@@ -52,13 +54,14 @@ namespace mips {
 		uint32												m_branch_target = 0;
 		uint32												m_program_counter = 0;
 		uint64												m_instruction_count = 0;
-		uint64												m_target_instructions = 0;
+		uint64												m_target_instructions = std::numeric_limits<uint64>::max();;
 		uint64												m_memory_ptr = 0;
 		uint32												m_memory_size = 0;
 		uint32												m_stack_size = 0;
 
 	public:
 		uint32												m_user_value = 0; // TODO REPLACE WITH COP0
+
 	private:
 
 		coprocessor	 * __restrict m_coprocessors[4]{ nullptr };
@@ -67,24 +70,25 @@ namespace mips {
 	public: // clean up later
 		union {
 			jit1 * __restrict							 m_jit1;
+			jit2 * __restrict							 m_jit2;
 		};
 	private:
 		JitType											  m_jit_type;
 
 		CPU_Exception									  m_trapped_exception;
 		
-		bool												  m_readonly_exec;
-		bool												  m_ticked;
-		bool												  m_collect_stats;
-		bool																			m_disable_cti;
+		const bool												  m_readonly_exec;
+		const bool										m_ticked;
+		const bool												  m_collect_stats;
+		const bool																			m_disable_cti;
 		std::unordered_map<const char *, size_t>  m_instruction_stats;
 
 		bool												  m_from_exception = false;
 		mips::mmu											m_mmu_type;
 		system												*m_guest_system = nullptr;
-		bool												  m_debugging = false;
+		const bool												  m_debugging = false;
 
-		void ExecuteInstruction(bool branch_delay) __restrict;
+		void ExecuteInstruction(bool branch_delay);
 
 	public:
 		void compare(const processor & __restrict other, uint32 /*previous_pc*/) {
@@ -109,11 +113,11 @@ namespace mips {
 			}
 		}
 
-		void add_stat(const char *name) __restrict {
+		void add_stat(const char *name) {
 			++m_instruction_stats[name];
 		}
 
-		const std::unordered_map<const char *, size_t> & get_stats_map() const __restrict {
+		const std::unordered_map<const char *, size_t> & get_stats_map() const {
 			return m_instruction_stats;
 		}
 
@@ -132,7 +136,7 @@ namespace mips {
 			m_trapped_exception = ex;
 		}
 
-		struct options {
+		struct options final {
 			memory_source* __restrict mem_src = nullptr;
 			char* mem_ptr = nullptr;
 			system* guest_system = nullptr;
@@ -161,12 +165,14 @@ namespace mips {
 		// Gets the program counter
 		uint32 get_program_counter() __restrict;
 
-		// Execute One Clock
-		void execute(uint64 clocks = 1) __restrict;
+		// Execute Clock
+		void execute(uint64 clocks = 1);
+		template <bool ticked, bool debugging>
+		__forceinline void execute_internal(uint64 clocks = 1);
 
 		// Get the register as a specific type
 		template <typename T>
-		T get_register(uint32 idx) const __restrict {
+		T get_register(uint32 idx) const {
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
 			union {
@@ -179,7 +185,7 @@ namespace mips {
 
 		// Set the register from a given type
 		template <typename T>
-		void set_register(uint32 idx, T value) __restrict {
+		void set_register(uint32 idx, T value) {
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
 			union {
@@ -204,7 +210,7 @@ namespace mips {
 		}
 
 		// Sets the link register
-		void set_link(uint32 pointer) __restrict;
+		void set_link(uint32 pointer);
 
 		// Gets the instruction at the current program counter
 		instruction_t get_instruction() const __restrict;

@@ -17,7 +17,7 @@ namespace mips
 {
 	class system;
 	class processor;
-	class debugger {
+	class debugger final {
 		SOCKET m_ListenSocket = INVALID_SOCKET;
 		SOCKET m_ClientSocket = INVALID_SOCKET;
 		std::thread m_ServerThread;

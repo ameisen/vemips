@@ -1,14 +1,15 @@
 #include "pch.hpp"
 
-#include <string>
-#include <vector>
-#include <functional>
-#include <chrono>
-#include <cassert>
-
 #include "elf/elf.hpp"
 #include "mips/mips.hpp"
 #include "system_vemix.hpp"
+
+#include <chrono>
+#include <functional>
+#include <string>
+#include <vector>
+
+#include <cassert>
 
 #define NOMINMAX 1
 #include <Windows.h>
@@ -16,16 +17,15 @@
 
 #define PAIR_TEST 0
 
-static uint64 GetHostFrequency()
-{
-	typedef struct _PROCESSOR_POWER_INFORMATION {
+static uint64 GetHostFrequency() {
+	struct PROCESSOR_POWER_INFORMATION final {
 	  ULONG Number;
 	  ULONG MaxMhz;
 	  ULONG CurrentMhz;
 	  ULONG MhzLimit;
 	  ULONG MaxIdleState;
 	  ULONG CurrentIdleState;
-	} PROCESSOR_POWER_INFORMATION, *PPROCESSOR_POWER_INFORMATION;
+	};
 
 	SYSTEM_INFO sysInfo;
 	GetSystemInfo(&sysInfo);
@@ -43,8 +43,7 @@ static uint64 GetHostFrequency()
 		ULONG(OutBufferLength)
 	);
 
-	if (status != 0)
-	{
+	if (status != 0) {
 		return 1;
 	}
 
@@ -54,20 +53,19 @@ static uint64 GetHostFrequency()
 }
 
 #if EMSCRIPTEN
-#  include "base64.hpp"
+#	include "base64.hpp"
 #endif
 
-static constexpr uint32_t VerMajor = 1;
-static constexpr uint32_t VerMinor = 0;
-static constexpr uint32_t VerBuild = 0;
+static constexpr const uint32_t VerMajor = 1;
+static constexpr const uint32_t VerMinor = 0;
+static constexpr const uint32_t VerBuild = 0;
 
-void version();
-void help();
-void changes();
+static void version();
+static void help();
+static void changes();
 
 #if !EMSCRIPTEN
-struct Option
-{
+struct Option final {
 	std::vector<std::string> option_str;
 	std::string description;
 	std::function<void(int argc, const char **argv, int &i)> procedure;
@@ -87,25 +85,22 @@ bool debug = false;
 uint16 debug_port = 0;
 
 #if !EMSCRIPTEN
-static const std::vector<Option> Options{
+static const std::vector<Option> Options {
 	{
 		{"-m", "--memory"},
 		"Specify how much memory to which the CPU shall have access [default: 1048576]",
 		[](int argc, const char **argv, int &i) {
-			if (i == argc - 1)
-			{
+			if (i == argc - 1) {
 				fprintf(stderr, "Error: No quantity following -m option\n");
 				_exit(1);
 			}
 			++i;
 			auto memory = std::stoll(argv[i], 0, 0);
-			if (memory < 4096)
-			{
+			if (memory < 4096) {
 				fprintf(stderr, "You cannot specify < 4096 bytes of memory to the emulator\n");
 				_exit(1);
 			}
-			if (memory > uint32(-1))
-			{
+			if (memory > uint32(-1)) {
 				fprintf(stderr, "You cannot specify greater than or equal to 2^32 bytes of memory to the emulator\n");
 				_exit(1);
 			}
@@ -116,20 +111,17 @@ static const std::vector<Option> Options{
 		{"-s", "--stack"},
 		"Specify how much memory will be reserved for the stack [default: memory / 2]",
 		[](int argc, const char **argv, int &i) {
-			if (i == argc - 1)
-			{
+			if (i == argc - 1) {
 				fprintf(stderr, "Error: No quantity following -s option\n");
 				_exit(1);
 			}
 			++i;
 			auto memory = std::stoll(argv[i], 0, 0);
-			if (memory < 0)
-			{
+			if (memory < 0) {
 				fprintf(stderr, "You cannot specify < 0 bytes of stack to the emulator\n");
 				_exit(1);
 			}
-			if (memory > uint32(-1))
-			{
+			if (memory > uint32(-1)) {
 				fprintf(stderr, "You cannot specify greater than or equal to 2^32 bytes of stack memory\n");
 				_exit(1);
 			}
@@ -140,15 +132,13 @@ static const std::vector<Option> Options{
 		{"--debug"},
 		"Enable the debugger. GDB Port must follow.",
 		[](int argc, const char **argv, int &i) {
-			if (i == argc - 1)
-			{
+			if (i == argc - 1) {
 				fprintf(stderr, "Error: No port following ---debug option\n");
 				_exit(1);
 			}
 			++i;
 			auto port = std::stoll(argv[i], 0, 0);
-			if (port < 0 || port > 0xFFFF)
-			{
+			if (port < 0 || port > 0xFFFF) {
 				fprintf(stderr, "Provided debuggerport number is out of range.\n");
 				_exit(1);
 			}
@@ -198,27 +188,22 @@ static const std::vector<Option> Options{
 		{"--mmu"},
 		"Specifies which MMU to use [emulated, none, host] [default: emulated].",
 		[](int argc, const char **argv, int &i) {
-			if (i == argc - 1)
-			{
+			if (i == argc - 1) {
 				printf("Error: No MMU following --mmu option\n");
 				_exit(1);
 			}
 			++i;
 			const auto mmu_v = argv[i];
-			if (strcmp(mmu_v, "emulated") == 0)
-			{
+			if (strcmp(mmu_v, "emulated") == 0) {
 				mmu_type = mips::mmu::emulated;
 			}
-			else if (strcmp(mmu_v, "none") == 0)
-			{
+			else if (strcmp(mmu_v, "none") == 0) {
 				mmu_type = mips::mmu::none;
 			}
-			else if (strcmp(mmu_v, "host") == 0)
-			{
+			else if (strcmp(mmu_v, "host") == 0) {
 				mmu_type = mips::mmu::host;
 			}
-			else
-			{
+			else {
 				fprintf(stderr, "The provided MMU (\'%s\') is not a valid MMU type\n", mmu_v);
 				_exit(1);
 			}
@@ -246,6 +231,13 @@ static const std::vector<Option> Options{
 		}
 	},
 	{
+		{"--jit2"},
+		"Enable function table in emulator (ticked mode not yet implemented)",
+		[](int, const char**, int&) {
+			JitToUse = mips::JitType::FunctionTable;
+		}
+	},
+	{
 		{"--stats"},
 		"Enable capturing of instruction stats",
 		[](int, const char **, int &) {
@@ -256,15 +248,13 @@ static const std::vector<Option> Options{
 		{"-t", "--ticks"},
 		"Enables ticked execution of emulator and increments by provided ticks",
 		[](int argc, const char **argv, int &i) {
-			if (i == argc - 1)
-			{
+			if (i == argc - 1) {
 				fprintf(stderr, "Error: No quantity following --ticks option\n");
 				_exit(1);
 			}
 			++i;
 			ticks = std::stoull(argv[i], 0, 0);
-			if (ticks == 0)
-			{
+			if (ticks == 0) {
 				fprintf(stderr, "You cannot specify 0 ticks\n");
 				_exit(1);
 			}
@@ -273,8 +263,7 @@ static const std::vector<Option> Options{
 };
 #endif
 
-void changes()
-{
+static void changes() {
 	puts(
 		"Changelist:\n"
 		"\t1.0.0\n"
@@ -330,29 +319,23 @@ void changes()
 	);
 }
 
-void version()
-{
+static void version() {
 	printf("Digital Carbide DCMIPSr6E Emulator %u.%u.%u (%s %s)\n", VerMajor, VerMinor, VerBuild, __DATE__, __TIME__);
 }
 
 #if !EMSCRIPTEN
-void help()
-{
+static void help() {
 	version();
 	printf("OVERVIEW: Emulator for MIPSr6 binaries\n\n");
 	printf("USAGE: emulator.exe [options] <binary>\n\n");
 	printf("OPTIONS:\n");
-	for (const auto &option : Options)
-	{
+	for (const auto &option : Options) {
 		bool first = true;
-		for (const std::string &opt : option.option_str)
-		{
-			if (first)
-			{
+		for (const std::string &opt : option.option_str) {
+			if (first) {
 				printf("  %s", opt.c_str());
 			}
-			else
-			{
+			else {
 				printf(" %s", opt.c_str());
 			}
 			first = false;
@@ -362,15 +345,13 @@ void help()
 }
 #endif
 
-int main(int argc, const char **argv)
-{
+int main(int argc, const char **argv) {
 	{
 		SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 		ULONG_PTR processAffinity, systemAffinity;
 		GetProcessAffinityMask(GetCurrentProcess(), &processAffinity, &systemAffinity);
-		if (processAffinity != 1)
-		{
+		if (processAffinity != 1) {
 			processAffinity &= ~1ull;
 			SetProcessAffinityMask(GetCurrentProcess(), processAffinity);
 			Yield();
@@ -380,36 +361,28 @@ int main(int argc, const char **argv)
 	std::string binary_file;
 
 #if !EMSCRIPTEN
-	for (int i = 1; i < argc; ++i)
-	{
+	for (int i = 1; i < argc; ++i) {
 		bool optionFound = false;
-		for (const auto &option : Options)
-		{
+		for (const auto &option : Options) {
 			bool matches_any = false;
-			for (const auto &str : option.option_str)
-			{
-				if (str == argv[i])
-				{
+			for (const auto &str : option.option_str) {
+				if (str == argv[i]) {
 					matches_any = true;
 					break;
 				}
 			}
-			if (matches_any)
-			{
+			if (matches_any) {
 				option.procedure(argc, argv, i);
 				optionFound = true;
 			}
 		}
 
-		if (!optionFound)
-		{
-			if (argv[i][0] == '-')
-			{
+		if (!optionFound) {
+			if (argv[i][0] == '-') {
 				fprintf(stderr, "Unknown option: %s\n", argv[i]);
 				return 1;
 			}
-			if (binary_file.length())
-			{
+			if (binary_file.length()) {
 				fprintf(stderr, "Cannot open multiple binary files\n");
 				return 1;
 			}
@@ -421,31 +394,26 @@ int main(int argc, const char **argv)
 	binary_file = "tmp/uploaded.bin";
 #endif
 
-	if (StackMemory == uint32(-1))
-	{
+	if (StackMemory == uint32(-1)) {
 		StackMemory = AvailableMemory / 2;
 	}
 
-	if ((AvailableMemory - StackMemory) < 4096)
-	{
+	if ((AvailableMemory - StackMemory) < 4096) {
 		fprintf(stderr, "There must be at least 4KiB of memory available to the system after removing stack reservation.\n");
 		return 1;
 	}
 
-	if (use_rox && mmu_type != mips::mmu::emulated)
-	{
+	if (use_rox && mmu_type != mips::mmu::emulated) {
 		fprintf(stderr, "--rox requires --mmu emulated\n");
 		return 1;
 	}
 
-	if (mmu_type != mips::mmu::emulated && !instruction_cache && JitToUse != mips::JitType::None)
-	{
+	if (mmu_type != mips::mmu::emulated && !instruction_cache && JitToUse != mips::JitType::None) {
 		fprintf(stderr, "--no-mmu requires --icache when being used with a JIT.\n");
 		return 1;
 	}
 
-	if (mmu_type != mips::mmu::emulated && !instruction_cache && JitToUse == mips::JitType::None)
-	{
+	if (mmu_type != mips::mmu::emulated && !instruction_cache && JitToUse == mips::JitType::None) {
 		fprintf(stdout, "warning: --no-mmu requires --icache to achieve behavioural parity with JIT.\n");
 	}
 
@@ -455,16 +423,16 @@ int main(int argc, const char **argv)
 	fprintf(stdout, "Options:\n");
 	fprintf(stdout, "\t%u bytes memory\n", AvailableMemory);
 	fprintf(stdout, "\t%u bytes reserved for stack\n", StackMemory);
-	switch (JitToUse)
-	{
+	switch (JitToUse) {
 		case mips::JitType::None:
 			fprintf(stdout, "\tInterpreted Mode\n"); break;
 		case mips::JitType::Jit:
 			fprintf(stdout, "\tJIT1 Mode\n"); break;
+		case mips::JitType::FunctionTable:
+			fprintf(stdout, "\tFunction Table Mode\n"); break;
 	}
 	fprintf(stdout, "\tROX (Read-only Executable) mode %s\n", use_rox ? "enabled" : "disabled");
-	switch (mmu_type)
-	{
+	switch (mmu_type) {
 		case mips::mmu::emulated:
 			fprintf(stdout, "\tMemory Management Unit: emulated\n"); break;
 		case mips::mmu::none:
@@ -474,12 +442,10 @@ int main(int argc, const char **argv)
 	}
 	fprintf(stdout, "\tInstruction statistics %s\n", instruction_Stats ? "enabled" : "disabled");
 	fprintf(stdout, "\tInstruction cache %s\n", instruction_cache ? "enabled" : "disabled");
-	if (ticks == 0)
-	{
+	if (ticks == 0) {
 		fprintf(stdout, "\tRealtime-mode enabled\n");
 	}
-	else
-	{
+	else {
 		fprintf(stdout, "\tLockstep-mode enabled, %zu cycles\n", ticks);
 	}
 
@@ -488,8 +454,7 @@ int main(int argc, const char **argv)
 	{
 #if !EMSCRIPTEN
 		FILE *fp = fopen(binary_file.c_str(), "rb");
-		if (!fp)
-		{
+		if (!fp) {
 			fprintf(stderr, "Could not open binary \"%s\"\n", binary_file.c_str());
 			return 1;
 		}
@@ -499,16 +464,14 @@ int main(int argc, const char **argv)
 		fread(binaryFileData.data(), 1, binaryFileData.size(), fp);
 		fclose(fp);
 #else
-		for (;;)
-		{
+		for (;;) {
 			char byte = fgetc(stdin);
-			if (byte == EOF)
-			{
+			if (byte == EOF) {
 				break;
 			}
 			binaryFileData.push_back(byte);
 		}
-		binaryFileData = base64_decode(binaryFileData);
+		binaryFileData = base64::decode(binaryFileData);
 #endif
 	}
 
@@ -520,58 +483,51 @@ int main(int argc, const char **argv)
 	std::vector<statistic> Stats;
 	size_t largest_jit_instruction = 0;
 
-	mips::system *sys = nullptr;
+	std::unique_ptr<mips::system> sys;
 
-	try
-	{
+	try {
 		printf("Processing ELF Binary\n");
 		elf::binary elf_binary { binaryFileData };
 		printf("Configuring VCPU and Configurating VENV\n");
 		
-		mips::system::options sys_options;
-		sys_options.total_memory = AvailableMemory;
-		sys_options.stack_memory = StackMemory;
-		sys_options.jit_type = JitToUse;
-		sys_options.read_only_exec = use_rox;
-		sys_options.record_instruction_stats = instruction_Stats;
-			sys_options.disable_cti = disable_cti;
-		sys_options.ticked = ticks != 0;
-		sys_options.instruction_cache = instruction_cache;
-		sys_options.mmu_type = mmu_type;
-		sys_options.debug = debug;
-		sys_options.debug_port = debug_port;
-		sys_options.debug_owned = debug;
-		try
-		{
+		mips::system::options sys_options = {
+			.total_memory = AvailableMemory,
+			.stack_memory = StackMemory,
+			.jit_type = JitToUse,
+			.mmu_type = mmu_type,
+			.debug_port = debug_port,
+			.read_only_exec = use_rox,
+			.record_instruction_stats = instruction_Stats,
+			.disable_cti = disable_cti,
+			.ticked = ticks != 0,
+			.instruction_cache = instruction_cache,
+			.debug = debug,
+			.debug_owned = debug
+		};
+		try {
 			sys_options.validate();
 		}
-		catch (const std::string ex)
-		{
+		catch (const std::string ex) {
 			fprintf(stderr, "Failed to validate system options:\n\t%s\n", ex.c_str());
 			return 1;
 		}
 
-		sys = new mips::system_vemix(sys_options, elf_binary);
+		sys = std::make_unique<mips::system_vemix>(sys_options, elf_binary);
 
 		printf("Beginning Execution ---\n\n");
 		fflush(stdout);
 		startTime = std::chrono::high_resolution_clock::now();
-		try
-		{
-			for (;;)
-			{
+		try {
+			for (;;) {
 				sys->clock(ticks);
 				//printf("Instructions: %llu\n", processor.get_instruction_count());
 			}
 		}
-		catch (...)
-		{
+		catch (...) {
 			instructions = sys->get_instruction_count();
-			if (instruction_Stats)
-			{
+			if (instruction_Stats) {
 				Stats.reserve(sys->get_stats_map().size());
-				for (const auto &statistic : sys->get_stats_map())
-				{
+				for (const auto &statistic : sys->get_stats_map()) {
 					Stats.push_back(statistic);
 				}
 				largest_jit_instruction = sys->get_jit_max_instruction_size();
@@ -579,20 +535,16 @@ int main(int argc, const char **argv)
 			throw;
 		}
 	}
-	catch (std::runtime_error exception)
-	{
+	catch (std::runtime_error exception) {
 		fprintf(stderr, "\n** Error: %s\n", exception.what());
 	}
-	catch (mips::ExecutionCompleteException)
-	{
+	catch (mips::ExecutionCompleteException) {
 		printf("\n** 'main' return detected - execution terminated\n");
 	}
-	catch (mips::ExecutionFailException)
-	{
+	catch (mips::ExecutionFailException) {
 		printf("\n** Unhandled CPU exception - execution terminated\n");
 	}
-	catch (...)
-	{
+	catch (...) {
 		printf("\n** Error\n");
 	}
 
@@ -600,51 +552,39 @@ int main(int argc, const char **argv)
 	auto duration = endTime - startTime;
 	uint64 ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
 
-	double seconds = double(ns) / 1000000000.0;
+	double seconds = double(ns) / 1'000'000'000.0;
 	double ips = double(instructions) / seconds;
 	uint64 ipsr = size_t(round(ips));
 
 	uint64 CpuFreq = GetHostFrequency();
 
-	if (CpuFreq == 1)
-	{
-		printf("** Execution Duration: %llu ms (%llu ips)\n", ns / 1000000, ipsr);
+	if (CpuFreq == 1) {
+		printf("** Execution Duration: %llu ms (%llu ips)\n", ns / 1'000'000, ipsr);
 	}
-	else
-	{
+	else {
 		double FreqRatio = double(CpuFreq * 1'000'000) / ips;
 
-		printf("** Execution Duration: %llu ms (%llu ips - 1:%.2f guest/host)\n", ns / 1000000, ipsr, FreqRatio);
+		printf("** Execution Duration: %llu ms (%llu ips - 1:%.2f guest/host)\n", ns / 1'000'000, ipsr, FreqRatio);
 	}
 	printf("** Instructions Executed: %llu\n", instructions);
 
-	if (instruction_Stats)
-	{
+	if (instruction_Stats) {
 		printf("** Collected Instruction Stats:\n\n");
 
-		if (largest_jit_instruction)
-		{
+		if (largest_jit_instruction) {
 			printf("\tLargest JIT Instruction: %zu bytes\n\n", largest_jit_instruction);
 		}
 
-		struct
-		{
-			bool operator()(const statistic &a, const statistic &b) const __restrict
-			{	
+		struct final {
+			bool operator()(const statistic & __restrict a, const statistic & __restrict b) const __restrict {
 				return a.second > b.second;
 			}	
 		} custom_comparator;
 
 		std::sort(Stats.begin(), Stats.end(), custom_comparator);
-		for (const statistic &stat_pair : Stats)
-		{
+		for (const statistic &stat_pair : Stats) {
 			printf("\t%s - %zu\n", stat_pair.first, stat_pair.second);
 		}
-	}
-
-	if (sys)
-	{
-		delete sys;
 	}
 
 	return 0;

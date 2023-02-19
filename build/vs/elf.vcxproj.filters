@@ -9,4 +9,7 @@
     <ClCompile Include="..\..\src\elf\pch.cpp" />
     <ClCompile Include="..\..\src\elf\elf.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="cpp.hint" />
+  </ItemGroup>
 </Project>

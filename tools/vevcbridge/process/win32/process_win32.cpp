@@ -96,7 +96,8 @@ std::vector<std::string> process::process::get_output() const __restrict
 	for (;;)
 	{
 		DWORD readBytes = 0;
-		char buffer[512];
+		char buffer[513];
+		memset(buffer, 0, sizeof(buffer));
 		if (ReadFile(m_StdOutRd, buffer, sizeof(buffer), &readBytes, nullptr))
 		{
 			break;

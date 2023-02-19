@@ -1,7 +1,16 @@
 #pragma once
 
+#ifndef NOMINMAX
+#	define NOMINMAX 1
+#endif
+
+#include <algorithm>
 #include <array>
+#include <string>
+
+#include <cassert>
 #include <cstdint>
+#include <cstddef>
 
 #if defined(_MSC_VER)
 #	define __unpredictable(expr) (expr)
@@ -20,8 +29,6 @@
 #	error unknown toolchain
 #endif
 
-#define NOMINMAX 1
-
 using uint8 = uint8_t;
 using uint16 = uint16_t;
 using uint32 = uint32_t;
@@ -37,3 +44,18 @@ using intptr = int64;
 using usize = uint64;
 
 template <uint32 _bit> constexpr uint64 bit = (uint64(1) << _bit);
+
+#define xassert(expr) do { assert(expr); __assume(expr); } while (false)
+
+namespace mips {
+	template <typename T, typename U>
+	inline T value_assert(U _value) {
+		const std::conditional_t<std::is_signed_v<T>, std::make_signed_t<U>, U> value = _value;
+		xassert(value >= std::numeric_limits<T>::min() && value <= std::numeric_limits<T>::max());
+		return T(value);
+	}
+
+	template<typename T, typename U> inline constexpr size_t offset_of(U T::* member) {
+		return (char*)&((T*)nullptr->*member) - (char*)nullptr;
+	}
+}

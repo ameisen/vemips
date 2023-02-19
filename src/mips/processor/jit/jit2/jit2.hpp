@@ -1,7 +1,5 @@
 #pragma once
 
-#include "common.hpp"
-
 #include <unordered_map>
 #include <array>
 #include "mips_common.hpp"
@@ -9,10 +7,7 @@
 #include <list>
 #include <limits>
 
-#define IS_INSTRUCTION(instr, ref) \
-	[&]() -> bool { \
-		return &mips::instructions::StaticProc_ ## ref == (const mips::instructions::InstructionInfo *)&(instr); \
-	}()
+#define xassert(expr) do { assert(expr); __assume(expr); } while (false)
 
 namespace mips {
 	namespace instructions {
@@ -20,9 +15,7 @@ namespace mips {
 	};
 
 	class processor;
-	class jit1 final {
-		friend class Jit1_CodeGen;
-
+	class jit2 final {
 		template <size_t x>
 		struct log2 { enum { value = 1 + log2<x/2>::value }; };
   
@@ -121,12 +114,12 @@ namespace mips {
 		Chunk * __restrict m_FlushChunk;
 		size_t m_largest_instruction = 0;
 
-		void populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, uint32 start_address, bool update);
+		void populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, uint32 start_address, bool update) __restrict;
 	public:
 		using jit_instructionexec_t = uint64 (*)  (uint64 instruction, uint64 processor, uint32 pc_runner, uint64, uint64, uint64);
 
-		jit1(processor & __restrict _processor);
-		~jit1();
+		jit2(processor & __restrict _processor);
+		~jit2();
 
 		void execute_instruction(uint32 address);
 		jit_instructionexec_t get_instruction(uint32 address);

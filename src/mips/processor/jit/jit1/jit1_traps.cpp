@@ -14,7 +14,7 @@ using namespace mips;
 
 // TODO consider implementing code properly.
 
-void Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+void Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 
 	const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
@@ -37,7 +37,7 @@ void Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+void Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 
 	const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
@@ -60,7 +60,7 @@ void Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+void Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 
 	const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
@@ -83,7 +83,7 @@ void Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+void Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 
 	const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
@@ -106,7 +106,7 @@ void Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+void Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 
 	const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
@@ -132,7 +132,7 @@ void Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+void Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
 
 	const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
@@ -163,7 +163,7 @@ namespace {
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict {
+void Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 pc_offset = value_assert<int8>(offset_of(&processor::m_program_counter) - 128);
 	static const int8 ic_offset = value_assert<int8>(offset_of(&processor::m_instruction_count) - 128);
 	static const int8 flags_offset = value_assert<int8>(offset_of(&processor::m_flags) - 128);

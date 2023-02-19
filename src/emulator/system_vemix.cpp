@@ -8,8 +8,6 @@ using namespace mips;
 
 system_vemix::system_vemix(const options & __restrict init_options, const elf::binary & __restrict binary) : system(init_options, binary) {}
 
-system_vemix::~system_vemix() {}
-
 void system_vemix::clock(uint64 clocks) __restrict {
 	system::clock(clocks);
 }
@@ -94,12 +92,14 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				static constexpr const uint32 PROT_GROWSUP	= 0x02000000;
 
 				// what... what do we do with memory mapping?
+				/*
 				const uint32 addr = m_processor->get_register<uint32>(4);
 				const uint32 length = m_processor->get_register<uint32>(5);
 				const uint32 prot = m_processor->get_register<uint32>(6);
 				const uint32 flags = m_processor->get_register<uint32>(7);
 				const int fd = m_processor->mem_fetch<int>(m_processor->get_register<uint32>(29) + 16);
 				const int offset = m_processor->mem_fetch<int>(m_processor->get_register<uint32>(29) + 20);
+				*/
 
 				// we ignore 'addr', because the hint is meaningless to us.
 				// THe only thing we are going to do is keep track of what has already
@@ -158,10 +158,12 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				// ignore, we lack file ops right now.
 			} break;
 			case __NR_ioctl: {
+				/*
 				const uint32 fd = m_processor->get_register<uint32>(4);
 				const uint32 request = m_processor->get_register<uint32>(5);
 				const uint32 arg1 = m_processor->get_register<uint32>(6);
 				const uint32 arg2 = m_processor->get_register<uint32>(7);
+				*/
 
 				//switch (request)
 				//{
@@ -202,7 +204,9 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				break; //do nothing.
 			case __NR_set_tid_address: {
 				// pretend to do something meaningful.
+				/*
 				const uint32 ptr = m_processor->get_register<uint32>(4);
+				*/
 				//m_processor->mem_write<uint32>(ptr, 0);
 				m_processor->set_register<uint32>(2, 0);
 			}  break;

@@ -3,7 +3,7 @@
 #include <common.hpp>
 
 namespace mips::platform {
-	class host_mmu {
+	class host_mmu final {
 		void *m_pointer = nullptr;
 	public:
 		host_mmu(uint32 total_memory, uint32 stack_memory);

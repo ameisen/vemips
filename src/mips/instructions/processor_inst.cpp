@@ -16,7 +16,6 @@ struct PROC_ ## InsInstruction																																	 \
 {																																											\
 	friend class PROC_Helper;																																		\
 	PROC_ ## InsInstruction() = delete;																														  \
-	static_assert(std::is_same<decltype(InsOperFlags), OpFlags>::value, "Operation Flags field must be of type 'OpFlags'");		  \
 	static constexpr uint32 OpMask = InsOpMask;																												\
 	static constexpr OpFlags Flags = InsOperFlags;																											\
 																																											 \
@@ -852,7 +851,6 @@ namespace mips::instructions
 	{
 		const GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<16>(instruction).sextend<int32>();
-		const uint32 pc = processor.get_program_counter();
 		
 		const uint32 address = rt.value<uint32>() + offset;
 

@@ -16,28 +16,28 @@ namespace {
 
 class sys_memory_source final : public mips::memory_source {
 	std::vector<char> m_Memory;
-	std::vector<mips::processor * __restrict> m_RegisteredProcessors;
+	std::vector<mips::processor *> m_RegisteredProcessors;
 	std::vector<std::pair<uint32, uint32>> m_ExecutableBlocks;
 public:
 	sys_memory_source(uint32 size) : m_Memory(size) {};
 	virtual ~sys_memory_source() {}
 
-	virtual void * get_ptr() __restrict {
+	virtual void * get_ptr() override {
 		return m_Memory.data();
 	}
 
-	virtual uint32 get_size() __restrict {
+	virtual uint32 get_size() override {
 		return uint32(m_Memory.size());
 	}
 
-	virtual const void * __restrict at(uint32 offset, uint32 size) const __restrict final override {
+	virtual const void * __restrict at(uint32 offset, uint32 size) const final override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
 		}
 		return m_Memory.data() + offset;
 	}
-	virtual const void * __restrict at_exec(uint32 offset, uint32 size) const __restrict final override {
+	virtual const void * __restrict at_exec(uint32 offset, uint32 size) const final override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
@@ -54,7 +54,7 @@ public:
 		}
 		return nullptr;
 	}
-	virtual void * __restrict write_at(uint32 offset, uint32 size) __restrict final override {
+	virtual void * __restrict write_at(uint32 offset, uint32 size) final override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
@@ -68,15 +68,15 @@ public:
 		return m_Memory.data() + offset;
 	}
 
-	virtual void register_processor(mips::processor * __restrict cpu) __restrict final override {
+	virtual void register_processor(mips::processor * cpu) final override {
 		m_RegisteredProcessors.push_back(cpu);
 	}
 
-	virtual void unregister_processor(mips::processor * __restrict cpu) __restrict final override {
+	virtual void unregister_processor(mips::processor * __restrict cpu) final override {
 		m_RegisteredProcessors.erase(std::find(m_RegisteredProcessors.begin(), m_RegisteredProcessors.end(), cpu));
 	}
 
-	virtual void set_executable_memory(const elf::binary & __restrict binary) __restrict final override {
+	virtual void set_executable_memory(const elf::binary & __restrict binary) final override {
 		for (auto&& section : binary.m_Sections) {
 			if (section.Executable) {
 				m_ExecutableBlocks.push_back({ section.MemoryOffset, section.MemoryOffset + section.MemorySize });
@@ -123,7 +123,7 @@ void mips::system::options::validate() const __restrict {
 	}
 }
 
-void system::initialize(const elf::binary & __restrict binary) __restrict {
+void system::initialize(const elf::binary & __restrict binary) {
 	char * __restrict mem_data;
 	uint32 mem_size;
 	if (m_options.mmu_type == mmu::emulated) {
@@ -281,17 +281,18 @@ void system::initialize(const elf::binary & __restrict binary) __restrict {
 
 system::system(const options & __restrict init_options, const elf::binary & __restrict binary) : m_options(init_options)
 {
-	mips::processor::options cpu_options;
-	cpu_options.jit_type = init_options.jit_type;
-	cpu_options.rox = init_options.read_only_exec;
-	cpu_options.collect_stats = init_options.record_instruction_stats;
-	cpu_options.disable_cti = init_options.disable_cti;
-	cpu_options.ticked = init_options.ticked;
-	cpu_options.mmu_type = init_options.mmu_type;
-	cpu_options.icache = init_options.instruction_cache;
-	cpu_options.stack = init_options.stack_memory;
-	cpu_options.guest_system = this;
-	cpu_options.debugging = init_options.debug;
+	mips::processor::options cpu_options = {
+		.guest_system = this,
+		.jit_type = init_options.jit_type,
+		.mmu_type = init_options.mmu_type,
+		.stack = init_options.stack_memory,
+		.rox = init_options.read_only_exec,
+		.collect_stats = init_options.record_instruction_stats,
+		.disable_cti = init_options.disable_cti,
+		.ticked = init_options.ticked,
+		.icache = init_options.instruction_cache,
+		.debugging = init_options.debug
+	};
 
 	switch (init_options.mmu_type) {
 	case mmu::emulated:
@@ -332,8 +333,9 @@ system::~system() {
 }
 
 void system::clock(uint64 clocks) __restrict {
-	if (!m_processor)
+	if (!m_processor) {
 		return;
+	}
 
 	while (!m_options.ticked || m_processor->m_instruction_count < m_processor->m_target_instructions) {
 		if (m_debugger && m_debugger->should_pause()) {

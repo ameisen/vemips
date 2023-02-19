@@ -26,7 +26,7 @@ namespace mips {
 		bool m_execution_success = false;
 
 	public:
-		struct options {
+		struct options final {
 			uint32 total_memory = 0;
 			uint32 stack_memory = 0; // 0 = no stack reservation, unified memory space
 			mips::JitType jit_type = JitType::None;
@@ -45,7 +45,7 @@ namespace mips {
 	protected:
 		const options m_options;
 
-		void initialize(const elf::binary & __restrict binary) __restrict;
+		void initialize(const elf::binary & __restrict binary);
 	public:
 		system(const options & __restrict init_options, const elf::binary & __restrict binary);
 		virtual ~system();

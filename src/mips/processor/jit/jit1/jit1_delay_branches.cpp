@@ -5,6 +5,7 @@
 #include "coprocessor/coprocessor1/coprocessor1.hpp"
 #include "instructions/instructions.hpp"
 #include "instructions/instructions_common.hpp"
+#include "instructions/instructions_table.hpp"
 #include "instructions/coprocessor1_support.hpp"
 #include <cassert>
 #include "codegen.hpp"
@@ -14,13 +15,7 @@ using namespace mips;
 extern jit1::jit_instructionexec_t jit1_get_instruction(jit1 * __restrict _this, uint32 address);
 static constexpr uint32 MaxShortJumpLookAhead = 2;
 
-#define IS_INSTRUCTION(instr, ref) \
-	[&]() -> bool { \
-		extern const mips::instructions::InstructionInfo StaticProc_ ## ref; \
-		return &StaticProc_ ## ref == &instr; \
-	}()
-
-bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict
+bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const uint32 this_address = address;
 
@@ -321,7 +316,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 //	 far_branch,				 // Branches outside this chunk
 //	 indeterminate			  // Branches to an unknown location
 // };
-void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) __restrict
+void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	branch_type branchtype;
 	uint32 target_address = 0;

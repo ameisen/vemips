@@ -6,85 +6,139 @@
 #  error "Unknown Platform"
 #endif
 
+using std::string;
+using std::string_view;
+
+using namespace std::literals::string_view_literals;
+
 namespace buildcarbide::fileutils
 {
+	static constexpr size_t string_length(string_view str) {
+		return str.size();
+	}
+
+	static constexpr size_t string_length(const string& __restrict str) {
+		return str.size();
+	}
+
+	template <size_t N>
+	static constexpr size_t string_length(const char(&str)[N]) {
+		for (size_t i = 0; i < N; ++i) {
+			if (str[i] == '\0') {
+				return i;
+			}
+		}
+		return N;
+	}
+
+	static size_t string_length(const char* __restrict str) {
+		return strlen(str);
+	}
+
+	static constexpr size_t string_length(char c) {
+		return 1;
+	}
+
+	static void fixup_in_place(std::string& __restrict path) {
+		for (size_t i = 0; i < path.size(); ++i) {
+			if (path[i] == '\\') {
+				path[i] = '/';
+			}
+		}
+
+		if (path.contains("//"sv)) {
+			string sanitized_path;
+			sanitized_path.reserve(path.size() - 1);
+
+			char last_char = '\0';
+			for (char c : path) {
+				if (last_char == '/' && c == '/') {
+					continue;
+				}
+
+				sanitized_path += c;
+
+				last_char = c;
+			}
+
+			path = sanitized_path;
+		}
+
+		if (!path.empty() && path.back() == '/') {
+			path.pop_back();
+		}
+	}
+
+	static std::string fixup(const std::string& __restrict path)
+	{
+		auto result = path;
+		fixup_in_place(result);
+		return result;
+	}
+
+	static std::string fixup(string_view path) {
+		return fixup(string(path));
+	}
+
+	static std::string fixup(const char* __restrict path) {
+		return fixup(string_view(path));
+	}
+
 	template <typename... Ts>
 	static std::string build_path(Ts... args)
 	{
-		std::string out;
+		size_t total_length = 0;
+		([&] {
+			total_length += string_length(args);
+			}(), ...);
 
-		const std::array<std::string, sizeof...(args)> elements = { {args...} };
-	
-		size_t i = 0;
-		for (const std::string &str : elements)
-		{
-			if (str.length())
-			{
-				out += str;
-				if ((i != elements.size() - 1) && str.back() != '\\' && str.back() != '/')
-				{
-					out += "/";
-				}
+		string combined;
+		combined.reserve(total_length);
+
+		([&] {
+			if (!combined.empty()) {
+				combined += '/';
 			}
-			++i;
-		}
+			combined += args;
+			}(), ...);
 
-		return out;
+		fixup(combined);
+
+		return combined;
 	}
 
 	static std::string get_base_path(const std::string & __restrict path)
 	{
-		std::string out = path;
-
-		while (out.size() && (out.back() == '\\' || out.back() == '/'))
-		{
-			out.pop_back();
-		}
-
-		// Now, pop until we hit another directory separator.
-
-		while (out.size() && (out.back() != '\\' && out.back() != '/'))
-		{
-			out.pop_back();
-		}
-
-		return out;
-	}
-
-	static std::string fixup(const std::string & __restrict path)
-	{
-		auto replace = [](std::string& str, const std::string & __restrict from, const std::string & __restrict to) -> bool {
-			size_t start_pos = str.find(from);
-			if (start_pos == std::string::npos)
-				return false;
-			str.replace(start_pos, from.length(), to);
-			return true;
+		const auto is_slash = [](char c) {
+			return c == '/';
 		};
-		std::string out = path;
-		while (replace(out, "\\", "/")) {}
-		while (replace(out, "//", "/")) {}
-		return out;
+
+		size_t current_index = path.size() - 1;
+		for (; current_index > 0 && !is_slash(path[current_index]); --current_index) {}
+		for (; current_index > 0 && is_slash(path[current_index]); --current_index) {}
+
+		if (current_index < 0) {
+			return {};
+		}
+
+		return path.substr(0, current_index + 1);
 	}
 
 	static std::string strip_extension(const std::string & __restrict filename)
 	{
 		// Is there a filename?
-		if (filename.size() == 0)
+		if (filename.empty())
 		{
-			return "";
+			return {};
 		}
-		size_t offset = filename.size() - 1;
-		for (size_t i = offset; i >= 1; --i)
-		{
-			if (filename[i] == '/' || filename[i] == '\\')
-			{
-				break;
-			}
-			if (filename[i] == '.')
-			{
-				return filename.substr(0, i);
-			}
+
+		size_t dot_index = filename.rfind('.');
+		size_t slash_index = filename.rfind('/');
+
+		if (dot_index == string::npos || dot_index < slash_index) {
+			return filename;
 		}
-		return filename;
+
+		return filename.substr(0, dot_index);
 	}
 }

@@ -65,6 +65,15 @@
       <Filter>platform\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\mips\debugger.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\jit2\jit2.hpp">
+      <Filter>processor\jit\jit2</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\instructions_table.hpp">
+      <Filter>instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\jit2\codegen.hpp">
+      <Filter>processor\jit\jit2</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\mips\pch.cpp" />
@@ -75,9 +84,6 @@
       <Filter>instructions</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\mips\instructions\instructions.cpp">
-      <Filter>instructions</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\mips\instructions\instructions_test.cpp">
       <Filter>instructions</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\mips\instructions\processor_inst.cpp">
@@ -109,6 +115,12 @@
       <Filter>platform\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\mips\debugger.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit2\jit2.cpp">
+      <Filter>processor\jit\jit2</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\instructions_table.cpp">
+      <Filter>instructions</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="coprocessor">
@@ -137,6 +149,9 @@
     </Filter>
     <Filter Include="platform\win32">
       <UniqueIdentifier>{f7c076f1-84d9-4723-bb79-f1b5ca34a311}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="processor\jit\jit2">
+      <UniqueIdentifier>{87312a6b-fb8b-41ed-9d9f-1dd96fe2e245}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

@@ -24,9 +24,12 @@ fileutils::modtime_t buildcarbide::fileutils::get_file_modtime(FILE * __restrict
 
 	// TODO should we close 'handle' or something?
 
-	LARGE_INTEGER time_value;
-	time_value.HighPart = write_time.dwHighDateTime;
-	time_value.LowPart = write_time.dwLowDateTime;
+	ULARGE_INTEGER time_value = {
+		{
+			.LowPart = write_time.dwLowDateTime,
+			.HighPart = write_time.dwHighDateTime
+		}
+	};
 
 	return time_value.QuadPart;
 }

@@ -1,3 +1,7 @@
+#pragma once
+
 #include <vector>
 
-std::vector<char> base64_decode(std::vector<char> const& s);
+namespace base64 {
+	std::vector<char> decode(const std::vector<char>& encoded_string);
+}

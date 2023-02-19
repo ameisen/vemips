@@ -18,17 +18,26 @@
     <OCDDebuggerServerAddress>localhost:3333</OCDDebuggerServerAddress>
     <Keyword>IoT</Keyword>
     <ProjectGuid>{DA676745-74F2-4030-B96B-76790E6B325B}</ProjectGuid>
+		
+		<VeMipsToolsDir>$(VEMIPS_SDK)</VeMipsToolsDir>
+		<VeMipsSDKDir>$(VEMIPS_SDK)</VeMipsSDKDir>
+		
+		<VeMipsToolsDir Condition="!Exists($(VeMipsToolsDir))">$(SolutionDir)..\MIPS_SDK</VeMipsToolsDir>
+		<VeMipsSDKDir Condition="!Exists($(VeMipsSDKDir))">$(SolutionDir)..\MIPS_SDK</VeMipsSDKDir>
+		
+		<VeMipsToolsDir>$(VeMipsToolsDir)\</VeMipsToolsDir>
+		<VeMipsSDKDir>$(VeMipsSDKDir)\</VeMipsSDKDir>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -102,19 +111,19 @@
   <!-- To Enable linux debugger End -->
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <NMakeBuildCommandLine>$(VEMIPS_SDK)\vevcbridge $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
-    <NMakeReBuildCommandLine>$(VEMIPS_SDK)\vevcbridge $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
-    <NMakeCleanCommandLine>$(VEMIPS_SDK)\vevcbridge $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
+    <NMakeBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectPath)$(ProjectName).bin</NMakeOutput>
-    <IncludePath>$(VEMIPS_SDK)\incxx;$(VEMIPS_SDK)\inc</IncludePath>
+    <IncludePath>$(VeMipsSDKDir)incxx;$(VeMipsSDKDir)inc</IncludePath>
     <NMakePreprocessorDefinitions>_WIN32=0</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <NMakeBuildCommandLine>$(VEMIPS_SDK)\vevcbridge $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
-    <NMakeReBuildCommandLine>$(VEMIPS_SDK)\vevcbridge $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
-    <NMakeCleanCommandLine>$(VEMIPS_SDK)\vevcbridge $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
+    <NMakeBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectPath)$(ProjectName).bin</NMakeOutput>
-    <IncludePath>$(VEMIPS_SDK)\incxx;$(VEMIPS_SDK)\inc</IncludePath>
+    <IncludePath>$(VeMipsSDKDir)incxx;$(VeMipsSDKDir)inc</IncludePath>
     <NMakePreprocessorDefinitions>_WIN32=0</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <ImportGroup Label="ExtensionTargets">

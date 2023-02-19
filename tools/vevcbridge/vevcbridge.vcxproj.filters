@@ -29,6 +29,7 @@
     <ClCompile Include="toolchain\clang.cpp">
       <Filter>toolchain</Filter>
     </ClCompile>
+    <ClCompile Include="options.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="tinyxml2">
@@ -101,5 +102,6 @@
     <ClInclude Include="toolchain\toolchain.hpp">
       <Filter>toolchain</Filter>
     </ClInclude>
+    <ClInclude Include="options.hpp" />
   </ItemGroup>
 </Project>

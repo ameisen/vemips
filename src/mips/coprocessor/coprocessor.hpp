@@ -9,7 +9,7 @@ namespace mips {
 		processor & __restrict m_processor;
 	public:
 		coprocessor(processor & __restrict processor) : m_processor(processor) {}
-		virtual ~coprocessor() {}
+		virtual ~coprocessor() = default;
 
 		virtual void clock() __restrict = 0;
 	};

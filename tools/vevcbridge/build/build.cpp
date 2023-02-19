@@ -9,8 +9,6 @@ using namespace buildcarbide;
 
 build::build(const configuration & __restrict configuration, const project & __restrict project)
 {
-	std::mutex array_lock;
-
 	bool any_build = false;
 
 	// Distribute the work to multiple threads, which should help with larger projects.
@@ -30,7 +28,7 @@ build::build(const configuration & __restrict configuration, const project & __r
 		// Get the modtime of the expected output file, if it exists. If it doesn't, we _must_ build.
 		// TODO get a toolchain-specific object file extension
 		fileutils::modtime_t obj_modtime = 0;
-		std::string object_path = configuration.intermediate_dir + "/" + fileutils::strip_extension(source_file.filename) + ".o";
+		std::string object_path = fileutils::build_path(configuration.intermediate_dir, (fileutils::strip_extension(source_file.filename) + ".o"));
 		if (!do_build)
 		{
 			obj_modtime = fileutils::get_file_modtime(object_path);

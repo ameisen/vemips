@@ -5,6 +5,10 @@
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release-LLVM|x64">
+      <Configuration>Release-LLVM</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release|x64">
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
@@ -19,13 +23,20 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'" Label="Configuration">
+    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -41,6 +52,9 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IntDir>$(ProjectDir)Int\$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
@@ -49,6 +63,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IntDir>$(ProjectDir)Int\$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
     <OutDir>$(ProjectDir)..\..\out\$(Platform)\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">
+    <IntDir>$(ProjectDir)Int\$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
+    <OutDir>$(ProjectDir)..\..\out\$(Platform)\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>false</VcpkgEnabled>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -68,6 +89,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <EnableModules>
       </EnableModules>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -81,7 +103,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
-      <AdditionalOptions>/std:c++latest /Ob3 /favor:INTEL64 /volatile:iso %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/std:c++latest /Ob3 /volatile:iso %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <InlineFunctionExpansion>
       </InlineFunctionExpansion>
@@ -98,6 +120,44 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <EnableModules>
       </EnableModules>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>
+      </SDLCheck>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
+      <AdditionalOptions>/std:c++latest /volatile:iso -flto=thin %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>
+      </EnableFiberSafeOptimizations>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <ControlFlowGuard>false</ControlFlowGuard>
+      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <ConformanceMode>true</ConformanceMode>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <EnableModules>
+      </EnableModules>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -115,6 +175,7 @@
     <ClInclude Include="..\..\src\mips\instructions\coprocessor1_support.hpp" />
     <ClInclude Include="..\..\src\mips\instructions\instructions.hpp" />
     <ClInclude Include="..\..\src\mips\instructions\instructions_common.hpp" />
+    <ClInclude Include="..\..\src\mips\instructions\instructions_table.hpp" />
     <ClInclude Include="..\..\src\mips\instructions\processor_inst.hpp" />
     <ClInclude Include="..\..\src\mips\memory_source.hpp" />
     <ClInclude Include="..\..\src\mips\mips.hpp" />
@@ -126,6 +187,8 @@
     <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\codegen.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\jit2\codegen.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\jit2\jit2.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\avx_type.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak.h" />
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_bin2hex.h" />
@@ -139,11 +202,12 @@
     <ClCompile Include="..\..\src\mips\debugger.cpp" />
     <ClCompile Include="..\..\src\mips\instructions\coprocessor1_inst.cpp" />
     <ClCompile Include="..\..\src\mips\instructions\instructions.cpp" />
-    <ClCompile Include="..\..\src\mips\instructions\instructions_test.cpp" />
+    <ClCompile Include="..\..\src\mips\instructions\instructions_table.cpp" />
     <ClCompile Include="..\..\src\mips\instructions\processor_inst.cpp" />
     <ClCompile Include="..\..\src\mips\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="..\..\src\mips\platform\win32\host_mmu.cpp" />
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_compact_branches.cpp" />
@@ -152,6 +216,7 @@
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1.cpp" />
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_memory.cpp" />
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_traps.cpp" />
+    <ClCompile Include="..\..\src\mips\processor\jit\jit2\jit2.cpp" />
     <ClCompile Include="..\..\src\mips\processor\processor.cpp" />
     <ClCompile Include="..\..\src\mips\system.cpp" />
   </ItemGroup>
