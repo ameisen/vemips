@@ -3,6 +3,10 @@
 #include "mips/processor/processor.hpp"
 #include "mips/coprocessor/coprocessor.hpp"
 
+#if !TABLEGEN
+#	include "instructions_table.hpp"
+#endif
+
 #include <cassert>
 
 #include <unordered_map>
@@ -90,7 +94,7 @@ namespace mips::instructions
 
 			ThisSigMask &= procInfo.InstructionMask;
 		}
-		assert(ThisSigMask != 0);
+		xassert(ThisSigMask != 0);
 
 		current_map.Mask = ThisSigMask;
 
@@ -242,17 +246,13 @@ namespace mips::instructions
 #endif
 }
 
-#if !TABLEGEN
-extern const mips::instructions::InstructionInfo * __restrict get_instruction(instruction_t i);
-extern bool execute_instruction(instruction_t i, mips::processor & __restrict p);
-#endif
 
 namespace mips
 {
 	const instructions::InstructionInfo * __restrict FindExecuteInstruction(instruction_t instruction)
 	{
 #if USE_STATIC_INSTRUCTION_SEARCH
-		return ::get_instruction(instruction);
+		return instructions::get_instruction(instruction);
 #else
 		const auto * __restrict current_map = &instructions::StaticInitVarsPtr->g_LookupMap;
 		while (current_map)

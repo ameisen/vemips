@@ -30,14 +30,14 @@ public:
 		return uint32(m_Memory.size());
 	}
 
-	virtual const void * __restrict at(uint32 offset, uint32 size) const final override {
+	virtual const void * at(uint32 offset, uint32 size) const final override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
 		}
 		return m_Memory.data() + offset;
 	}
-	virtual const void * __restrict at_exec(uint32 offset, uint32 size) const final override {
+	virtual const void * at_exec(uint32 offset, uint32 size) const final override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
@@ -54,7 +54,7 @@ public:
 		}
 		return nullptr;
 	}
-	virtual void * __restrict write_at(uint32 offset, uint32 size) final override {
+	virtual void * write_at(uint32 offset, uint32 size) final override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
@@ -271,7 +271,7 @@ void system::initialize(const elf::binary & __restrict binary) {
 
 
 	memcpy(mem_data + uint32(stack_start), stack_vector.data(), stack_vector.size() * sizeof(uint32));
-	assert((stack_start % 16) == 0);
+	xassert((stack_start % 16) == 0);
 	if (stack_offset) {
 		stack_start -= stack_offset;
 	}

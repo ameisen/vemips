@@ -6,6 +6,11 @@
 #include "mips/processor/jit/jit1/jit1.hpp"
 #include "mips/processor/jit/jit2/jit2.hpp"
 #include "mips/system.hpp"
+
+#if !TABLEGEN
+#include "instructions/instructions_table.hpp"
+#endif
+
 #include <cstdio>
 
 #define NEW_SYSCALL 1
@@ -155,11 +160,6 @@ uint32 processor::get_program_counter() __restrict {
 	return m_program_counter;
 }
 
-#if !TABLEGEN
-extern const mips::instructions::InstructionInfo * __restrict get_instruction(instruction_t i);
-extern bool execute_instruction(instruction_t i, mips::processor & __restrict p);
-#endif
-
 // REMOVE THIS WHEN UNIFIED INSTRUCTIONS ARE IN
 void processor::ExecuteInstruction(bool branch_delay) {
 #if !TABLEGEN
@@ -176,13 +176,13 @@ void processor::ExecuteInstruction(bool branch_delay) {
 				m_jit2->execute_instruction(m_program_counter);
 				return;
 			default:
-				__assume(0);
+				_assume(0);
 			}
 		}
 		
 		instruction_t instruction = get_instruction();
 		if (m_collect_stats) {
-			const auto * __restrict info = ::get_instruction(instruction);
+			const auto * __restrict info = instructions::get_instruction(instruction);
 			if (info) {
 				++m_instruction_stats[info->Name];
 				info->Proc(instruction, *this);
@@ -192,7 +192,7 @@ void processor::ExecuteInstruction(bool branch_delay) {
 			}
 		}
 		else {
-			if (!execute_instruction(instruction, *this)) {
+			if (!instructions::execute_instruction(instruction, *this)) {
 				throw CPU_Exception{ CPU_Exception::Type::RI, this->get_program_counter() };
 			}
 		}
@@ -239,7 +239,7 @@ void processor::execute(uint64 clocks) {
 }
 
 template <bool ticked, bool debugging>
-__forceinline void processor::execute_internal(uint64 clocks) {
+_forceinline void processor::execute_internal(uint64 clocks) {
 	if constexpr (ticked) {
 		m_target_instructions = m_instruction_count + clocks;
 	}

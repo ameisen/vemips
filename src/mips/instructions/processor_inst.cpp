@@ -7,9 +7,9 @@
 
 using namespace mips;
 
-extern __forceinline processor * __restrict get_current_processor();
-extern __forceinline coprocessor * __restrict get_current_coprocessor();
-extern __forceinline void set_current_coprocessor(coprocessor * __restrict cop);
+extern _forceinline processor * __restrict get_current_processor();
+extern _forceinline coprocessor * __restrict get_current_coprocessor();
+extern _forceinline void set_current_coprocessor(coprocessor * __restrict cop);
 
 #define ProcInstructionDef(InsInstruction, InsOperFlags, InsOpMask, InsOpRef)																	  \
 struct PROC_ ## InsInstruction																																	 \
@@ -19,11 +19,11 @@ struct PROC_ ## InsInstruction																																	 \
 	static constexpr uint32 OpMask = InsOpMask;																												\
 	static constexpr OpFlags Flags = InsOperFlags;																											\
 																																											 \
-	static __forceinline bool SubExecute																														 \
+	static _forceinline bool SubExecute																														 \
 		(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor);							  \
 																																											 \
 	template <typename reg_t, typename format_t>																											  \
-	static __forceinline bool write_result(reg_t &dest, format_t value)																				\
+	static _forceinline bool write_result(reg_t &dest, format_t value)																				\
 	{																																										\
 		return PROC_Helper::_write_result<reg_t, format_t, Flags>(dest, value);																	  \
 	}																																										\
@@ -53,7 +53,7 @@ namespace PROC_ ## InsInstruction ## _NS																														\
 		{}																																								  \
 	} static _StaticInitObj;																																		 \
 }																																											\
-__forceinline bool PROC_ ## InsInstruction::SubExecute
+_forceinline bool PROC_ ## InsInstruction::SubExecute
 
 namespace mips::instructions
 {
@@ -67,7 +67,7 @@ namespace mips::instructions
 			{
 				instructions::StaticInitVarsPtr = new instructions::StaticInitVars;
 			}
-			const InstructionInfo Procs{ name, control, 1, exec, OpFlags };
+			const InstructionInfo Procs{ name, 1, exec, OpFlags, { .control = control } };
 			FullProcInfo FullProc = { instructionMask, instructionRef, Procs };
 			instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
 #endif
@@ -82,7 +82,7 @@ namespace mips::instructions
 
 	public:
 		template <typename InsT>
-		__forceinline static void Execute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+		_forceinline static void Execute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 		{
 			try
 			{
@@ -112,7 +112,7 @@ namespace mips::instructions
 		}
 
 		template <typename reg_t, typename format_t, OpFlags Flags>
-		__forceinline static bool _write_result(reg_t & __restrict dest, format_t value)
+		_forceinline static bool _write_result(reg_t & __restrict dest, format_t value)
 		{
 			dest.template set<format_t>(value);
 			return true;

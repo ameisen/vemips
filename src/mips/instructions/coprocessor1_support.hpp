@@ -106,7 +106,7 @@ namespace mips::instructions
 			case 3:
 				return RoundingState::Down;
 		}
-		__assume(0);
+		_assume(0);
 		return RoundingState::None;
 	}
 
@@ -203,7 +203,7 @@ namespace mips::instructions
 					}
 			}
 
-			__assume(0);
+			_assume(0);
 		}
 		return value;
 	}
@@ -259,13 +259,38 @@ namespace mips::instructions
 
 	class _InstructionInitializer
 	{
+		struct instruction_tuple final {
+			const instructionexec_t executor;
+			const instruction_type type;
+		};
+
+		static constexpr instruction_tuple get_instruction_type(
+			FormatBits format_bits,
+			instructionexec_t exec_f, instructionexec_t exec_d, instructionexec_t exec_w, instructionexec_t exec_l
+		) {
+			switch (format_bits) {
+				case FormatBits::Single:
+					return { exec_f, instruction_type::single_fp };
+				case FormatBits::Double:
+					return { exec_d, instruction_type::double_fp };
+				case FormatBits::Word:
+					return { exec_w, instruction_type::word_fp };
+				case FormatBits::Long:
+					return { exec_l, instruction_type::long_fp };
+				case FormatBits::None:
+					return { exec_f, instruction_type::void_fp };
+				default:
+					xassert(false);
+			}
+		}
+
 	public:
 		_InstructionInitializer(
 			const char *name,
 			uint32 instructionMask,
 			uint32 instructionRef,
 			std::initializer_list<MaskType> referenceMasks,
-			instructionexec_t execf, instructionexec_t execd, instructionexec_t execw, instructionexec_t execl,
+			instructionexec_t exec_f, instructionexec_t exec_d, instructionexec_t exec_w, instructionexec_t exec_l,
 			uint32 OpFlags,
 			bool control
 		)
@@ -280,49 +305,21 @@ namespace mips::instructions
 			{
 				uint32 referenceMask = uint32(reference_mask.Mask) | instructionRef;
 
-				switch (reference_mask.Type)
-				{
-					case FormatBits::Single:
-					{
-						const InstructionInfo Procs{ name, control, 1, execf, OpFlags, 'f' };
-						FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
-						instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
-					} break;
-					case FormatBits::Double:
-					{
-						const InstructionInfo Procs{ name, control, 1, execd, OpFlags, 'd' };
-						FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
-						instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
-					} break;
-					case FormatBits::Word:
-					{
-						const InstructionInfo Procs{ name, control, 1, execw, OpFlags, 'w' };
-						FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
-						instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
-					} break;
-					case FormatBits::Long:
-					{
-						const InstructionInfo Procs{ name, control, 1, execl, OpFlags, 'l' };
-						FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
-						instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
-					} break;
-					case FormatBits::None:
-					{
-						const InstructionInfo Procs{ name, control, 1, execf, OpFlags, 'v' };
-						FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
-						instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
-					} break;
-					default:
-						assert(false);
-				}
+				const auto instruction_data = get_instruction_type(reference_mask.Type, exec_f, exec_d, exec_w, exec_l);
+
+				const InstructionInfo Procs{ name, 1, instruction_data.executor, OpFlags, { .control = control }, instruction_data.type };
+				FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
+				instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
 			}
 #else
 			// We want to make sure these instructions get compiled in.
+			// ReSharper disable CppEntityAssignedButNoRead CppAssignedValueIsNeverUsed CppJoinDeclarationAndAssignment
 			volatile instructionexec_t fake_exec;
-			fake_exec = execf;
-			fake_exec = execd;
-			fake_exec = execl;
-			fake_exec = execw;
+			fake_exec = exec_f;
+			fake_exec = exec_d;
+			fake_exec = exec_l;
+			fake_exec = exec_w;
+			// ReSharper restore CppEntityAssignedButNoRead CppAssignedValueIsNeverUsed CppJoinDeclarationAndAssignment
 #endif
 		}
 	};
@@ -339,14 +336,14 @@ namespace mips::instructions
 		template <typename format_t>
 		format_t value_upper() const
 		{
-			assert(sizeof(coprocessor1::register_type) / 2 == sizeof(format_t));
+			xassert(sizeof(coprocessor1::register_type) / 2 == sizeof(format_t));
 			return parent::m_Processor.template get_register_upper<format_t>(parent::m_Register);
 		}
 
 		template <typename format_t>
 		format_t set_upper(format_t value)
 		{
-			assert(sizeof(coprocessor1::register_type) / 2 == sizeof(format_t));
+			xassert(sizeof(coprocessor1::register_type) / 2 == sizeof(format_t));
 			parent::m_Processor.template set_register_upper<format_t>(parent::m_Register, value);
 			return value;
 		}
@@ -364,7 +361,7 @@ namespace mips::instructions
 		template <typename format_t>
 		format_t value() const
 		{
-			assert(sizeof(uint32) >= sizeof(format_t));
+			xassert(sizeof(uint32) >= sizeof(format_t));
 			// Strict Aliasing rules apply.
 			union
 			{
@@ -390,7 +387,7 @@ namespace mips::instructions
 		template <typename format_t>
 		format_t set(format_t value)
 		{
-			assert(sizeof(uint32) >= sizeof(format_t));
+			xassert(sizeof(uint32) >= sizeof(format_t));
 			// Strict Aliasing rules apply.
 			union
 			{
@@ -666,7 +663,7 @@ namespace mips::instructions
 	}
 
 	template <typename reg_t, typename format_t, OpFlags Flags>
-	static __forceinline bool _write_result(reg_t & __restrict dest, format_t value)
+	static _forceinline bool _write_result(reg_t & __restrict dest, format_t value)
 	{
 #if FPU_EXCEPTION_SUPPORT
 		const uint32 exStatus = _statusfp();
@@ -801,10 +798,10 @@ struct COP1_ ## InsInstruction																																					\
 	static constexpr FormatBits Formats = GetFormatBitsFromExtMask(ExtMasks);																					  \
 																																															\
 	template <typename format_t>																																				  \
-	static __forceinline bool SubExecute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor); \
+	static _forceinline bool SubExecute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor); \
 																																															\
 	template <typename reg_t, typename format_t>																															 \
-	static __forceinline bool write_result(reg_t &dest, format_t value)																							  \
+	static _forceinline bool write_result(reg_t &dest, format_t value)																							  \
 	{																																													  \
 		return _write_result<reg_t, format_t, Flags>(dest, value);																									  \
 	}																																													  \
@@ -862,4 +859,4 @@ namespace COP1_ ## InsInstruction ## _NS																																	  \
 		{}																																												 \
 	} static _StaticInitObj;																																						\
 }																																														  \
-template <typename format_t> __forceinline bool COP1_ ## InsInstruction::SubExecute
+template <typename format_t> _forceinline bool COP1_ ## InsInstruction::SubExecute

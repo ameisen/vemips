@@ -1,5 +1,7 @@
 // Copyright 2016-2017 Digital Carbide / Michael Kuklinski. All Rights Reserved.
 
+#include "common.hpp"
+
 #include <cstdio>
 #include <string>
 #include <iostream>
@@ -8,6 +10,9 @@
 #include <mutex>
 #include <cassert>
 
+#ifdef NOMINMAX
+#	undef NOMINMAX
+#endif
 #define NOMINMAX 1
 #include <Windows.h>
 
@@ -103,7 +108,7 @@ public:
 		for (auto cmd : pending_commands)
 		{
 			cmd += '\n';
-			assert(cmd.length() <= std::numeric_limits<DWORD>::max());
+			xassert(cmd.length() <= std::numeric_limits<DWORD>::max());
 			DWORD toWrite = DWORD(cmd.length());
 			DWORD totalWritten = 0;
 			fprintf(fp, " >> ");
@@ -182,7 +187,7 @@ public:
 	{
 		str += '\n';
 
-		assert(str.length() <= std::numeric_limits<DWORD>::max());
+		xassert(str.length() <= std::numeric_limits<DWORD>::max());
 		DWORD toWrite = DWORD(str.length());
 		DWORD totalWritten = 0;
 		fprintf(fp, " >> ");

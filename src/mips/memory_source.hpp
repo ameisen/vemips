@@ -13,9 +13,9 @@ namespace mips {
 		memory_source() = default;
 		virtual ~memory_source() = default;
 
-		virtual const void * __restrict at(uint32 offset, uint32 size) const __restrict = 0;
-		virtual const void * __restrict at_exec(uint32 offset, uint32 size) const __restrict = 0;
-		virtual void * __restrict write_at(uint32 offset, uint32 size) __restrict = 0;
+		virtual const void * at(uint32 offset, uint32 size) const __restrict = 0;
+		virtual const void * at_exec(uint32 offset, uint32 size) const __restrict = 0;
+		virtual void * write_at(uint32 offset, uint32 size) __restrict = 0;
 
 		virtual void register_processor (processor * __restrict cpu) __restrict = 0;
 		virtual void unregister_processor (processor * __restrict cpu) __restrict = 0;

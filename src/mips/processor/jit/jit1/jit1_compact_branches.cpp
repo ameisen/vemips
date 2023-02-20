@@ -21,18 +21,18 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	const uint32 next_chunk = chunk_last + 1;
 	const uint32 this_offset = (address - chunk_begin) / 4u;
 
-	static const int8 flags_offset = value_assert<int8>(offset_of(&processor::m_flags) - 128);
-	static const int8 dbt_offset =  value_assert<int8>(offset_of(&processor::m_branch_target) - 128);
-	static const int8 pc_offset = value_assert<int8>(offset_of(&processor::m_program_counter) - 128);
-	static const int8 ic_offset = value_assert<int8>(offset_of(&processor::m_instruction_count) - 128);
-	static const int8 gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+	static const int8 flags_offset = value_assert<int8>(offsetof(processor, m_flags) - 128);
+	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, m_branch_target) - 128);
+	static const int8 pc_offset = value_assert<int8>(offsetof(processor, m_program_counter) - 128);
+	static const int8 ic_offset = value_assert<int8>(offsetof(processor, m_instruction_count) - 128);
+	static const int8 gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 	static const int8 r31 = gp_offset + (31 * 4);
 
 	const auto patch_preprolog = [&](auto address) -> std::string
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
 		// Start with a set of nops so that we have somewhere to write patch code.
-		const std::string patch = GetUniqueLabel();
+		const std::string patch = get_unique_label();
 		L(patch); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
 		chunk.m_patches.push_back({ uint32(getSize()), 0 });
 		auto &patch_pair = chunk.m_patches.back();
@@ -89,7 +89,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 	const auto patch_jump = [&](uint32 target_address)
 	{
-		 const auto currentAddress = m_jit.fetch_instruction(target_address);
+		 const auto currentAddress = jit_.fetch_instruction(target_address);
 
 		// In this case, we need to find the address in order to jump to it.
 		inc(rdi);
@@ -99,7 +99,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		mov(dword[rbp + pc_offset], eax);
 		mov(edx, eax);
 		mov(rax, uint64(jit1_get_instruction));
-		mov(rcx, uint64(&m_jit));
+		mov(rcx, uint64(&jit_));
 		call(rax);
 		patch_epilog(patch);
 		jmp(rax);
@@ -116,7 +116,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		if (target_address >= chunk_begin && target_address <= chunk_last)
 		{
 			const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-			const auto target_label = GetIndexLabel(instruction_offset);
+			const auto target_label = get_index_label(instruction_offset);
 			mov(dword[rbp + pc_offset], target_address);
 			inc(rdi);
 			safejmp(target_label, instruction_offset);
@@ -138,7 +138,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		if (target_address >= chunk_begin && target_address <= chunk_last)
 		{
 			const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-			const auto target_label = GetIndexLabel(instruction_offset);
+			const auto target_label = get_index_label(instruction_offset);
 			mov(dword[rbp + pc_offset], target_address);
 			inc(rdi);
 			safejmp(target_label, instruction_offset);
@@ -152,7 +152,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	 else if (IS_INSTRUCTION(instruction_info, PROC_BLEZALC)) // branch rt <= 0 and link
 	{
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 		const uint32 link_address = address + 4;
@@ -161,7 +161,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		// instruction only valid if rt != 0
 		if (rt.get_register() != 0)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jg(no_jump);															 // jump past branch
@@ -170,7 +170,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -183,7 +183,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -195,8 +195,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP06))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const uint32 target_address = address + 4 + offset;
@@ -206,7 +206,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const uint32 link_address = address + 4;
 			mov(dword[rbp + r31], link_address);	// set link
 
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jl(no_jump);															 // jump past branch if < 0
@@ -215,7 +215,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -228,12 +228,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BGEUC - branch rs >= rt
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
@@ -243,7 +243,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -256,7 +256,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -268,7 +268,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZALC)) // branch rt > 0 and link
 	{
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 		const uint32 link_address = address + 4;
@@ -277,7 +277,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		// instruction only valid if rt != 0
 		if (rt.get_register() != 0)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jle(no_jump);															 // jump past branch
@@ -286,7 +286,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -299,7 +299,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -311,8 +311,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP07))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const uint32 target_address = address + 4 + offset;
@@ -322,7 +322,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const uint32 link_address = address + 4;
 			mov(dword[rbp + r31], link_address);	// set link
 
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jge(no_jump);															
@@ -331,7 +331,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -344,12 +344,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BLTUC - branch rs < rt
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
@@ -359,7 +359,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -372,7 +372,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -384,8 +384,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP10))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const uint32 target_address = address + 4 + offset;
@@ -395,7 +395,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const uint32 link_address = address + 4;
 			mov(dword[rbp + r31], link_address);	// set link
 
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0);
 			jne(no_jump);															 
@@ -404,7 +404,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -417,12 +417,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BEQC - branch rt == rs
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
@@ -432,7 +432,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -445,12 +445,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs.get_register() >= rt.get_register()) // BOVC - branch if rs + rt overflows (signed)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			add(eax, get_register_op32(rt)); // add [rs] and [rt]
@@ -460,7 +460,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -473,7 +473,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -485,8 +485,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP30))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const uint32 target_address = address + 4 + offset;
@@ -496,7 +496,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const uint32 link_address = address + 4;
 			mov(dword[rbp + r31], link_address);	// set link
 
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			je(no_jump);															 
@@ -505,7 +505,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -518,12 +518,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BNEC - branch rt != rs
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
@@ -533,7 +533,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -546,12 +546,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs.get_register() >= rt.get_register()) // BNVC - branch if rs + rt not overflows (signed)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			add(eax, get_register_op32(rt)); // add [rs] and [rt]
@@ -561,7 +561,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -574,7 +574,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -586,14 +586,14 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLEZC)) // branch rt <= 0
 	{
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
 		if (rt.get_register() != 0)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jg(no_jump);															 // jump past branch
@@ -602,7 +602,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -615,7 +615,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -627,15 +627,15 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP26))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const uint32 target_address = address + 4 + offset;
 
 		if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() == rt.get_register()) // BGEZC - branch [rt] >= 0
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jl(no_jump);
@@ -644,7 +644,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -657,12 +657,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BGEC / BLEC - branch [rs] >= [rt]
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			cmp(eax, get_register_op32(rt)); // compare [rs] and [rt]
@@ -672,7 +672,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -685,7 +685,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -697,14 +697,14 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZC)) // branch rt > 0
 	{
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
 		if (rt.get_register() != 0)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jle(no_jump);															// jump past branch
@@ -713,7 +713,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -726,7 +726,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -738,15 +738,15 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP27))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const uint32 target_address = address + 4 + offset;
 
 		if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() == rt.get_register()) // BLTZC - branch [rt] < 0
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
 			jge(no_jump);
@@ -755,7 +755,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -768,12 +768,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BLTC / BGTC - branch [rs] < [rt]
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			cmp(eax, get_register_op32(rt)); // compare [rs] and [rt]
@@ -783,7 +783,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -796,7 +796,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -808,14 +808,14 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BEQZC)) // branch [rs] == 0
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<23>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
 		if (rs.get_register() != 0)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rs), 0); // compare [rs] to 0
 			jne(no_jump);															// jump past branch
@@ -824,7 +824,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -837,7 +837,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -849,14 +849,14 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BNEZC)) // branch [rs] != 0
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, m_jit.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<23>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
 		if (rs.get_register() != 0)
 		{
-			const auto no_jump = GetUniqueLabel();
+			const auto no_jump = get_unique_label();
 
 			cmp(get_register_op32(rs), 0); // compare [rs] to 0
 			je(no_jump);															 // jump past branch
@@ -866,7 +866,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			if (target_address >= chunk_begin && target_address <= chunk_last)
 			{
 				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto target_label = GetIndexLabel(instruction_offset);
+				const auto target_label = get_index_label(instruction_offset);
 				mov(dword[rbp + pc_offset], target_address);
 				inc(rdi);
 				safejmp(target_label, instruction_offset);
@@ -880,7 +880,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			}
 
 			L(no_jump);
-				 if (!m_jit.m_processor.m_disable_cti)
+				 if (!jit_.m_processor.m_disable_cti)
 					or_(ebx, processor::flag_bit(processor::flag::no_cti));
 		}
 		else
@@ -892,10 +892,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JIC)) // branch [rt] + offset
 	{
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
 
-		const auto not_within = GetUniqueLabel();
+		const auto not_within = get_unique_label();
 
 		inc(rdi);
 		mov(eax, get_register_op32(rt));
@@ -917,19 +917,19 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		mov(rdx, rax);
 		mov(rax, uint64(jit1_get_instruction));
-		mov(rcx, uint64(&m_jit));
+		mov(rcx, uint64(&jit_));
 		call(rax);
 		
 		jmp(rax);
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JIALC)) // branch [rt] + offset and link
 	{
-		const instructions::GPRegister<16, 5> rt(instruction, m_jit.m_processor);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
 		const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
 		const uint32 link_address = address + 4;
 		mov(dword[rbp + r31], link_address);	// set link
 
-		const auto not_within = GetUniqueLabel();
+		const auto not_within = get_unique_label();
 
 		inc(rdi);
 		mov(eax, get_register_op32(rt));
@@ -951,7 +951,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		mov(rdx, rax);
 		mov(rax, uint64(jit1_get_instruction));
-		mov(rcx, uint64(&m_jit));
+		mov(rcx, uint64(&jit_));
 		call(rax);
 		
 		jmp(rax);

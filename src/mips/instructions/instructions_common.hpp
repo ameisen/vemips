@@ -41,9 +41,9 @@ namespace mips
 			DelayBranch = (1U << 18),
 			CompactBranch = (1U << 19),
 			SetNoCTI = (1U << 20),
-				 Load = (1U << 21),
-				 Store = (1U << 22),
-				 COP1 = (1U << 23),
+			Load = (1U << 21),
+			Store = (1U << 22),
+			COP1 = (1U << 23),
 		};
 
 		constexpr OpFlags operator | (OpFlags a, OpFlags b)
@@ -91,19 +91,50 @@ namespace mips
 
 		typedef uint64(*instructionexec_t) (instruction_t instruction, processor & __restrict processor);
 
+		enum class instruction_type : uint8 {
+			normal = 0,
+			single_fp = 1,
+			double_fp = 2,
+			word_fp = 3,
+			long_fp = 4,
+			void_fp = 5,
+		};
+
+		struct instruction_flags final {
+			bool control : 1;
+		};
+
 		struct InstructionInfo
 		{
 			const char * Name;
 			instructionexec_t Proc;
-			uint32 CoprocessorIdx;
 			uint32 OpFlags;
-			bool ControlInstruction;
-			char Type;
+			uint8 CoprocessorIdx;
+			struct {
+				instruction_type Type : 3;
+				instruction_flags Flags;
+			};
 
-			InstructionInfo() = default;
-			InstructionInfo(const char * __restrict _Name, bool _CT, uint32 coprocessor, instructionexec_t proc, uint32 _OpFlags, char type = 'n') :
-				Name(_Name), Proc(proc), CoprocessorIdx(coprocessor), OpFlags(_OpFlags), ControlInstruction(_CT), Type(type) {}
+			InstructionInfo(
+				const char* __restrict name,
+				uint8 coprocessor,
+				instructionexec_t proc,
+				uint32 op_flags,
+				instruction_flags flags ,
+				instruction_type type = instruction_type::normal
+			) :
+				Name(name),
+				Proc(proc),
+				OpFlags(op_flags),
+				CoprocessorIdx(coprocessor),
+				Type(type),
+				Flags(flags)
+			{}
+
+			InstructionInfo(const InstructionInfo&) = default;
 		};
+
+		static constexpr const size_t foo = sizeof(InstructionInfo);
 
 #if !USE_STATIC_INSTRUCTION_SEARCH
 
@@ -223,7 +254,7 @@ namespace mips
 			template <typename format_t>
 			format_t set(format_t value)
 			{
-				assert(sizeof(typename processor_t::register_type) >= sizeof(format_t));
+				xassert(sizeof(typename processor_t::register_type) >= sizeof(format_t));
 				m_Processor.template set_register<format_t>(m_Register, value);
 				return value;
 			}

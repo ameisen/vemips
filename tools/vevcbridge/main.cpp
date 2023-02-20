@@ -231,7 +231,7 @@ int main(int argc, const char **argv)
 	buildcarbide::configuration config;
 	config.target = build_options.platform;
 	config.config = build_options.configuration;
-	config.base_path = buildcarbide::fileutils::fixup(base_dir);
+	config.base_path = buildcarbide::fileutils::fix_up(base_dir);
 	config.intermediate_dir = buildcarbide::fileutils::build_path(base_dir, intermediate_location);
 
 	auto *proj = buildcarbide::get_project(build_options.project_file);

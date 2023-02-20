@@ -15,8 +15,8 @@ namespace elf {
 			size_t m_Size;
 
 			template <size_t N>
-			__forceinline void check_size(size_t size, const char (& __restrict message)[N]) const __restrict {
-				if __unlikely(m_Size < size) [[unlikely]] {
+			_forceinline void check_size(size_t size, const char (& __restrict message)[N]) const __restrict {
+				if _unlikely(m_Size < size) [[unlikely]] {
 					throw std::runtime_error(message);
 				}
 			}

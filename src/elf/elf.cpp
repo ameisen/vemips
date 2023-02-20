@@ -101,7 +101,7 @@ namespace elf {
 		data_stream stream_data = { binary_data };
 
 		// validate magic number.
-		if __unlikely(stream_data.pop<uint32_t>() != MagicNumber) [[unlikely]] {
+		if _unlikely(stream_data.pop<uint32_t>() != MagicNumber) [[unlikely]] {
 			throw std::runtime_error("ELF Binary magic number mismatch");
 		}
 
@@ -138,7 +138,7 @@ namespace elf {
 		elfptr_t MemoryAlign;
 
 		void validate() const {
-			if __unlikely(MemoryAlign > 1 && ((VirtualAddr % MemoryAlign) != (PhysicalAddr % MemoryAlign))) [[unlikely]] {
+			if _unlikely(MemoryAlign > 1 && ((VirtualAddr % MemoryAlign) != (PhysicalAddr % MemoryAlign))) [[unlikely]] {
 				throw std::runtime_error("VirtualAddr and PhysicalAddr alignments mismatch");
 			}
 		}
@@ -157,7 +157,7 @@ namespace elf {
 		elfptr_t MemoryAlign;
 
 		void validate() const {
-			if __unlikely(MemoryAlign > 1 && ((VirtualAddr % MemoryAlign) != (PhysicalAddr % MemoryAlign))) [[unlikely]] {
+			if _unlikely(MemoryAlign > 1 && ((VirtualAddr % MemoryAlign) != (PhysicalAddr % MemoryAlign))) [[unlikely]] {
 				throw std::runtime_error("VirtualAddr and PhysicalAddr alignments mismatch");
 			}
 		}
@@ -180,7 +180,7 @@ namespace elf {
 	void binary::read_binary(data_stream & __restrict stream_data) {
 		using elfptr_t = PtrType;
 
-		if __unlikely(stream_data.pop<ElfEndian>() != ElfEndian::Little) [[unlikely]] {
+		if _unlikely(stream_data.pop<ElfEndian>() != ElfEndian::Little) [[unlikely]] {
 			throw std::runtime_error("Only Little Endian ELF binaries supported");
 		}
 
@@ -197,7 +197,7 @@ namespace elf {
 
 		// We only support a single ISA, so a full enum is unnecessary.
 		static const uint16_t MIPS_ISA = 0x08;
-		if __unlikely(stream_data.pop<uint16_t>() != MIPS_ISA) [[unlikely]] {
+		if _unlikely(stream_data.pop<uint16_t>() != MIPS_ISA) [[unlikely]] {
 			throw std::runtime_error("Only MIPS binaries are supported");
 		}
 
@@ -205,7 +205,7 @@ namespace elf {
 		_unused(ElfVersion);
 
 		const elfptr_t entryOffset = stream_data.pop<elfptr_t>();
-		if __unlikely(entryOffset > 0xFFFFFFFF) [[unlikely]] {
+		if _unlikely(entryOffset > 0xFFFFFFFF) [[unlikely]] {
 			throw std::runtime_error("ELF Entry Address out of range");
 		}
 		m_EntryAddress = uint32_t(entryOffset);
@@ -229,13 +229,13 @@ namespace elf {
 		}
 
 		// Validate that the entry point is in-range. The program may crash if it's near the end, but that's Not Our Problem (tm)
-		if __unlikely(entryOffset >= 0x100000000ull) [[unlikely]] {
+		if _unlikely(entryOffset >= 0x100000000ull) [[unlikely]] {
 			throw std::runtime_error("ELF offsets out of range (32-bit only)");
 		}
 
 		m_Sections.reserve(size_t(ProgramHeaderEntries + SectionHeaderEntries));
 
-		assert(programHeaderOffset <= std::numeric_limits<decltype(m_ProgramHeaders)>::max());
+		xassert(programHeaderOffset <= std::numeric_limits<decltype(m_ProgramHeaders)>::max());
 		m_ProgramHeaders = uint32(programHeaderOffset);
 		m_ProgramHeaderSize = ProgramHeaderSize;
 		m_ProgramHeaderCnt = ProgramHeaderEntries;
@@ -271,7 +271,7 @@ namespace elf {
 
 				// Make sure that the size is valid.
 				m_RawDataStream.offset<char>(programHeader.Offset + (programHeader.FileSize - 1));
-				if __unlikely((programHeader.VirtualAddr + programHeader.MemorySize) >= 0x100000000ull) [[unlikely]] {
+				if _unlikely((programHeader.VirtualAddr + programHeader.MemorySize) >= 0x100000000ull) [[unlikely]] {
 					throw std::runtime_error("ELF Program Header out of virtual address range");
 				}
 

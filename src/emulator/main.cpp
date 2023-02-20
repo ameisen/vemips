@@ -11,8 +11,7 @@
 
 #include <cassert>
 
-#define NOMINMAX 1
-#include <Windows.h>
+#include "platform/platform.hpp"
 #include <PowrProf.h>
 
 #define PAIR_TEST 0
@@ -34,7 +33,7 @@ static uint64 GetHostFrequency() {
 	PowerInfo.resize(sysInfo.dwNumberOfProcessors);
 
 	size_t OutBufferLength = PowerInfo.size() * sizeof(PROCESSOR_POWER_INFORMATION);
-	assert(OutBufferLength <= std::numeric_limits<ULONG>::max());
+	xassert(OutBufferLength <= std::numeric_limits<ULONG>::max());
 	NTSTATUS status = CallNtPowerInformation(
 		ProcessorInformation,
 		nullptr,

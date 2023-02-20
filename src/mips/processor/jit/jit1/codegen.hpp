@@ -9,22 +9,27 @@ namespace mips
 	class jit1;
 	class Jit1_CodeGen final : public Xbyak::CodeGenerator
 	{
-		jit1 & __restrict m_jit;
-		uint32 unique_label_idx = 0;
+		jit1 & __restrict jit_;
+		uint32 unique_label_index_ = 0;
 
 	public:
-		Jit1_CodeGen(jit1 & __restrict jit, uint8 *userptr, size_t usersz) : m_jit(jit), Xbyak::CodeGenerator(usersz, userptr) {}
+		Jit1_CodeGen(jit1 & __restrict jit, uint8 *userptr, size_t usersz) : Xbyak::CodeGenerator(usersz, userptr), jit_(jit) {}
 		virtual ~Jit1_CodeGen() = default;
 
-		std::string GetUniqueLabel () __restrict {
-			char buffer[48];
-			sprintf(buffer, "unique_%u", unique_label_idx++);
+		template <size_t N>
+		static constexpr size_t length_const(const char (& __restrict)[N]) {
+			return N;
+		}
+
+		std::string get_unique_label () __restrict {
+			char buffer[length_const("unique_") + std::numeric_limits<uint32>::digits10 + 1];
+			sprintf(buffer, "unique_%u", unique_label_index_++);
 			return buffer;
 		};
 
-		std::string GetIndexLabel(uint32 index) const __restrict {
-			assert(index < jit1::NumInstructionsChunk);
-			char buffer[48];
+		static std::string get_index_label(uint32 index) {
+			xassert(index < jit1::NumInstructionsChunk);
+			char buffer[length_const("unique_") + std::numeric_limits<uint32>::digits10 + 1];
 			sprintf(buffer, "index_%u", index);
 			return buffer;
 		}
@@ -33,7 +38,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op8(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -51,7 +56,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op16(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -69,7 +74,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op32(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -87,7 +92,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op64(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		

@@ -1029,7 +1029,7 @@ namespace mips::instructions
 			case OpFlags::Round_ToZero:
 				Result = fixed_t(fs_val);
 			default:
-				__assume(0);
+				_assume(0);
 		}
 
 #if FPU_EXCEPTION_SUPPORT

@@ -10,13 +10,13 @@ std::unordered_map<std::string, fileutils::modtime_t> buildcarbide::get_c_includ
 {
 	std::unordered_map<std::string, fileutils::modtime_t> out;
 
-	const std::string fixed_filename = fileutils::fixup(filename);
+	const std::string fixed_filename = fileutils::fix_up(filename);
 	std::unordered_set<std::string> running_parse = { fixed_filename };
 	std::unordered_set<std::string> already_parsed = { fixed_filename };
 
 	const auto insert_parse = [&](const std::string & __restrict filename)
 	{
-		std::string fixed_filename = fileutils::fixup(filename);
+		std::string fixed_filename = fileutils::fix_up(filename);
 		if (already_parsed.find(fixed_filename) != already_parsed.end())
 		{
 			return;

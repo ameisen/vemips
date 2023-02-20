@@ -155,7 +155,7 @@ namespace mips {
 		processor(const options & __restrict _options);
 		~processor();
 
-		coprocessor * __restrict get_coprocessor(uint32 idx) __restrict {
+		coprocessor * get_coprocessor(uint32 idx) __restrict {
 			return m_coprocessors[idx];
 		}
 
@@ -168,7 +168,7 @@ namespace mips {
 		// Execute Clock
 		void execute(uint64 clocks = 1);
 		template <bool ticked, bool debugging>
-		__forceinline void execute_internal(uint64 clocks = 1);
+		_forceinline void execute_internal(uint64 clocks = 1);
 
 		// Get the register as a specific type
 		template <typename T>
@@ -379,7 +379,7 @@ namespace mips {
 			m_flags &= ~bits;
 		}
 
-		system * __restrict get_guest_system() __restrict {
+		system * get_guest_system() __restrict {
 			return m_guest_system;
 		}
 	};

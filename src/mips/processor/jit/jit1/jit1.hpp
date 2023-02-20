@@ -50,7 +50,7 @@ namespace mips {
 
 		template <typename T>
 		struct identity_hash final {
-			__forceinline T operator()(T v) const __restrict {
+			_forceinline T operator()(T v) const __restrict {
 				return v;
 			}
 		};
@@ -62,26 +62,26 @@ namespace mips {
 			std::array<ChunkOffset * __restrict, 256> m_DataOffsets = { 0 };
 
 		public:
-			__forceinline ~MapLevel1();
-			__forceinline const bool contains(uint32 idx) const {
+			_forceinline ~MapLevel1();
+			_forceinline const bool contains(uint32 idx) const {
 				return m_Data[idx] != nullptr;
 			}
-			__forceinline Chunk & __restrict operator [] (uint32 idx);
-			__forceinline ChunkOffset & __restrict get_offsets(uint32 idx);
+			_forceinline Chunk & __restrict operator [] (uint32 idx);
+			_forceinline ChunkOffset & __restrict get_offsets(uint32 idx);
 		};
 
 		class MapLevel2 final {
 				std::array<MapLevel1* __restrict, 256> m_Data = { 0 };
 		public:
-			__forceinline ~MapLevel2() {
+			_forceinline ~MapLevel2() {
 				for (auto * __restrict ptr : m_Data) {
 					delete ptr;
 				}
 			}
-			__forceinline const bool contains(uint32 idx) const {
+			_forceinline const bool contains(uint32 idx) const {
 				return m_Data[idx] != nullptr;
 			}
-			__forceinline MapLevel1 & __restrict operator [] (uint32 idx) {
+			_forceinline MapLevel1 & __restrict operator [] (uint32 idx) {
 				MapLevel1 * __restrict &result = m_Data[idx];
 				if (!result) {
 					result = new MapLevel1;
@@ -93,15 +93,15 @@ namespace mips {
 		class MapLevel3 final {
 			std::array<MapLevel2 * __restrict, (1 << RemainingLog2)> m_Data = { 0 };
 		public:
-			__forceinline ~MapLevel3() {
+			_forceinline ~MapLevel3() {
 				for (auto * __restrict ptr : m_Data) {
 					delete ptr;
 				}
 			}
-			__forceinline const bool contains(uint32 idx) const {
+			_forceinline const bool contains(uint32 idx) const {
 				return m_Data[idx] != nullptr;
 			}
-			__forceinline MapLevel2 & __restrict operator [] (uint32 idx) {
+			_forceinline MapLevel2 & __restrict operator [] (uint32 idx) {
 				MapLevel2 * __restrict &result = m_Data[idx];
 				if (!result) {
 					result = new MapLevel2;

@@ -23,7 +23,7 @@ namespace mips
 		};
 
 		std::string GetIndexLabel(uint32 index) const __restrict {
-			assert(index < jit2::NumInstructionsChunk);
+			xassert(index < jit2::NumInstructionsChunk);
 			char buffer[48];
 			sprintf(buffer, "index_%u", index);
 			return buffer;
@@ -33,7 +33,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op8(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -51,7 +51,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op16(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -69,7 +69,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op32(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -87,7 +87,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op64(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offset_of(&processor::m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		

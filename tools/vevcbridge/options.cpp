@@ -84,12 +84,12 @@ buildcarbide::options buildcarbide::options::build(std::span<const char*> args) 
 			fprintf(stderr, "Failed to get value of environment variable VEMIPS_SDK. Please confirm that it is configured.\n");
 			exit(1);
 		}
-		sdk_path = buildcarbide::fileutils::fixup(string_view(buffer));
+		sdk_path = buildcarbide::fileutils::fix_up(string_view(buffer));
 	}
 
-	fileutils::fixup_in_place(project_file);
-	fileutils::fixup_in_place(out_file);
-	fileutils::fixup_in_place(sdk_path);
+	fileutils::fix_up_in_place(project_file);
+	fileutils::fix_up_in_place(out_file);
+	fileutils::fix_up_in_place(sdk_path);
 
 	return options(std::move(project_file), std::move(configuration), std::move(platform), std::move(command), std::move(out_file), std::move(sdk_path));
 }

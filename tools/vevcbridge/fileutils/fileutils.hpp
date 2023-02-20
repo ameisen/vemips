@@ -6,6 +6,8 @@
 #  error "Unknown Platform"
 #endif
 
+#include <string_view>
+
 using std::string;
 using std::string_view;
 
@@ -39,7 +41,7 @@ namespace buildcarbide::fileutils
 		return 1;
 	}
 
-	static void fixup_in_place(std::string& __restrict path) {
+	static void fix_up_in_place(std::string& __restrict path) {
 		for (size_t i = 0; i < path.size(); ++i) {
 			if (path[i] == '\\') {
 				path[i] = '/';
@@ -69,19 +71,19 @@ namespace buildcarbide::fileutils
 		}
 	}
 
-	static std::string fixup(const std::string& __restrict path)
+	static std::string fix_up(const std::string& __restrict path)
 	{
 		auto result = path;
-		fixup_in_place(result);
+		fix_up_in_place(result);
 		return result;
 	}
 
-	static std::string fixup(string_view path) {
-		return fixup(string(path));
+	static std::string fix_up(string_view path) {
+		return fix_up(string(path));
 	}
 
-	static std::string fixup(const char* __restrict path) {
-		return fixup(string_view(path));
+	static std::string fix_up(const char* __restrict path) {
+		return fix_up(string_view(path));
 	}
 
 	template <typename... Ts>
@@ -95,14 +97,19 @@ namespace buildcarbide::fileutils
 		string combined;
 		combined.reserve(total_length);
 
-		([&] {
+		const auto combiner = [&] (const auto &arg) {
 			if (!combined.empty()) {
 				combined += '/';
 			}
-			combined += args;
-			}(), ...);
+			combined += arg;
+		};
 
-		fixup(combined);
+		(
+			combiner(args),
+			...
+		);
+
+		fix_up(combined);
 
 		return combined;
 	}
@@ -132,8 +139,8 @@ namespace buildcarbide::fileutils
 			return {};
 		}
 
-		size_t dot_index = filename.rfind('.');
-		size_t slash_index = filename.rfind('/');
+		const size_t dot_index = filename.rfind('.');
+		const size_t slash_index = filename.rfind('/');
 
 		if (dot_index == string::npos || dot_index < slash_index) {
 			return filename;

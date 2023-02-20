@@ -26,16 +26,16 @@ using namespace mips;
 	}()
 
 namespace {
-	__forceinline __declspec(restrict, nothrow) void * allocate_executable(size_t size) {
+	_forceinline __declspec(restrict, nothrow) void * allocate_executable(size_t size) {
 		 return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	}
 
-	__forceinline __declspec(nothrow) void free_executable(void *ptr) {
+	_forceinline __declspec(nothrow) void free_executable(void *ptr) {
 		VirtualFree(ptr, 0, MEM_RELEASE);
 	}
 }
 
-__forceinline jit2::MapLevel1::~MapLevel1() {
+_forceinline jit2::MapLevel1::~MapLevel1() {
 	for (auto *ptr : m_Data) {
 		if (ptr) {
 			free_executable(ptr);
@@ -43,7 +43,7 @@ __forceinline jit2::MapLevel1::~MapLevel1() {
 	}
 }
 
-__forceinline jit2::Chunk & __restrict jit2::MapLevel1::operator [] (uint32 idx) {
+_forceinline jit2::Chunk & __restrict jit2::MapLevel1::operator [] (uint32 idx) {
 	Chunk * __restrict result = m_Data[idx];
 	if (!result) {
 		result = (Chunk * __restrict)allocate_executable(sizeof(Chunk));
@@ -56,7 +56,7 @@ __forceinline jit2::Chunk & __restrict jit2::MapLevel1::operator [] (uint32 idx)
 	return *result;
 }
 
-__forceinline jit2::ChunkOffset & __restrict jit2::MapLevel1::get_offsets(uint32 idx) {
+_forceinline jit2::ChunkOffset & __restrict jit2::MapLevel1::get_offsets(uint32 idx) {
 	return *m_DataOffsets[idx];
 }
 
@@ -326,7 +326,7 @@ void jit2::execute_instruction(uint32 address)
 	*/
 }
 
-__forceinline jit2::jit_instructionexec_t jit2::get_instruction(uint32 address)
+_forceinline jit2::jit_instructionexec_t jit2::get_instruction(uint32 address)
 {
 	const uint32 mapped_address = address & ~(ChunkSize - 1);
 	const uint32 address_offset = (address - mapped_address) / 4u;
@@ -364,7 +364,7 @@ __forceinline jit2::jit_instructionexec_t jit2::get_instruction(uint32 address)
 	return jit_instructionexec_t(chunk_instruction);
 }
 
-__forceinline jit2::jit_instructionexec_t jit2::fetch_instruction(uint32 address)
+_forceinline jit2::jit_instructionexec_t jit2::fetch_instruction(uint32 address)
 {
 	const uint32 mapped_address = address & ~(ChunkSize - 1);
 	const uint32 address_offset = (address - mapped_address) / 4u;

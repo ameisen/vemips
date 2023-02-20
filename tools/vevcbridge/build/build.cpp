@@ -9,8 +9,6 @@ using namespace buildcarbide;
 
 build::build(const configuration & __restrict configuration, const project & __restrict project)
 {
-	bool any_build = false;
-
 	// Distribute the work to multiple threads, which should help with larger projects.
 	for (const auto & __restrict source_file : project.get_raw_source_files())
 	{
@@ -57,9 +55,7 @@ build::build(const configuration & __restrict configuration, const project & __r
 			continue;
 		}
 
-		// Kick off a compile via parocess.
-
-		any_build = true;
+		// Kick off a compile via process.
 	}
 }
 

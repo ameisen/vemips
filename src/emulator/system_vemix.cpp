@@ -67,6 +67,9 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				m_processor->set_register<uint32>(2, ret_value);
 			} break;
 			case __NR_mmap2: {
+				// ReSharper disable CppDeclaratorNeverUsed
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-variable"
 				static constexpr const uint32 MAP_SHARED	  = 0x01;
 				static constexpr const uint32 MAP_PRIVATE	 = 0x02;
 				static constexpr const uint32 MAP_TYPE		 = 0x0f;
@@ -90,6 +93,8 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				static constexpr const uint32 PROT_EXEC		= 4;
 				static constexpr const uint32 PROT_GROWSDOWN = 0x01000000;
 				static constexpr const uint32 PROT_GROWSUP	= 0x02000000;
+#pragma clang diagnostic pop
+				// ReSharper restore CppDeclaratorNeverUsed
 
 				// what... what do we do with memory mapping?
 				/*

@@ -26,8 +26,8 @@ namespace {
 		
 		//calculate checksum
 		uint32 sum = 0;
-		for (size_t i = 0; i < payload.size(); ++i) {
-			sum += payload[i];
+		for (const char v : payload) {
+			sum += v;
 		}
 		sum %= 256;
 
@@ -58,26 +58,24 @@ static bool begins(const std::string & __restrict str, const std::string & __res
 	return true;
 }
 
-debugger::debugger(uint16 port, mips::system &sys) : m_system(sys) {
-	static bool Once = true;
-	if (Once) {
-		int res = WSAStartup(MAKEWORD(2, 2), &g_wsa_data);
-		if (res != 0) {
+debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
+	static bool once = true;
+	if (once) {
+		if (WSAStartup(MAKEWORD(2, 2), &g_wsa_data) != 0) {
 			throw std::string("Failed to initialize WinSock");
 		}
-		Once = false;
+		once = false;
 	}
 
-	struct addrinfo hints;
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
-	hints.ai_flags = AI_PASSIVE;
-
+	constexpr addrinfo hints = {
+		.ai_flags = AI_PASSIVE,
+		.ai_family = AF_INET,
+		.ai_socktype = SOCK_STREAM,
+		.ai_protocol = IPPROTO_TCP
+	};
 
 	struct addrinfo *result = nullptr;
-	char port_str[6];
+	char port_str[std::numeric_limits<uint16>::digits10 + 2];
 	sprintf(port_str, "%u", port);
 	int res = getaddrinfo(nullptr, port_str, &hints, &result);
 	if (res != 0 || result == nullptr) {
@@ -154,13 +152,13 @@ debugger::debugger(uint16 port, mips::system &sys) : m_system(sys) {
 					// stop execution of all threads
 					printf("Packet: Ctrl-C\n");
 					handle_stop();
-					std::vector<char> OK = { 'S', ' ', '1', '1' };
-					auto outPacket = assemble_packet(OK);
-					assert(outPacket.size() <= std::numeric_limits<int>::max());
-					send(m_ClientSocket, outPacket.data(), int(outPacket.size()), 0);
+					static const std::vector<char> OK = { 'S', ' ', '1', '1' };
+					auto out_packet = assemble_packet(OK);
+					xassert(out_packet.size() <= std::numeric_limits<int>::max());
+					send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
 					std::string out;
-					out.resize(outPacket.size());
-					memcpy(&out[0], outPacket.data(), outPacket.size());
+					out.resize(out_packet.size());
+					memcpy(out.data(), out_packet.data(), out_packet.size());
 					printf("Sent: %s\n", out.data());
 					++tbuffer;
 					--res;
@@ -198,34 +196,34 @@ debugger::debugger(uint16 port, mips::system &sys) : m_system(sys) {
 
 							if (m_ack_mode) {
 								if (handle_packet(buffer, response)) {
-									auto outPacket = assemble_packet(response);
+									auto out_packet = assemble_packet(response);
 
-									const char plus = '+';
+									constexpr char plus = '+';
 									send(m_ClientSocket, &plus, 1, 0);
-									assert(outPacket.size() <= std::numeric_limits<int>::max());
-									send(m_ClientSocket, outPacket.data(), int(outPacket.size()), 0);
+									xassert(out_packet.size() <= std::numeric_limits<int>::max());
+									send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
 									
 									std::string out;
-									out.resize(outPacket.size());
-									memcpy(&out[0], outPacket.data(), outPacket.size());
+									out.resize(out_packet.size());
+									memcpy(out.data(), out_packet.data(), out_packet.size());
 									printf("Sent: %s\n", out.data());
 								}
 								else {
-									const char minus = '-';
+									constexpr char minus = '-';
 									send(m_ClientSocket, &minus, 1, 0);
 								}
 							}
 							else {
 								handle_packet(buffer, response);
 
-								auto outPacket = assemble_packet(response);
+								auto out_packet = assemble_packet(response);
 
-								assert(outPacket.size() <= std::numeric_limits<int>::max());
-								send(m_ClientSocket, outPacket.data(), int(outPacket.size()), 0);
+								xassert(out_packet.size() <= std::numeric_limits<int>::max());
+								send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
 
 								std::string out;
-								out.resize(outPacket.size());
-								memcpy(&out[0], outPacket.data(), outPacket.size());
+								out.resize(out_packet.size());
+								memcpy(out.data(), out_packet.data(), out_packet.size());
 								printf("Sent: %s\n", out.data());
 							}
 							buffer.clear();
@@ -310,8 +308,8 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		std::string token;
 		bool in_string = false;
 		bool in_escape = false;
-		while (in.size()) {
-			while (in.size() && (in_string || !is_delim(in.front()))) {
+		while (!in.empty()) {
+			while (!in.empty() && (in_string || !is_delim(in.front()))) {
 				if (!in_escape && in.front() == '\\') {
 					in_escape = true;
 				}
@@ -351,10 +349,10 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 					in.erase(0, 1);
 				}
 			}
-			while (in.size() && is_delim(in.front())) {
+			while (!in.empty() && is_delim(in.front())) {
 				in.erase(0, 1);
 			}
-			if (token.size()) {
+			if (!token.empty()) {
 				tokens.push_back(token);
 				token.clear();
 			}
@@ -654,7 +652,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		// no idea
 	}
 	else if (get_token(0)[0] == 'x') {
-		// The command we get is misformed?
+		// The command we get is malformed?
 	}
 	else if (get_token(0)[0] == 'm') {
 		// we're reading memory.
@@ -666,8 +664,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 
 		for (uint32 i = 0; i < length; ++i) {
 			char buffer[8];
-			auto *ptr = m_system.get_processor()->mem_fetch_debugger<uint8>(addr);
-			if (ptr) {
+			if (auto *ptr = m_system.get_processor()->mem_fetch_debugger<uint8>(addr)) {
 				sprintf(buffer, "%02x", *ptr);
 				SendResponse(buffer);
 				has_response = true;
@@ -684,7 +681,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		}
 	}
 	else if (get_token(0)[0] == 'Z') {
-		// The command we get is misformed?
+		// The command we get is malformed?
 		uint32 type;
 		uint32 address;
 		uint32 kind;
@@ -692,27 +689,24 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 
 		{
 			{
-				std::unique_lock<std::mutex> _bplock(m_breakpoint_lock);
-				m_breakpoints.push_back({ type, address, kind });
+				std::unique_lock _bplock(m_breakpoint_lock);
+				m_breakpoints.emplace_back(type, address, kind);
 			}
 			SendResponse("OK");
 		}
 	}
 	else if (get_token(0)[0] == 'z') {
-		// The command we get is misformed?
+		// The command we get is malformed?
 		uint32 type;
 		uint32 address;
 		uint32 kind;
 		sscanf(get_token(0).c_str(), "z%x,%x,%x", &type, &address, &kind);
 
-		type = type;
-
 		{
 			{
-				std::unique_lock<std::mutex> _bplock(m_breakpoint_lock);
+				std::unique_lock _bplock(m_breakpoint_lock);
 				breakpoint_t bpt{ type, address, kind };
-				auto fiter = std::find(m_breakpoints.begin(), m_breakpoints.end(), bpt);
-				if (fiter != m_breakpoints.end()) {
+				if (const auto fiter = std::find(m_breakpoints.begin(), m_breakpoints.end(), bpt); fiter != m_breakpoints.end()) {
 					m_breakpoints.erase(fiter);
 				}
 			}
@@ -732,7 +726,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		else if (get_token(1) == "s") {
 			uint32 thread;
 			sscanf(get_token(2).c_str(), "%x", &thread);
-			std::unique_lock<std::mutex> _bplock(m_breakpoint_lock);
+			std::unique_lock _bplock(m_breakpoint_lock);
 			m_step[thread] = 2;
 			m_paused = false;
 		}
@@ -778,20 +772,20 @@ void debugger::wait() {
 	--m_threads_to_pause;
 	printf("Thread Interrupted (remaining threads %u\n", m_threads_to_pause.load());
 	
-	std::unique_lock<std::mutex> _lock(m_wait_lock);
+	std::unique_lock _lock(m_wait_lock);
 	
-	if (m_pending_breakpoints.size()) {
-		auto pending_breakpoint = m_pending_breakpoints.back();
+	if (!m_pending_breakpoints.empty()) {
+		const auto [thread_id, breakpoint] = m_pending_breakpoints.back();
 		m_pending_breakpoints.pop_back();
 
 		// report back the breakpoint being hit.
-		if (std::get<0>(pending_breakpoint.second) == uint32(-1)) { // step
+		if (std::get<0>(breakpoint) == uint32(-1)) { // step
 			SendResponse("S 05 ");
 		}
 		else {
 			SendResponse("T 05 "); // TARGET_SIGNAL_TRAP
 			char buffer[32];
-			sprintf(buffer, "thread:%x;", pending_breakpoint.first);
+			sprintf(buffer, "thread:%x;", thread_id);
 			SendResponse(buffer);
 			sprintf(buffer, "%02x:%08x;", 64, endian_swap(m_system.get_processor()->get_program_counter()));
 			SendResponse(buffer);
@@ -799,22 +793,22 @@ void debugger::wait() {
 			SendResponse(buffer);
 			sprintf(buffer, "%02x:%08x;", 0x1f, endian_swap(m_system.get_processor()->get_register<uint32>(0x1f)));
 			SendResponse(buffer);
-			if (std::get<0>(pending_breakpoint.second) == 0) {
+			if (std::get<0>(breakpoint) == 0) {
 				SendResponse("swbreak:;");
 			}
-			else if (std::get<0>(pending_breakpoint.second) == 1) {
+			else if (std::get<0>(breakpoint) == 1) {
 				SendResponse("hwbreak:;");
 			}
 		}
 
-		auto outPacket = assemble_packet(response);
+		const auto out_packet = assemble_packet(response);
 
-		assert(outPacket.size() <= std::numeric_limits<int>::max());
-		send(m_ClientSocket, outPacket.data(), int(outPacket.size()), 0);
+		xassert(out_packet.size() <= std::numeric_limits<int>::max());
+		send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
 
 		std::string out;
-		out.resize(outPacket.size());
-		memcpy(&out[0], outPacket.data(), outPacket.size());
+		out.resize(out_packet.size());
+		memcpy(out.data(), out_packet.data(), out_packet.size());
 		printf("Sent: %s\n", out.data());
 	}
 	
@@ -852,24 +846,23 @@ bool debugger::should_interrupt_execution() {
 
 	const uint32 thread = 1;
 	const uint32 pc = m_system.get_processor()->get_program_counter();
-	std::unique_lock<std::mutex> _bplock(m_breakpoint_lock);
+	std::unique_lock _bplock(m_breakpoint_lock);
 
 	// check for breakpoints
 	for (auto &breakpoint : m_breakpoints) {
 		if (pc == std::get<1>(breakpoint)) {
-			m_pending_breakpoints.push_back({ thread, breakpoint }); // TODO thread
+			m_pending_breakpoints.emplace_back(thread, breakpoint); // TODO thread
 			m_paused = true;
 			return true;
 		}
 	}
 
 	// check for step
-	const uint32 step_point = m_step[thread];
-	if (step_point > 0) {
+	if (const uint32 step_point = m_step[thread]; step_point > 0) {
 		--m_step[thread];
 		if (step_point == 1) {
 			const breakpoint_t steppoint{ uint32(-1), pc, 0 };
-			m_pending_breakpoints.push_back({ thread, steppoint }); // TODO thread
+			m_pending_breakpoints.emplace_back(thread, steppoint); // TODO thread
 			m_paused = true;
 			return true;
 		}

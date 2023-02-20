@@ -29,16 +29,16 @@ namespace {
 }
 
 namespace {
-	__forceinline __declspec(restrict, nothrow) void * allocate_executable(size_t size) {
+	_forceinline __declspec(restrict, nothrow) void * allocate_executable(size_t size) {
 		 return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	}
 
-	__forceinline __declspec(nothrow) void free_executable(void *ptr) {
+	_forceinline __declspec(nothrow) void free_executable(void *ptr) {
 		VirtualFree(ptr, 0, MEM_RELEASE);
 	}
 }
 
-__forceinline jit1::MapLevel1::~MapLevel1() {
+_forceinline jit1::MapLevel1::~MapLevel1() {
 	for (auto *ptr : m_Data) {
 		if (ptr) {
 			free_executable(ptr);
@@ -46,7 +46,7 @@ __forceinline jit1::MapLevel1::~MapLevel1() {
 	}
 }
 
-__forceinline jit1::Chunk & __restrict jit1::MapLevel1::operator [] (uint32 idx) {
+_forceinline jit1::Chunk & __restrict jit1::MapLevel1::operator [] (uint32 idx) {
 	Chunk * __restrict result = m_Data[idx];
 	if (!result) {
 		result = (Chunk * __restrict)allocate_executable(sizeof(Chunk));
@@ -59,7 +59,7 @@ __forceinline jit1::Chunk & __restrict jit1::MapLevel1::operator [] (uint32 idx)
 	return *result;
 }
 
-__forceinline jit1::ChunkOffset & __restrict jit1::MapLevel1::get_offsets(uint32 idx) {
+_forceinline jit1::ChunkOffset & __restrict jit1::MapLevel1::get_offsets(uint32 idx) {
 	return *m_DataOffsets[idx];
 }
 
@@ -106,11 +106,11 @@ jit1::jit1(processor & __restrict _processor) : m_processor(_processor)
 		{
 			g_ex_return = uint64(g_global_exec_data + cg.getSize());
 
-			static const int8 flags_offset = value_assert<int8>(offset_of(&processor::m_flags) - 128);
-			static const int8 pc_offset =  value_assert<int8>(offset_of(&processor::m_program_counter) - 128);
-			static const int8 gp_offset =  value_assert<int8>(offset_of(&processor::m_registers) - 128);
-			static const int8 dbt_offset =  value_assert<int8>(offset_of(&processor::m_branch_target) - 128);
-			static const int8 ic_offset =  value_assert<int8>(offset_of(&processor::m_instruction_count) - 128);
+			static const int8 flags_offset = value_assert<int8>(offsetof(processor, m_flags) - 128);
+			static const int8 pc_offset =  value_assert<int8>(offsetof(processor, m_program_counter) - 128);
+			static const int8 gp_offset =  value_assert<int8>(offsetof(processor, m_registers) - 128);
+			static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, m_branch_target) - 128);
+			static const int8 ic_offset =  value_assert<int8>(offsetof(processor, m_instruction_count) - 128);
 
 			cg.mov(cg.qword[cg.rbp + ic_offset], cg.rdi);		// save instruction count
 			cg.mov(cg.dword[cg.rbp + flags_offset], cg.ebx);
@@ -239,15 +239,15 @@ namespace
 
 void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update)
 {
-	assert((start_address % 4) == 0);
+	xassert((start_address % 4) == 0);
 	const uint32 base_address = start_address & ~(jit1::ChunkSize - 1);
 	const uint32 last_address = base_address + (jit1::ChunkSize - 1);
 
-	static const int8 flags_offset = value_assert<int8>(offset_of(&processor::m_flags) - 128);
-	static const int8 pc_offset =  value_assert<int8>(offset_of(&processor::m_program_counter) - 128);
-	static const int8 gp_offset =  value_assert<int8>(offset_of(&processor::m_registers) - 128);
-	static const int8 dbt_offset =  value_assert<int8>(offset_of(&processor::m_branch_target) - 128);
-	static const int8 ic_offset =  value_assert<int8>(offset_of(&processor::m_instruction_count) - 128);
+	static const int8 flags_offset = value_assert<int8>(offsetof(processor, m_flags) - 128);
+	static const int8 pc_offset =  value_assert<int8>(offsetof(processor, m_program_counter) - 128);
+	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, m_registers) - 128);
+	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, m_branch_target) - 128);
+	static const int8 ic_offset =  value_assert<int8>(offsetof(processor, m_instruction_count) - 128);
 
 	uint32 chunk_start_offset = 0;
 
@@ -284,7 +284,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	static constexpr uint32 num_instructions = jit1::ChunkSize / 4u;
 	for (uint32 i = start_index; i < num_instructions; ++i)
 	{
-		auto cur_label = GetIndexLabel(i);
+		auto cur_label = get_index_label(i);
 		L(cur_label);
 		chunk_offset[i] = uint32(this->getSize()) + chunk_start_offset;
 
@@ -315,7 +315,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		L(id_label);
 #endif
 		
-		if (m_jit.m_processor.m_ticked && m_jit.m_processor.m_debugging)
+		if (jit_.m_processor.m_ticked && jit_.m_processor.m_debugging)
 		{
 			mov(rax, int64(&should_debug_break));
 			mov(dword[rbp + pc_offset], int32(current_address));
@@ -327,7 +327,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			cmp(rdi, r14);;
 			je("save_return", T_NEAR);
 		}
-		else if (m_jit.m_processor.m_debugging)
+		else if (jit_.m_processor.m_debugging)
 		{
 			mov(rax, int64(&should_debug_break));
 			mov(dword[rbp + pc_offset], int32(current_address));
@@ -337,9 +337,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			test(eax, eax);
 			jnz("save_return", T_NEAR);
 		}
-		else if (m_jit.m_processor.m_ticked)
+		else if (jit_.m_processor.m_ticked)
 		{
-			const auto no_flush = GetUniqueLabel();
+			const auto no_flush = get_unique_label();
 		
 			// check if we are already at our tick count.
 			cmp(rdi, r14);
@@ -352,7 +352,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			const size_t ins_start_size = getSize();
 
 			// Also fetch previous instruction.
-			const instruction_t * __restrict prev_ptr = m_jit.m_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4);
+			const instruction_t * __restrict prev_ptr = jit_.m_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4);
 			if (prev_ptr)
 			{
 				prev_instruction = *prev_ptr;
@@ -368,7 +368,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				}
 			}
 
-			const instruction_t * __restrict ptr = m_jit.m_processor.safe_mem_fetch_exec<const instruction_t>(current_address);
+			const instruction_t * __restrict ptr = jit_.m_processor.safe_mem_fetch_exec<const instruction_t>(current_address);
 			if (ptr)
 			{
 				const instruction_t instruction = *ptr;
@@ -376,7 +376,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 				if (instruction_info_ptr)
 				{
-					if (m_jit.m_processor.m_collect_stats)
+					if (jit_.m_processor.m_collect_stats)
 					{
 						// dispatch a stat call.
 						mov(rcx, int64(instruction_info_ptr->Name));
@@ -386,12 +386,12 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					compact_branch = ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::CompactBranch)) != 0);
 					delay_branch = ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::DelayBranch)) != 0);
 
-					if (cti_test && !m_jit.m_processor.m_disable_cti)
+					if (cti_test && !jit_.m_processor.m_disable_cti)
 					{
 						// CTI instruction prefix.
 						if ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::ControlInstruction)) != 0)
 						{
-							const auto no_ex = GetUniqueLabel();
+							const auto no_ex = get_unique_label();
 
 							test(ebx, processor::flag_bit(processor::flag::no_cti));
 							jz(no_ex);
@@ -658,7 +658,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 						can_except = true;
 					}
 
-					cti = instruction_info_ptr->ControlInstruction;
+					cti = instruction_info_ptr->Flags.control;
 				}
 				else
 				{
@@ -676,7 +676,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			}
 
 			const size_t ins_size = getSize() - ins_start_size;
-			m_jit.m_largest_instruction = std::max(m_jit.m_largest_instruction, ins_size);
+			jit_.m_largest_instruction = std::max(jit_.m_largest_instruction, ins_size);
 		}
 		else
 		{
@@ -754,8 +754,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				// xor rcx, rcx								; zero rcx, as our JIT guarantees that it is 0 at the start of instructions.
 				// jmp rax									  ; jump to the remote jump target
 				// no_change:								  ; otherwise, the subroutine (unencoded) compact branch did not trigger a branch.
-				const auto no_change = GetUniqueLabel();
-				const auto not_within = GetUniqueLabel();
+				const auto no_change = get_unique_label();
+				const auto not_within = get_unique_label();
 
 				test(ebx, processor::flag_bit(processor::flag::pc_changed));
 				jz(no_change);
@@ -777,7 +777,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 				mov(rdx, rax);
 				mov(rax, uint64(jit1_get_instruction));
-				mov(rcx, uint64(&m_jit));
+				mov(rcx, uint64(&jit_));
 				call(rax);
 				jmp(rax);
 				L(no_change);
@@ -813,7 +813,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
 		// Start with a set of nops so that we have somewhere to write patch code.
-		const std::string patch = GetUniqueLabel();
+		const std::string patch = get_unique_label();
 		L(patch); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
 		chunk.m_patches.push_back({ uint32(getSize()), 0 });
 		auto &patch_pair = chunk.m_patches.back();
@@ -856,7 +856,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		mov(word[rcx + 10], int16_t(patch_suffix));
 	};
 
-	const auto patch = patch_preprolog(m_jit.fetch_instruction(uint32(last_address + 1)));
+	const auto patch = patch_preprolog(jit_.fetch_instruction(uint32(last_address + 1)));
 
 	mov(edx, uint32(last_address + 1));
 
@@ -864,7 +864,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 	mov(dword[rbp + pc_offset], edx);
 	mov(rax, uint64(jit1_get_instruction));
-	mov(rcx, uint64(&m_jit));
+	mov(rcx, uint64(&jit_));
 	call(rax);
 
 	patch_epilog(patch);
@@ -937,7 +937,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		add(rsp, 40);
 		ret();
 
-		if (m_jit.m_processor.m_collect_stats)
+		if (jit_.m_processor.m_collect_stats)
 		{
 			// dispatch a stat call.
 			L("intrinsic_stats");
@@ -951,15 +951,15 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 }
 
-	assert(!hasUndefinedLabel());
+	xassert(!hasUndefinedLabel());
 	ready();
 	//chunk.m_datasize = getSize();
 	const uint8 * __restrict data = getCode();
 
 	//this->
 
-	assert(chunk_offset.back() < getSize());
-	assert(getSize() <= jit1::MaxChunkRealSize);
+	xassert(chunk_offset.back() < getSize());
+	xassert(getSize() <= jit1::MaxChunkRealSize);
 
 	// Finalize the data stream and then allocate a new chunk for it, if necessary.
 	uint32 total_size = uint32(this->getSize()) + chunk_start_offset;
@@ -968,8 +968,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 	if (!update)
 	{
-		m_jit.m_Chunks.push_back(&chunk);
-		std::sort(m_jit.m_Chunks.begin(), m_jit.m_Chunks.end());
+		jit_.m_Chunks.push_back(&chunk);
+		std::sort(jit_.m_Chunks.begin(), jit_.m_Chunks.end());
 	}
 }
 

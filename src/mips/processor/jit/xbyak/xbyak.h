@@ -236,7 +236,7 @@ public:
 			"invalid zero",
 			"internal error",
 		};
-		assert((size_t)err_ < sizeof(errTbl) / sizeof(*errTbl));
+		xassert((size_t)err_ < sizeof(errTbl) / sizeof(*errTbl));
 		return errTbl[err_];
 	}
 };
@@ -327,7 +327,7 @@ public:
 #endif
 		void *p = mmap(NULL, size, PROT_READ | PROT_WRITE, mode, -1, 0);
 		if (p == MAP_FAILED) throw Error(ERR_CANT_ALLOC);
-		assert(p);
+		xassert(p);
 		sizeList_[(uintptr_t)p] = size;
 		return (uint8*)p;
 	}
@@ -383,7 +383,7 @@ public:
 		, bit_(bit)
 		, zero_(0), mask_(0), rounding_(0)
 	{
-		assert((bit_ & (bit_ - 1)) == 0); // bit must be power of two
+		xassert((bit_ & (bit_ - 1)) == 0); // bit must be power of two
 	}
 	Kind getKind() const { return static_cast<Kind>(kind_); }
 	int getIdx() const { return idx_ & (EXT8BIT - 1); }
@@ -402,8 +402,11 @@ public:
 	bool isExt8bit() const { return (idx_ & EXT8BIT) != 0; }
 	bool isExtIdx() const { return (getIdx() & 8) != 0; }
 	bool isExtIdx2() const { return (getIdx() & 16) != 0; }
-	bool hasEvex() const { return isZMM() || isExtIdx2() || hasZero() || getOpmaskIdx() || getRounding(); }
-	bool hasRex() const { return isExt8bit() | isREG(64) | isExtIdx(); }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wclang-diagnostic-bitwise-instead-of-logical"
+	bool hasEvex() const { return (isZMM() | isExtIdx2() | hasZero()) || getOpmaskIdx() || getRounding(); }  // NOLINT(clang-diagnostic-bitwise-instead-of-logical)
+	bool hasRex() const { return isExt8bit() | isREG(64) | isExtIdx(); }  // NOLINT(clang-diagnostic-bitwise-instead-of-logical)
+#pragma clang diagnostic pop
 	bool hasZero() const { return zero_; }
 	int getOpmaskIdx() const { return mask_; }
 	int getRounding() const { return rounding_; }
@@ -638,7 +641,7 @@ public:
 	enum {
 		es, cs, ss, ds, fs, gs
 	};
-	Segment(int idx) : idx_(idx) { assert(0 <= idx_ && idx_ < 6); }
+	Segment(int idx) : idx_(idx) { xassert(0 <= idx_ && idx_ < 6); }
 	int getIdx() const { return idx_; }
 	const char *toString() const
 	{
@@ -896,7 +899,7 @@ public:
 	*/
 	void rewrite(size_t offset, uint64 disp, size_t size)
 	{
-		assert(offset < maxSize_);
+		xassert(offset < maxSize_);
 		if (size != 1 && size != 2 && size != 4 && size != 8) throw Error(ERR_BAD_PARAMETER);
 		uint8 *const data = top_ + offset;
 		for (size_t i = 0; i < size; i++) {
@@ -2231,7 +2234,7 @@ public:
 		case Segment::fs: db(0x0F); db(0xA0); break;
 		case Segment::gs: db(0x0F); db(0xA8); break;
 		default:
-			assert(0);
+			xassert(0);
 		}
 	}
 	void pop(const Segment& seg)
@@ -2244,7 +2247,7 @@ public:
 		case Segment::fs: db(0x0F); db(0xA1); break;
 		case Segment::gs: db(0x0F); db(0xA9); break;
 		default:
-			assert(0);
+			xassert(0);
 		}
 	}
 	void putSeg(const Segment& seg)
@@ -2257,7 +2260,7 @@ public:
 		case Segment::fs: db(0x64); break;
 		case Segment::gs: db(0x65); break;
 		default:
-			assert(0);
+			xassert(0);
 		}
 	}
 	void mov(const Operand& op, const Segment& seg)
