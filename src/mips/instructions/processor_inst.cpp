@@ -145,6 +145,29 @@ namespace mips::instructions
 		return write_result(rd, int32(result));
 	}
 
+	// No support on MIPS32r6
+	/*
+	ProcInstructionDef(
+		ADDI,
+		(OpFlags::None),
+		0b11111100000000000000000000000000,
+		0b00100000000000000000000000000000
+	) (const instruction_t instruction, processor& __restrict processor, coprocessor1& __restrict)
+	{
+		const GPRegister<21, 5> rs(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const int32 immediate = TinyInt<16>(instruction).sextend<int32>();
+
+		const int64 result = int64(rs.value<int32>()) + immediate;
+		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
+		{
+			throw CPU_Exception{ CPU_Exception::Type::Ov, processor.get_program_counter() };
+		}
+
+		return write_result(rt, int32(result));
+	}
+	*/
+
 	ProcInstructionDef(
 		ADDIU,
 		(OpFlags::None),

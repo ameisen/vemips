@@ -13,6 +13,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

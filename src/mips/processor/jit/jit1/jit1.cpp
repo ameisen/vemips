@@ -23,6 +23,7 @@ using namespace mips;
 
 // this can and should be global to all JITs.
 namespace {
+	static constinit size_t global_exec_data_size = 0x1000;
 	static char * g_global_exec_data = nullptr;
 	static uintptr g_ex_return = 0;
 }
@@ -121,9 +122,9 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 {
 	if (!g_global_exec_data)
 	{
-		g_global_exec_data = (char *)allocate_executable(0x1000);
+		g_global_exec_data = (char *)allocate_executable(global_exec_data_size);
 
-		Jit1_CodeGen cg{ *this, (uint8 *)g_global_exec_data, 0x1000 };
+		Jit1_CodeGen cg{ *this, (uint8 *)g_global_exec_data, global_exec_data_size };
 		{
 			g_ex_return = uintptr(g_global_exec_data + cg.getSize());
 
@@ -157,7 +158,7 @@ namespace
 		return rspv + 4;
 	}
 
-	struct bytes
+	struct bytes final
 	{
 		const uint8 * __restrict m_data;
 		const size_t m_datasize;
@@ -342,7 +343,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			call(rax);
 			test(eax, eax);
 			jnz("save_return", T_NEAR);
-			cmp(rdi, r14);;
+			cmp(rdi, r14);
 			je("save_return", T_NEAR);
 		}
 		else if (jit_.processor_.debugging_)

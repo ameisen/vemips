@@ -51,13 +51,13 @@ processor::processor(const options & __restrict options) :
 	},
 	memory_source_(options.mem_src),
 	jit_type_(options.jit_type),
+	instruction_stats_(options.collect_stats ? std::make_unique<decltype(instruction_stats_)::element_type>() : nullptr),
+	mmu_type_(options.mmu_type),
+	guest_system_(options.guest_system),
 	readonly_exec_(options.rox),
 	ticked_(options.ticked),
 	collect_stats_(options.collect_stats),
 	disable_cti_(options.disable_cti),
-	instruction_stats_(options.collect_stats ? std::make_unique<decltype(instruction_stats_)::element_type>() : decltype(instruction_stats_){}),
-	mmu_type_(options.mmu_type),
-	guest_system_(options.guest_system),
 	debugging_(options.debugging)
 {
 #if !USE_STATIC_INSTRUCTION_SEARCH
@@ -174,12 +174,11 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 				jit2_->execute_instruction(program_counter_);
 				return;
 			case JitType::None:
-			default:
-				_assume(0);
+				xassert(false);
 			}
 		}
 		
-		instruction_t instruction = get_instruction();
+		const instruction_t instruction = get_instruction();
 		if (collect_stats_) {
 			if (const auto * __restrict info = instructions::get_instruction(instruction)) {
 				++(*instruction_stats_)[info->Name];
@@ -225,11 +224,11 @@ void processor::ExecuteInstructionExplicit(const instructions::InstructionInfo* 
 }
 
 struct cti_clear final {
-	processor * __restrict m_Processor = nullptr;
+	processor * __restrict processor = nullptr;
 
 	~cti_clear() {
-		if (m_Processor) {
-			m_Processor->clear_flags(processor::flag::no_cti);
+		if (processor) {
+			processor->clear_flags(processor::flag::no_cti);
 		}
 	}
 };
@@ -281,7 +280,7 @@ _forceinline void processor::execute_internal(const uint64 clocks) {
 			program_counter_updater.variable_ptr = branch_delay ? &program_counter_ : nullptr;
 			program_counter_updater.new_value = (!branch_delay) ? (program_counter_ + 4) : branch_target_;
 			if (get_flags(flag::no_cti)) {
-				cti_delay_updater.m_Processor = this;
+				cti_delay_updater.processor = this;
 			}
 
 			++instruction_count_;
@@ -339,7 +338,7 @@ bool processor::execute_explicit(const instructions::InstructionInfo* instructio
 	program_counter_updater.variable_ptr = branch_delay ? &program_counter_ : nullptr;
 	program_counter_updater.new_value = (!branch_delay) ? (program_counter_ + 4) : branch_target_;
 	if (get_flags(flag::no_cti)) {
-		cti_delay_updater.m_Processor = this;
+		cti_delay_updater.processor = this;
 	}
 
 	++instruction_count_;
