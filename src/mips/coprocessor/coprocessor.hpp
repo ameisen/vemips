@@ -8,10 +8,10 @@ namespace mips {
 	protected:
 		processor & __restrict m_processor;
 	public:
-		coprocessor(processor & __restrict processor) : m_processor(processor) {}
-		virtual ~coprocessor() = default;
+		_nothrow coprocessor(processor & __restrict processor) : m_processor(processor) {}
+		virtual _nothrow ~coprocessor() = default;
 
-		virtual void clock() __restrict = 0;
+		virtual _nothrow void clock() __restrict = 0;
 	};
 }
 

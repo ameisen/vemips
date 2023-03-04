@@ -2,13 +2,13 @@
 
 #include "system_vemix.hpp"
 
-#include "..\..\common\inc\bits\syscall.h"
+#include "../../common/inc/bits/syscall.h"
 
 using namespace mips;
 
 system_vemix::system_vemix(const options & __restrict init_options, const elf::binary & __restrict binary) : system(init_options, binary) {}
 
-void system_vemix::clock(uint64 clocks) __restrict {
+void system_vemix::clock(const uint64 clocks) __restrict {
 	system::clock(clocks);
 }
 
@@ -24,8 +24,9 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 		const uint32 code = m_processor->get_register<uint32>(2);
 		switch (code) {
 			case __NR_futex: {
-				// TODO ?
-			}
+				// do nothing substantial for now, though we do need to actually handle this.
+				m_processor->set_register<uint32>(2, uint32(-1));
+			} break;
 			case __NR_sbrk: { // sbrk
 				// todo move to system object
 				static uint32 system_break = m_system_break;
@@ -38,22 +39,20 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				}
 
 				// make sure it just makes sense, first.
-				const uint32 end_addr = system_break + increment;
-				if (end_addr < system_break) {
+				const uint32 end_address = system_break + increment;
+				if (end_address < system_break) {
 					m_processor->set_register<uint32>(2, std::numeric_limits<uint32>::max());
 					break;
 				}
 
 				// now let's check if we blow our memory constraints.
-				const uint32 max_data_seg = m_options.total_memory - m_options.stack_memory;
-				if (end_addr > max_data_seg) {
+				if (const uint32 max_data_seg = m_options.total_memory - m_options.stack_memory; end_address > max_data_seg) {
 					m_processor->set_register<uint32>(2, std::numeric_limits<uint32>::max());
 					break;
 				}
 
 				// Now let's just make sure it doesn't go past stack.
-				const uint32 stack_ptr = m_processor->get_register<uint32>(29);
-				if (end_addr > stack_ptr) {
+				if (const uint32 stack_ptr = m_processor->get_register<uint32>(29); end_address > stack_ptr) {
 					m_processor->set_register<uint32>(2, std::numeric_limits<uint32>::max());
 					break;
 				}
@@ -204,7 +203,7 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				break;
 			case __NR_set_thread_area:
 				// m_user_value
-				m_processor->m_user_value = m_processor->get_register<uint32>(4);
+				m_processor->user_value_ = m_processor->get_register<uint32>(4);
 				m_processor->set_register<uint32>(2, 0);
 				break; //do nothing.
 			case __NR_set_tid_address: {

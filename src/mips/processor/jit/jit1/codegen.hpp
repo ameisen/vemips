@@ -38,7 +38,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op8(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -56,7 +56,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op16(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -74,7 +74,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op32(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -92,7 +92,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op64(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
+			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 		
 			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
 		
@@ -187,5 +187,26 @@ namespace mips
 			indeterminate_unhandled		 // Branches to an unknown location, use pc state
 		};
 		void handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+
+		template <typename... Args>
+		_forceinline _nothrow void db(uint8 arg, Args... args) {
+			Xbyak::CodeGenerator::db(arg);
+			(Xbyak::CodeGenerator::db(std::forward<Args>(args)), ...);
+		}
+
+		template <EnumC T>
+		void or_(const Xbyak::Operand& op, T imm) { Xbyak::CodeGenerator::or_(op, std::underlying_type_t<T>(imm)); }
+
+		using Xbyak::CodeGenerator::or_;
+
+		template <EnumC T>
+		void and_(const Xbyak::Operand& op, T imm) { Xbyak::CodeGenerator::and_(op, std::underlying_type_t<T>(imm)); }
+
+		using Xbyak::CodeGenerator::and_;
+
+		template <EnumC T>
+		void test(const Xbyak::Operand& op, T imm) { Xbyak::CodeGenerator::test(op, std::underlying_type_t<T>(imm)); }
+
+		using Xbyak::CodeGenerator::test;
 	};
 }

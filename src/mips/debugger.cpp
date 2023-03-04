@@ -34,11 +34,11 @@ namespace {
 		char test_checksum[3];
 		sprintf(test_checksum, "%02x", sum);
 
+		memcpy(packet.data() + 1, payload.data(), payload.size());
+
 		packet[packet.size() - 3] = '#';
 		packet[packet.size() - 2] = test_checksum[0];
 		packet[packet.size() - 1] = test_checksum[1];
-
-		memcpy(packet.data() + 1, payload.data(), payload.size());
 
 		return packet;
 	}
@@ -314,7 +314,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 					in_escape = true;
 				}
 				else {
-					char c;
+					char c = in.front();
 					if (in_escape) {
 						in_escape = false;
 						switch (c) {
@@ -337,7 +337,6 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 						}
 					}
 					else {
-						c = in.front();
 						if (c == '\"') {
 							in_string = !in_string;
 							in.erase(0, 1);

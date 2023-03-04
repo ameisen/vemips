@@ -71,8 +71,8 @@
     <ClInclude Include="..\..\src\mips\instructions\instructions_table.hpp">
       <Filter>instructions</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\mips\processor\jit\jit2\codegen.hpp">
-      <Filter>processor\jit\jit2</Filter>
+    <ClInclude Include="..\..\src\mips\processor\processor_support.hpp">
+      <Filter>processor</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

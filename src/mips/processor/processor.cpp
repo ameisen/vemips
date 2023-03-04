@@ -7,29 +7,29 @@
 #include "mips/processor/jit/jit2/jit2.hpp"
 #include "mips/system.hpp"
 
-#if !TABLEGEN
+#if !VEMIPS_TABLEGEN
 #include "instructions/instructions_table.hpp"
 #endif
 
-#include <cstdio>
-
-#define NEW_SYSCALL 1
-
 using namespace mips;
 
-thread_local processor * __restrict g_currentprocessor = nullptr;
-thread_local coprocessor * __restrict g_currentcoprocessor = nullptr;
+namespace mips {
+	namespace {
+		thread_local processor* __restrict g_currentprocessor = nullptr;
+		thread_local coprocessor* __restrict g_currentcoprocessor = nullptr;
+	}
 
-processor * __restrict get_current_processor() {
-	return g_currentprocessor;
-}
+	processor* get_current_processor() {
+		return g_currentprocessor;
+	}
 
-coprocessor * __restrict get_current_coprocessor() {
-	return g_currentcoprocessor;
-}
+	coprocessor* get_current_coprocessor() {
+		return g_currentcoprocessor;
+	}
 
-void set_current_coprocessor(coprocessor * __restrict cop) {
-	g_currentcoprocessor = cop;
+	void set_current_coprocessor(coprocessor* __restrict cop) {
+		g_currentcoprocessor = cop;
+	}
 }
 
 #if !USE_STATIC_INSTRUCTION_SEARCH
@@ -38,93 +38,89 @@ namespace mips::instructions {
 }
 #endif
 
-processor::processor(const options & __restrict _options) :
-	m_jit_type(_options.jit_type),
-	m_memory_source(_options.mem_src),
-	m_readonly_exec(_options.rox),
-	m_collect_stats(_options.collect_stats),
-	m_disable_cti(_options.disable_cti),
-	m_ticked(_options.ticked),
-	m_mmu_type(_options.mmu_type),
-	m_stack_size(_options.stack),
-	m_guest_system(_options.guest_system),
-	m_debugging(_options.debugging)
+processor::processor(const options & __restrict options) :
+	stack_size_(options.stack),
+	memory_source_(options.mem_src),
+	jit_type_(options.jit_type),
+	readonly_exec_(options.rox),
+	ticked_(options.ticked),
+	collect_stats_(options.collect_stats),
+	disable_cti_(options.disable_cti),
+	mmu_type_(options.mmu_type),
+	guest_system_(options.guest_system),
+	debugging_(options.debugging)
 {
 #if !USE_STATIC_INSTRUCTION_SEARCH
 	mips::instructions::finish_map_build();
 #endif
 	// Set up coprocessor 1 (FPU)
-	m_coprocessors[1] = new coprocessor1(*this);
-	if (m_memory_source) {
-		m_memory_source->register_processor(this);
+	coprocessors_[1] = new coprocessor1(*this);
+	if (memory_source_) {
+		memory_source_->register_processor(this);
 	}
 
-#if !TABLEGEN
-	switch (_options.jit_type) {
+#if !VEMIPS_TABLEGEN
+	switch (options.jit_type) {
 		case JitType::None:
-			m_jit1 = nullptr; break;
+			jit1_ = nullptr; break;
 		case JitType::Jit:
-			m_jit1 = new jit1(*this); break;
+			jit1_ = new jit1(*this); break;
 		case JitType::FunctionTable:
-			m_jit2 = new jit2(*this); break;
+			jit2_ = new jit2(*this); break;
 	}
 #endif
 
-	if (m_mmu_type != mmu::emulated) {
+	if (mmu_type_ != mmu::emulated) {
 		// if there is no MMU, we need to set up some basic pointers.
-		m_memory_ptr = uint64(_options.mem_ptr);
-		m_memory_size = _options.mem_size;
-	}
-
-	static const volatile bool RunNever = false;
-	if (RunNever) {
-		get_current_processor();
-		get_current_coprocessor();
-		set_current_coprocessor(nullptr);
+		memory_ptr_ = uint64(options.mem_ptr);
+		memory_size_ = options.mem_size;
 	}
 }
 
 processor::~processor() {
-	for (coprocessor * __restrict cop : m_coprocessors) {
-		delete cop;
+	for (coprocessor * __restrict coprocessor : coprocessors_) {
+		delete coprocessor;
 	}
-	if (m_memory_source) {
-		m_memory_source->unregister_processor(this);
+	if (memory_source_) {
+		memory_source_->unregister_processor(this);
 	}
 
-#if !TABLEGEN
-	switch (m_jit_type) {
+#if !VEMIPS_TABLEGEN
+	switch (jit_type_) {
 		case JitType::Jit:
-			delete m_jit1; break;
+			delete jit1_; break;
 		case JitType::FunctionTable:
-			delete m_jit2; break;
+			delete jit2_; break;
+		case JitType::None:
+			// Do Nothing
+			break;
 	}
 #endif
 }
 
-void processor::delay_branch(uint32 pointer) __restrict {
-	m_branch_target = pointer;
-	set_flags(flag_bit(flag::branch_delay) | flag_bit(flag::no_cti));
+void processor::delay_branch(const uint32 pointer) __restrict {
+	branch_target_ = pointer;
+	set_flags(flag::branch_delay | flag::no_cti);
 }
 
-void processor::compact_branch(uint32 pointer) __restrict {
+void processor::compact_branch(const uint32 pointer) __restrict {
 	set_program_counter(pointer);
-	set_flags(flag_bit(flag::pc_changed));
+	set_flags(flag::pc_changed);
 }
 
 void processor::set_no_cti() __restrict {
-	set_flags(flag_bit(flag::no_cti));
+	set_flags(flag::no_cti);
 }
 
-void processor::set_link(uint32 pointer) {
-	m_registers[31] = pointer;
+void processor::set_link(const uint32 pointer) {
+	registers_[31] = pointer;
 }
 
 instruction_t processor::get_instruction() const __restrict {
-	if ((m_program_counter % 4) != 0) {
-		throw CPU_Exception{ CPU_Exception::Type::RI, m_program_counter };
+	if ((program_counter_ % 4) != 0) {
+		throw CPU_Exception{ CPU_Exception::Type::RI, program_counter_ };
 	}
-	const instruction_t instruction_ptr = mem_fetch<const instruction_t>(m_program_counter);
+	const instruction_t instruction_ptr = mem_fetch<const instruction_t>(program_counter_);
 
 	return instruction_ptr;
 }
@@ -152,43 +148,43 @@ struct incrementer final {
 
 // Sets the program counter. This is meant to be used as an external function to set up the CPU
 void processor::set_program_counter(uint32 address) __restrict {
-	m_program_counter = address;
+	program_counter_ = address;
 }
 
 // Gets the program counter
-uint32 processor::get_program_counter() __restrict {
-	return m_program_counter;
+uint32 processor::get_program_counter() const __restrict {
+	return program_counter_;
 }
 
 // REMOVE THIS WHEN UNIFIED INSTRUCTIONS ARE IN
-void processor::ExecuteInstruction(bool branch_delay) {
-#if !TABLEGEN
+void processor::ExecuteInstruction(const bool branch_delay) {
+#if !VEMIPS_TABLEGEN
 	try {
 		g_currentprocessor = this;
 
-		if (m_jit_type != JitType::None && !branch_delay) {
+		if (jit_type_ != JitType::None && !branch_delay) {
 			// if this is a branch delay slot, force interpretive mode. Fall through to the interpreter.
-			switch (m_jit_type) {
+			switch (jit_type_) {
 			case JitType::Jit:
-				m_jit1->execute_instruction(m_program_counter);
+				jit1_->execute_instruction(program_counter_);
 				return;
 			case JitType::FunctionTable:
-				m_jit2->execute_instruction(m_program_counter);
+				jit2_->execute_instruction(program_counter_);
 				return;
+			case JitType::None:
 			default:
 				_assume(0);
 			}
 		}
 		
 		instruction_t instruction = get_instruction();
-		if (m_collect_stats) {
-			const auto * __restrict info = instructions::get_instruction(instruction);
-			if (info) {
-				++m_instruction_stats[info->Name];
+		if (collect_stats_) {
+			if (const auto * __restrict info = instructions::get_instruction(instruction)) {
+				++instruction_stats_[info->Name];
 				info->Proc(instruction, *this);
 			}
 			else {
-				throw m_trapped_exception;
+				throw trapped_exception_;
 			}
 		}
 		else {
@@ -196,32 +192,49 @@ void processor::ExecuteInstruction(bool branch_delay) {
 				throw CPU_Exception{ CPU_Exception::Type::RI, this->get_program_counter() };
 			}
 		}
-		if (m_jit_type != JitType::None) {
-			if (get_flags(flag_bit(flag::trapped_exception))) {
-				throw m_trapped_exception;
+		if (jit_type_ != JitType::None) {
+			if (get_flags(flag::trapped_exception)) {
+				throw trapped_exception_;
 			}
 		}
 	}
 	catch (const CPU_Exception & __restrict ex) {
-		m_from_exception = true;
-		m_guest_system->handle_exception(ex);
+		from_exception_ = true;
+		guest_system_->handle_exception(ex);
 	}
 #endif
 }
 
-struct cti_clear {
+void processor::ExecuteInstructionExplicit(const instructions::InstructionInfo* instruction_info, const instruction_t instruction, bool branch_delay) {
+#if !VEMIPS_TABLEGEN
+	try {
+		g_currentprocessor = this;
+
+		if (collect_stats_) {
+			++instruction_stats_[instruction_info->Name];
+		}
+		instruction_info->Proc(instruction, *this);
+	}
+	catch (const CPU_Exception& __restrict ex) {
+		from_exception_ = true;
+		guest_system_->handle_exception(ex);
+	}
+#endif
+}
+
+struct cti_clear final {
 	processor * __restrict m_Processor = nullptr;
 
 	~cti_clear() {
 		if (m_Processor) {
-			m_Processor->clear_flags(processor::flag_bit(processor::flag::no_cti));
+			m_Processor->clear_flags(processor::flag::no_cti);
 		}
 	}
 };
 
-void processor::execute(uint64 clocks) {
-	if (m_ticked) {
-		if (m_debugging) {
+void processor::execute(const uint64 clocks) {
+	if (ticked_) {
+		if (debugging_) {
 			return execute_internal<true, true>(clocks);
 		}
 		else {
@@ -229,7 +242,7 @@ void processor::execute(uint64 clocks) {
 		}
 	}
 	else {
-		if (m_debugging) {
+		if (debugging_) {
 			return execute_internal<false, true>(clocks);
 		}
 		else {
@@ -239,16 +252,16 @@ void processor::execute(uint64 clocks) {
 }
 
 template <bool ticked, bool debugging>
-_forceinline void processor::execute_internal(uint64 clocks) {
+_forceinline void processor::execute_internal(const uint64 clocks) {
 	if constexpr (ticked) {
-		m_target_instructions = m_instruction_count + clocks;
+		target_instructions_ = instruction_count_ + clocks;
 	}
 
-	mips::system* const __restrict guest_system = debugging ? m_guest_system : nullptr;
+	const mips::system* const __restrict guest_system = debugging ? guest_system_ : nullptr;
 
-	while (!ticked || m_instruction_count < m_target_instructions) {
-		m_registers[0] = 0; // $0 is _always_ 0
-		for (coprocessor* __restrict cop : m_coprocessors) {
+	while (!ticked || instruction_count_ < target_instructions_) {
+		registers_[0] = 0; // $0 is _always_ 0
+		for (coprocessor* __restrict cop : coprocessors_) {
 			if (cop) {
 				cop->clock();
 			}
@@ -258,38 +271,38 @@ _forceinline void processor::execute_internal(uint64 clocks) {
 		updater<uint32>			 program_counter_updater;
 		cti_clear					 cti_delay_updater;
 
-		if (m_jit_type == JitType::None) {
-			const bool branch_delay = get_flags(flag_bit(flag::branch_delay));
+		if (jit_type_ == JitType::None) {
+			const bool branch_delay = get_flags(flag::branch_delay);
 
-			program_counter_incrementer.variable_ptr = branch_delay ? nullptr : &m_program_counter;
+			program_counter_incrementer.variable_ptr = branch_delay ? nullptr : &program_counter_;
 
-			program_counter_updater.variable_ptr = branch_delay ? &m_program_counter : nullptr;
-			program_counter_updater.new_value = (!branch_delay) ? (m_program_counter + 4) : m_branch_target;
-			if (get_flags(flag_bit(flag::no_cti))) {
+			program_counter_updater.variable_ptr = branch_delay ? &program_counter_ : nullptr;
+			program_counter_updater.new_value = (!branch_delay) ? (program_counter_ + 4) : branch_target_;
+			if (get_flags(flag::no_cti)) {
 				cti_delay_updater.m_Processor = this;
 			}
 
-			++m_instruction_count;
-			clear_flags(flag_bit(flag::branch_delay));
+			++instruction_count_;
+			clear_flags(flag::branch_delay);
 		}
 		else {
-			if (m_from_exception) {
-				if (get_flags(flag_bit(flag::branch_delay))) {
-					clear_flags(flag_bit(flag::branch_delay));
-					m_program_counter = m_branch_target;
+			if (from_exception_) {
+				if (get_flags(flag::branch_delay)) {
+					clear_flags(flag::branch_delay);
+					program_counter_ = branch_target_;
 				}
 				else {
-					m_program_counter += 4;
+					program_counter_ += 4;
 				}
-				m_from_exception = false;
+				from_exception_ = false;
 			}
 		}
 
 		ExecuteInstruction(false);
 
 		// If the program counter has changed through a compact branch, then do NOT increment the program counter.
-		if (get_flags(flag_bit(flag::pc_changed))) {
-			clear_flags(flag_bit(flag::pc_changed));
+		if (get_flags(flag::pc_changed)) {
+			clear_flags(flag::pc_changed);
 			program_counter_updater.variable_ptr = nullptr;
 			program_counter_incrementer.variable_ptr = nullptr;
 		}
@@ -301,31 +314,83 @@ _forceinline void processor::execute_internal(uint64 clocks) {
 	}
 }
 
-void processor::memory_touched(uint32 pointer, uint32 size) __restrict {
-	if (m_readonly_exec) {
+bool processor::execute_explicit(const instructions::InstructionInfo* instruction_info, instruction_t instruction) {
+	if (ticked_ && instruction_count_ >= target_instructions_) {
+		return false;
+	}
+
+	registers_[0] = 0; // $0 is _always_ 0
+	for (coprocessor* __restrict cop : coprocessors_) {
+		if (cop) {
+			cop->clock();
+		}
+	}
+
+	incrementer<uint32, 4>	program_counter_incrementer;
+	updater<uint32>			 program_counter_updater;
+	cti_clear					 cti_delay_updater;
+
+	const bool branch_delay = get_flags(flag::branch_delay);
+
+	program_counter_incrementer.variable_ptr = branch_delay ? nullptr : &program_counter_;
+
+	program_counter_updater.variable_ptr = branch_delay ? &program_counter_ : nullptr;
+	program_counter_updater.new_value = (!branch_delay) ? (program_counter_ + 4) : branch_target_;
+	if (get_flags(flag::no_cti)) {
+		cti_delay_updater.m_Processor = this;
+	}
+
+	++instruction_count_;
+	clear_flags(flag::branch_delay);
+
+	ExecuteInstructionExplicit(instruction_info, instruction, false);
+
+	// If the program counter has changed through a compact branch, then do NOT increment the program counter.
+	if (get_flags(flag::pc_changed)) {
+		clear_flags(flag::pc_changed);
+		program_counter_updater.variable_ptr = nullptr;
+		program_counter_incrementer.variable_ptr = nullptr;
+	}
+
+	// Were we interrupted by the debugger? If so, drop to caller.
+	if (debugging_ && guest_system_->get_debugger()->should_pause()) {
+		return false;
+	}
+
+	return true;
+}
+
+void processor::memory_touched(const uint32 pointer, uint32 size) const __restrict {
+	if (readonly_exec_) {
 		return;
 	}
-#if !TABLEGEN
-	switch (m_jit_type) {
+#if !VEMIPS_TABLEGEN
+	switch (jit_type_) {
 		case JitType::Jit: {
-			m_jit1->memory_touched(pointer);
+			jit1_->memory_touched(pointer);
 		} break;
 		case JitType::FunctionTable: {
-			m_jit2->memory_touched(pointer);
+			jit2_->memory_touched(pointer);
 		} break;
+		case JitType::None:
+			// do nothing
+			break;
 	}
 #endif
 }
 
-void processor::memory_touched_jit(uint32 pointer, uint32 size) __restrict {
+void processor::memory_touched_jit(uint32 pointer, uint32 size) const __restrict {
 }
 
 size_t processor::get_jit_max_instruction_size() const __restrict {
-	switch (m_jit_type) {
+	switch (jit_type_) {
 		case JitType::Jit:
-			return m_jit1->get_max_instruction_size();
+			return jit1_->get_max_instruction_size();
 		case JitType::FunctionTable:
-			return m_jit2->get_max_instruction_size();
+			return jit2_->get_max_instruction_size();
+		case JitType::None:
+			// do nothing
+			break;
 	}
 	return 0;
 }

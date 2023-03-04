@@ -21,16 +21,16 @@ uintptr_t mem_read_jit(processor * __restrict proc, uint32 address, uint32 size)
 }
 
 uint32 memory_touched_jit(processor * __restrict proc, uint32 address) {
-	return proc->m_jit1->memory_touched(address) ? 1 : 0;
+	return proc->jit1_->memory_touched(address) ? 1 : 0;
 }
 
 bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
-	static const int8 memp_offset = value_assert<int8>(offsetof(processor, m_memory_ptr) - 128);
-	static const int8 mems_offset = value_assert<int8>(offsetof(processor, m_memory_size) - 128);
+	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
+	static const int8 memp_offset = value_assert<int8>(offsetof(processor, memory_ptr_) - 128);
+	static const int8 mems_offset = value_assert<int8>(offsetof(processor, memory_size_) - 128);
 
 	// rd = rs + rt
-	const instructions::GPRegister<21, 5> base(instruction, jit_.m_processor);
+	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 
 	const int8 base_offset = value_assert<int8>(gp_offset + (4 * base.get_register()));
 
@@ -85,7 +85,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		return true;
 	}
 
-	const auto mmu_type = jit_.m_processor.m_mmu_type;
+	const auto mmu_type = jit_.processor_.mmu_type_;
 	
 	int32 offset = 0;
 	if (!e) {
@@ -153,8 +153,8 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 			if (mmu_type == mmu::none) {
 				// this cheks if it is in range, or if it overflows and thus overwrites '0'
 				if (
-					(end_address + jit_.m_processor.m_stack_size) > jit_.m_processor.m_memory_size ||
-					(uint64(offset) + uint64(jit_.m_processor.m_stack_size) + uint64(store_size)) > 0x100000000ull)
+					(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
+					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x100000000ull)
 				{
 					mov(eax, int32(address));
 					jmp("intrinsic_ades_ex", T_NEAR);
@@ -169,8 +169,8 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 						jmp("intrinsic_ades_ex", T_NEAR);
 						return false;
 					}
-					if (jit_.m_processor.m_stack_size) {
-						if (addr >= jit_.m_processor.m_memory_size && addr < uint32(0x100000000 - jit_.m_processor.m_stack_size)) {
+					if (jit_.processor_.stack_size_) {
+						if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
 							mov(eax, int32(address));
 							jmp("intrinsic_ades_ex", T_NEAR);
 							return false;
@@ -195,12 +195,12 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				jo("intrinsic_ades_ex", T_NEAR);
 
 				// Offset for stack
-				if (jit_.m_processor.m_stack_size) {
-					add(eax, jit_.m_processor.m_stack_size);
+				if (jit_.processor_.stack_size_) {
+					add(eax, jit_.processor_.stack_size_);
 				}
 
 				// check for range
-				cmp(eax, uint32((jit_.m_processor.m_memory_size - store_size) - offset));
+				cmp(eax, uint32((jit_.processor_.memory_size_ - store_size) - offset));
 				ja("intrinsic_ades_ex", T_NEAR);
 			}
 
@@ -208,7 +208,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		}
 		// rdx == address
 	}
-	if (mmu_type == mmu::emulated && !jit_.m_processor.m_readonly_exec) {
+	if (mmu_type == mmu::emulated && !jit_.processor_.readonly_exec_) {
 		// If ROX isn't set, then we need to also dispatch a check for memory alteration. Yay.
 		mov(rax, uint64(memory_touched_jit));
 		mov(rcx, rbp);
@@ -220,8 +220,8 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 
 	// perform the actual store.
 	if (!fpu) {
-		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
-		const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
+		//const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
 		if (mmu_type != mmu::emulated) {
 			if (rt.get_register() == 0) {
@@ -370,7 +370,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 	{
 		// TODO fix offsets.
 		static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-		const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.m_processor.get_coprocessor(1));
+		const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
 		const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
 
 		if (mmu_type != mmu::emulated) {
@@ -419,7 +419,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		}
 	}
 
-	if (mmu_type == mmu::emulated && !jit_.m_processor.m_readonly_exec) {
+	if (mmu_type == mmu::emulated && !jit_.processor_.readonly_exec_) {
 		const auto no_flush = get_unique_label();
 		//cmp(eax, 0);
 		//je(no_flush);
@@ -434,13 +434,13 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 }
 
 bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
-	static const int8 memp_offset = value_assert<int8>(offsetof(processor, m_memory_ptr) - 128);
-	static const int8 mems_offset = value_assert<int8>(offsetof(processor, m_memory_size) - 128);
+	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
+	static const int8 memp_offset = value_assert<int8>(offsetof(processor, memory_ptr_) - 128);
+	static const int8 mems_offset = value_assert<int8>(offsetof(processor, memory_size_) - 128);
 
 	// rd = rs + rt
-	const instructions::GPRegister<21, 5> base(instruction, jit_.m_processor);
-	const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
+	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
+	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
 	if (rt.get_register() == 0) {
 		// nop
@@ -450,7 +450,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 	const int8 base_offset = value_assert<int8>(gp_offset + (4 * base.get_register()));
 	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
-	const auto mmu_type = jit_.m_processor.m_mmu_type;
+	const auto mmu_type = jit_.processor_.mmu_type_;
 
 	int32 nommu_offset = 0;
 
@@ -509,8 +509,8 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				if (mmu_type == mmu::none) {
 					// this cheks if it is in range, or if it overflows and thus overwrites '0'
 					if (
-						(end_address + jit_.m_processor.m_stack_size) > jit_.m_processor.m_memory_size ||
-						(uint64(offset) + uint64(jit_.m_processor.m_stack_size) + uint64(load_size)) > 0x100000000ull)
+						(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
+						(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(load_size)) > 0x100000000ull)
 					{
 						mov(eax, int32(address));
 						jmp("intrinsic_adel_ex", T_NEAR);
@@ -525,8 +525,8 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 							jmp("intrinsic_adel_ex", T_NEAR);
 							return false;
 						}
-						if (jit_.m_processor.m_stack_size) {
-							if (addr >= jit_.m_processor.m_memory_size && addr < uint32(0x100000000 - jit_.m_processor.m_stack_size)) {
+						if (jit_.processor_.stack_size_) {
+							if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
 								mov(eax, int32(address));
 								jmp("intrinsic_adel_ex", T_NEAR);
 								return false;
@@ -551,12 +551,12 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					jo("intrinsic_adel_ex", T_NEAR);
 
 					// Offset for stack
-					if (jit_.m_processor.m_stack_size) {
-						add(eax, jit_.m_processor.m_stack_size);
+					if (jit_.processor_.stack_size_) {
+						add(eax, jit_.processor_.stack_size_);
 					}
 
 					// check for range
-					cmp(eax, uint32((jit_.m_processor.m_memory_size - load_size) - offset));
+					cmp(eax, uint32((jit_.processor_.memory_size_ - load_size) - offset));
 					ja("intrinsic_adel_ex", T_NEAR);
 				}
 
@@ -669,7 +669,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				}
 
 				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.m_processor.get_coprocessor(1));
+				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
 				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
 
 				mov(rax, qword[r13]);
@@ -681,7 +681,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				}
 
 				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.m_processor.get_coprocessor(1));
+				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
 				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
 
 				mov(eax, dword[r13]);
@@ -689,7 +689,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWPC)) {
 				// load word PC relative - gets special offset handling.
-				const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
 
 				const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
@@ -809,7 +809,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				}
 
 				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.m_processor.get_coprocessor(1));
+				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
 				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
 
 				mov(rax, qword[rdx + rax]);
@@ -821,7 +821,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				}
 
 				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.m_processor.get_coprocessor(1));
+				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
 				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
 
 				mov(eax, dword[rdx + rax]);
@@ -829,7 +829,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWPC)) {
 				// load word PC relative - gets special offset handling.
-				const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
 
 				const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));

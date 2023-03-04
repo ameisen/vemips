@@ -3,7 +3,7 @@
 #include "mips/processor/processor.hpp"
 #include "mips/coprocessor/coprocessor.hpp"
 
-#if !TABLEGEN
+#if !VEMIPS_TABLEGEN
 #	include "instructions_table.hpp"
 #endif
 

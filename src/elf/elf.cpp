@@ -97,7 +97,7 @@ namespace {
 namespace elf {
 	static constexpr const uint32_t MagicNumber = 0X464C457F;
 
-	binary::binary(const std::vector<char> &binary_data) : m_RawDataStream(binary_data) {
+	binary::binary(const std::span<char> binary_data) : m_RawDataStream(binary_data) {
 		data_stream stream_data = { binary_data };
 
 		// validate magic number.

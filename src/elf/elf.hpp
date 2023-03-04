@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <string>
 #include <stdexcept>
+#include <span>
 
 namespace elf {
 	class binary final {
@@ -22,7 +23,7 @@ namespace elf {
 			}
 
 		public:
-			data_stream(const std::vector<char> & __restrict data) : m_Data(data.data()), m_Size(data.size()) {}
+			data_stream(const std::span<char> data) : m_Data(data.data()), m_Size(data.size()) {}
 
 			template <typename T>
 			T pop() __restrict {
@@ -104,6 +105,6 @@ namespace elf {
 		uint32															m_ProgramHeaderSize;
 		uint32															m_ProgramHeaderCnt;
 
-		binary(const std::vector<char> & __restrict binary_data);
+		binary(std::span<char> binary_data);
 	};
 }

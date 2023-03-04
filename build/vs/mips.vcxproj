@@ -139,7 +139,7 @@
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
-      <AdditionalOptions>/std:c++latest /volatile:iso -flto=thin %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/std:c++latest /volatile:iso -flto=thin -Wno-assume -Wno-invalid-offsetof %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -187,7 +187,6 @@
     <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\codegen.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp" />
-    <ClInclude Include="..\..\src\mips\processor\jit\jit2\codegen.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit2\jit2.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\avx_type.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak.h" />
@@ -195,6 +194,7 @@
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_mnemonic.h" />
     <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_util.h" />
     <ClInclude Include="..\..\src\mips\processor\processor.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\processor_support.hpp" />
     <ClInclude Include="..\..\src\mips\system.hpp" />
   </ItemGroup>
   <ItemGroup>

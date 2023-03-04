@@ -24,11 +24,11 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 	const uint32 next_chunk = chunk_last + 1;
 	const uint32 this_offset = (this_address - chunk_begin) / 4u;
 
-	static const int8 flags_offset = value_assert<int8>(offsetof(processor, m_flags) - 128);
-	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, m_branch_target) - 128);
-	static const int8 pc_offset = value_assert<int8>(offsetof(processor, m_program_counter) - 128);
-	static const int8 ic_offset = value_assert<int8>(offsetof(processor, m_instruction_count) - 128);
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
+	static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
+	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
+	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
+	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
+	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 	static const int8 r31 = gp_offset + (31 * 4);
 
 	const auto no_jump = get_unique_label();
@@ -36,7 +36,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 	if (IS_INSTRUCTION(instruction_info, COP1_BC1EQZ_v))
 	{
 		static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-		const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.m_processor.get_coprocessor(1));
+		const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
 		const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
 
 		const int32 offset = instructions::TinyInt<18>(instruction << 2U).sextend<int32>();
@@ -46,15 +46,16 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		test(dword[r12 + ft_offset], 1); // ZF set to 1 if [ft] & 1 == 0
 		jnz(no_jump);
 		mov(esi, int32(target_address));
-		or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+		or_(ebx, processor::flag::branch_delay);
 		L(no_jump);
-			if (!jit_.m_processor.m_disable_cti)
-				or_(ebx, processor::flag_bit(processor::flag::no_cti));
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, COP1_BC1NEZ_v))
 	{
 		static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-		const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.m_processor.get_coprocessor(1));
+		const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
 		const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
 
 		const int32 offset = instructions::TinyInt<18>(instruction << 2U).sextend<int32>();
@@ -64,10 +65,11 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		test(dword[r12 + ft_offset], 1); // ZF set to 1 if [ft] & 1 == 0
 		jz(no_jump);
 		mov(esi, int32(target_address));
-		or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+		or_(ebx, processor::flag::branch_delay);
 		L(no_jump);
-			if (!jit_.m_processor.m_disable_cti)
-				or_(ebx, processor::flag_bit(processor::flag::no_cti));
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BAL))
 	{
@@ -78,14 +80,15 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
 		mov(dword[rbp + r31], int32(link_address));
 		mov(esi, int32(target_address));
-		or_(ebx, processor::flag_bit(processor::flag::branch_delay));
-			if (!jit_.m_processor.m_disable_cti)
-				or_(ebx, processor::flag_bit(processor::flag::no_cti));
+		or_(ebx, processor::flag::branch_delay);
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BEQ))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
@@ -96,7 +99,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		if (rs.get_register() == rt.get_register())
 		{
 			mov(esi, int32(target_address)); // 0 == 0
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+			or_(ebx, processor::flag::branch_delay | processor::flag::no_cti);
 		}
 		else
 		{
@@ -115,15 +118,16 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			}
 			jne(no_jump);
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
-				 if (!jit_.m_processor.m_disable_cti)
-					or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!jit_.processor_.disable_cti_) {
+				or_(ebx, processor::flag::no_cti);
+			}
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGEZ))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
@@ -133,22 +137,23 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		if (rs.get_register() == 0) // 0 >= 0
 		{
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+			or_(ebx, processor::flag::branch_delay | processor::flag::no_cti);
 		}
 		else
 		{
 			cmp(get_register_op32(rs), 0);
 			jl(no_jump);
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
-				 if (!jit_.m_processor.m_disable_cti)
-					or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!jit_.processor_.disable_cti_) {
+				or_(ebx, processor::flag::no_cti);
+			}
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZ))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
@@ -164,15 +169,16 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			cmp(get_register_op32(rs), 0);
 			jle(no_jump);
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
-			if (!jit_.m_processor.m_disable_cti)
-				or_(ebx, processor::flag_bit(processor::flag::no_cti));
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLEZ))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
@@ -182,22 +188,23 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		if (rs.get_register() == 0) // 0 <= 0
 		{
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+			or_(ebx, processor::flag::branch_delay | processor::flag::no_cti);
 		}
 		else
 		{
 			cmp(get_register_op32(rs), 0);
 			jg(no_jump);
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
-				 if (!jit_.m_processor.m_disable_cti)
-					or_(ebx, processor::flag_bit(processor::flag::no_cti));
+			if (!jit_.processor_.disable_cti_) {
+				or_(ebx, processor::flag::no_cti);
+			}
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLTZ))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
@@ -213,16 +220,17 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			cmp(get_register_op32(rs), 0);
 			jge(no_jump);
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
-			if (!jit_.m_processor.m_disable_cti)
-				or_(ebx, processor::flag_bit(processor::flag::no_cti));
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BNE))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
-		const instructions::GPRegister<16, 5> rt(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
+		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
@@ -251,11 +259,12 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			}
 			je(no_jump);
 			mov(esi, int32(target_address));
-			or_(ebx, processor::flag_bit(processor::flag::branch_delay));
+			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
-			if (!jit_.m_processor.m_disable_cti)
-				or_(ebx, processor::flag_bit(processor::flag::no_cti));
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_J))
 	{
@@ -264,7 +273,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		const uint32 target_address = (address & instructions::HighBits(4)) | instr_index;
 
 		mov(esi, int32(target_address));
-		or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+		or_(ebx, processor::flag::branch_delay | processor::flag::no_cti);
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JAL))
 	{
@@ -276,12 +285,12 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
 		mov(dword[rbp + r31], int32(link_address));
 		mov(esi, int32(target_address));
-		or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+		or_(ebx, processor::flag::branch_delay | processor::flag::no_cti);
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
-		const instructions::GPRegister<11, 5> rd(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
+		const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
 		const uint32 link_address = address + 8;
 
@@ -290,19 +299,19 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			mov(dword[rbp + (int64(gp_offset) + int64(rd.get_register()) * 4)], int32(link_address));
 		}
 		mov(esi, dword[rbp + (gp_offset + int64(rs.get_register()) * 4)]);
-		or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+		or_(ebx, processor::flag::branch_delay | processor::flag::no_cti);
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JR))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
-		const instructions::GPRegister<11, 5> rd(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
+		const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
 		mov(esi, dword[rbp + (int64(gp_offset) + int64(rs.get_register()) * 4)]);
-		or_(ebx, processor::flag_bit(processor::flag::branch_delay) | processor::flag_bit(processor::flag::no_cti));
+		or_(ebx, processor::flag::branch_delay | processor::flag::no_cti);
 	}
 	else
 	{
-		xassert(false);
+		xwarn(false, "delay branch implementation missing");
 		insert_procedure_ecx(address, uint64(instruction_info.Proc), instruction, instruction_info);
 		return true;
 	}
@@ -328,11 +337,11 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	const uint32 next_chunk = chunk_last + 1;
 	const uint32 this_offset = (this_address - chunk_begin) / 4u;
 
-	static const int8 flags_offset = value_assert<int8>(offsetof(processor, m_flags) - 128);
-	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, m_branch_target) - 128);
-	static const int8 pc_offset = value_assert<int8>(offsetof(processor, m_program_counter) - 128);
-	static const int8 ic_offset = value_assert<int8>(offsetof(processor, m_instruction_count) - 128);
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, m_registers) - 128);
+	static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
+	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
+	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
+	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
+	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 	static const int8 r31 = gp_offset + int8(31 * 4);
 
 	const auto patch_preprolog = [&](auto address) -> std::string
@@ -345,19 +354,17 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		auto & [offset, target] = chunk.m_patches.back();
 		uint32 &patch_target = target;
 
-			// patch no-op
-			if (address == nullptr) {
-				for (const uint8 octet : { 0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00 }) {
-					db(octet);
-				}
-			}
-			else {
-				static constexpr uint16 patch_prefix = 0xB848;
-				static constexpr uint16 patch_suffix = 0xE0FF;
-				dw(patch_prefix);
-				dq(uint64(address));
-				dw(patch_suffix);
-			}
+		// patch no-op
+		if (address == nullptr) {
+			db(0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00);
+		}
+		else {
+			static constexpr uint16 patch_prefix = 0xB848;
+			static constexpr uint16 patch_suffix = 0xE0FF;
+			dw(patch_prefix);
+			dq(uint64(address));
+			dw(patch_suffix);
+		}
 
 		mov(rcx, int64(&patch_target));
 		mov(dword[rcx], edx);
@@ -550,7 +557,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 
 		if (rs.get_register() != 0)
 		{
@@ -572,7 +579,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JR))
 	{
-		const instructions::GPRegister<21, 5> rs(instruction, jit_.m_processor);
+		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 
 		if (rs.get_register() != 0)
 		{
@@ -594,7 +601,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	}
 	else
 	{
-		xassert(false);
+		xwarn(false, "delay branch implementation missing");
 		branch_type = branch_type::indeterminate_unhandled;
 	}
 
@@ -603,9 +610,9 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		case branch_type::near_branch:						// Branches within this chunk
 		{
 			const auto no_branch = get_unique_label();
-			test(ebx, processor::flag_bit(processor::flag::branch_delay));
+			test(ebx, processor::flag::branch_delay);
 			je(no_branch);
-			and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+			and_(ebx, ~processor::flag::branch_delay);
 			// what is the offset of the target address?
 			const uint32 target_offset = (target_address - chunk_begin) / 4u;
 			const auto target_label = get_index_label(target_offset);
@@ -616,10 +623,10 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		case branch_type::far_branch:						 // Branches outside this chunk
 		{
 			const auto no_branch = get_unique_label();
-			test(ebx, processor::flag_bit(processor::flag::branch_delay));
+			test(ebx, processor::flag::branch_delay);
 			je(no_branch);
 			xor_(esi, esi);
-			and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+			and_(ebx, ~processor::flag::branch_delay);
 			const auto patch = patch_preprolog(jit_.fetch_instruction(target_address));
 
 			mov(edx, int32(target_address));
@@ -639,9 +646,9 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			const auto no_branch = get_unique_label();
 			const auto not_within = get_unique_label();
 
-			test(ebx, processor::flag_bit(processor::flag::branch_delay));
+			test(ebx, processor::flag::branch_delay);
 			je(no_branch);
-			and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+			and_(ebx, ~processor::flag::branch_delay);
 			mov(eax, esi);
 			xor_(esi, esi);
 
@@ -667,9 +674,9 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		case branch_type::near_branch_unhandled:		  // Branches within this chunk, use pc state	
 		{
 			const auto no_branch = get_unique_label();
-			test(ebx, processor::flag_bit(processor::flag::branch_delay));
+			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
-			and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+			and_(ebx, ~processor::flag::branch_delay);
 			mov(eax, int32(target_address));
 			mov(dword[rbp + pc_offset], eax);
 
@@ -683,9 +690,9 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		case branch_type::far_branch_unhandled:			// Branches outside this chunk, use pc state
 		{
 			const auto no_branch = get_unique_label();
-			test(ebx, processor::flag_bit(processor::flag::branch_delay));
+			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
-			and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+			and_(ebx, ~processor::flag::branch_delay);
 			mov(eax, int32(target_address));
 			mov(dword[rbp + pc_offset], eax);
 
@@ -702,9 +709,9 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			const auto no_branch = get_unique_label();
 			const auto not_within = get_unique_label();
 
-			test(ebx, processor::flag_bit(processor::flag::branch_delay));
+			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
-			and_(ebx, ~processor::flag_bit(processor::flag::branch_delay));
+			and_(ebx, ~processor::flag::branch_delay);
 			mov(eax, dword[rbp + dbt_offset]);
 			mov(dword[rbp + pc_offset], eax);
 

@@ -9,7 +9,7 @@ using namespace mips;
 
 namespace {
 	template <typename T>
-	static T align_up(T value, T align) {
+	static constexpr T align_up(T value, T align) {
 		return (value + (align - 1)) & ~(align - 1);
 	}
 }
@@ -19,8 +19,8 @@ class sys_memory_source final : public mips::memory_source {
 	std::vector<mips::processor *> m_RegisteredProcessors;
 	std::vector<std::pair<uint32, uint32>> m_ExecutableBlocks;
 public:
-	sys_memory_source(uint32 size) : m_Memory(size) {};
-	virtual ~sys_memory_source() {}
+	explicit sys_memory_source(const uint32 size) : m_Memory(size) {}
+	virtual ~sys_memory_source() override = default;
 
 	virtual void * get_ptr() override {
 		return m_Memory.data();
@@ -30,19 +30,19 @@ public:
 		return uint32(m_Memory.size());
 	}
 
-	virtual const void * at(uint32 offset, uint32 size) const final override {
+	virtual const void * at(const uint32 offset, const uint32 size) const override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
 		}
 		return m_Memory.data() + offset;
 	}
-	virtual const void * at_exec(uint32 offset, uint32 size) const final override {
+	virtual const void * at_exec(const uint32 offset, const uint32 size) const override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
 		}
-		if (m_ExecutableBlocks.size()) {
+		if (!m_ExecutableBlocks.empty()) {
 			for (auto&& exec_block : m_ExecutableBlocks) {
 				if (offset >= exec_block.first && end_offset <= exec_block.second) {
 					return m_Memory.data() + offset;
@@ -54,7 +54,7 @@ public:
 		}
 		return nullptr;
 	}
-	virtual void * write_at(uint32 offset, uint32 size) final override {
+	virtual void * write_at(const uint32 offset, const uint32 size) override {
 		const size_t end_offset = size_t(offset) + size;
 		if (end_offset > uint32(m_Memory.size())) {
 			return nullptr;
@@ -68,18 +68,18 @@ public:
 		return m_Memory.data() + offset;
 	}
 
-	virtual void register_processor(mips::processor * cpu) final override {
+	virtual void register_processor(mips::processor * cpu) override {
 		m_RegisteredProcessors.push_back(cpu);
 	}
 
-	virtual void unregister_processor(mips::processor * __restrict cpu) final override {
+	virtual void unregister_processor(mips::processor * __restrict cpu) override {
 		m_RegisteredProcessors.erase(std::find(m_RegisteredProcessors.begin(), m_RegisteredProcessors.end(), cpu));
 	}
 
-	virtual void set_executable_memory(const elf::binary & __restrict binary) final override {
+	virtual void set_executable_memory(const elf::binary & __restrict binary) override {
 		for (auto&& section : binary.m_Sections) {
 			if (section.Executable) {
-				m_ExecutableBlocks.push_back({ section.MemoryOffset, section.MemoryOffset + section.MemorySize });
+				m_ExecutableBlocks.emplace_back(section.MemoryOffset, section.MemoryOffset + section.MemorySize);
 			}
 		}
 		std::stable_sort(m_ExecutableBlocks.begin(), m_ExecutableBlocks.end());
@@ -92,7 +92,7 @@ void mips::system::options::validate() const __restrict {
 		required_align = 0x1000;
 	}
 	const uint32 min_memory = align_up(0x10000u, required_align);
-	const uint32 min_stack = 0x1000u;
+	constexpr const uint32 min_stack = 0x1000u;
 
 	if ((total_memory % required_align) != 0) {
 		char buffer[512];
@@ -144,7 +144,7 @@ void system::initialize(const elf::binary & __restrict binary) {
 
 	uint32 highest_used_addr = 0;
 	// Validate that there is enough memory to hold the binary.
-	if (binary.m_Sections.size()) {
+	if (!binary.m_Sections.empty()) {
 		const uint32 preadjusted_final_mapped_address = binary.m_Sections.back().MemoryOffset + binary.m_Sections.back().MemorySize;
 		const uint32_t finalMappedAddress = preadjusted_final_mapped_address + stack_offset;
 		highest_used_addr = std::max(highest_used_addr, preadjusted_final_mapped_address);
@@ -197,8 +197,8 @@ void system::initialize(const elf::binary & __restrict binary) {
 		stack_start = stack_offset;
 	}
 
-	std::array<const char * __restrict, 2> arguments = { "vemips", "mips32r6" };
-	std::array<uint32, 2> argument_addresses;
+	const std::array<const char * __restrict, 2> arguments = { "vemips", "mips32r6" };
+	std::array<uint32, arguments.size()> argument_addresses;
 	size_t argument_idx = 0;
 	for (auto&& argument : arguments) {
 		const size_t strlenz = strlen(argument) + 1;
@@ -211,7 +211,7 @@ void system::initialize(const elf::binary & __restrict binary) {
 		stack_start -= (stack_start % 16);
 	}
 
-	const auto argument_count = argument_addresses.size() - 1;
+	constexpr auto argument_count = argument_addresses.size() - 1;
 
 	std::vector<uint32> stack_vector;
 	stack_vector.reserve(38 + argument_count);
@@ -260,7 +260,7 @@ void system::initialize(const elf::binary & __restrict binary) {
 	stack_vector.push_back(0);
 
 	// align stack_start.
-	uint32 vector_size = uint32(stack_vector.size() * sizeof(uint32));
+	const uint32 vector_size = uint32(stack_vector.size() * sizeof(uint32));
 	uint32 align_req = 16 - (vector_size % 16);
 	if (align_req == 16) {
 		align_req = 0;
@@ -268,7 +268,6 @@ void system::initialize(const elf::binary & __restrict binary) {
 	stack_start -= align_req;
 
 	stack_start -= stack_vector.size() * sizeof(uint32);
-
 
 	memcpy(mem_data + uint32(stack_start), stack_vector.data(), stack_vector.size() * sizeof(uint32));
 	xassert((stack_start % 16) == 0);
@@ -332,12 +331,12 @@ system::~system() {
 	delete m_host_mmu;
 }
 
-void system::clock(uint64 clocks) __restrict {
+void system::clock(const uint64 clocks) __restrict {
 	if (!m_processor) {
 		return;
 	}
 
-	while (!m_options.ticked || m_processor->m_instruction_count < m_processor->m_target_instructions) {
+	while (!m_options.ticked || m_processor->instruction_count_ < m_processor->target_instructions_) {
 		if (m_debugger && m_debugger->should_pause()) {
 			m_debugger->wait();
 			if (m_debugger->should_kill()) {

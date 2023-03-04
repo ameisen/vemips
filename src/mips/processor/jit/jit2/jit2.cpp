@@ -16,200 +16,69 @@
 
 using namespace mips;
 
-#define JIT_INSTRUCTION_SEPARATE 0
-#define JIT_INSERT_IDENTIFIERS 0
-
-#define IS_INSTRUCTION(instr, ref) \
-	[&]() -> bool { \
-		extern const mips::instructions::InstructionInfo StaticProc_ ## ref; \
-		return &StaticProc_ ## ref == instr; \
-	}()
-
-namespace {
-	_forceinline __declspec(restrict, nothrow) void * allocate_executable(size_t size) {
-		 return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	}
-
-	_forceinline __declspec(nothrow) void free_executable(void *ptr) {
-		VirtualFree(ptr, 0, MEM_RELEASE);
-	}
-}
-
 _forceinline jit2::MapLevel1::~MapLevel1() {
-	for (auto *ptr : m_Data) {
-		if (ptr) {
-			free_executable(ptr);
-		}
+	for (auto *ptr : data_) {
+		delete ptr;
 	}
 }
 
-_forceinline jit2::Chunk & __restrict jit2::MapLevel1::operator [] (uint32 idx) {
-	Chunk * __restrict result = m_Data[idx];
+_forceinline jit2::Chunk & jit2::MapLevel1::operator [] (uint32 idx) {
+	Chunk * __restrict result = data_[idx];
 	if (!result) {
-		result = (Chunk * __restrict)allocate_executable(sizeof(Chunk));
-		new (result) Chunk;
-		m_Data[idx] = result;
-
-		m_DataOffsets[idx] = new ChunkOffset;
-		memset(m_DataOffsets[idx]->data(), 0, m_DataOffsets[idx]->size() * sizeof(uint32));
+		result = new Chunk;
+		data_[idx] = result;
 	}
 	return *result;
-}
-
-_forceinline jit2::ChunkOffset & __restrict jit2::MapLevel1::get_offsets(uint32 idx) {
-	return *m_DataOffsets[idx];
-}
-
-jit2::jit_instructionexec_t jit1_get_instruction(jit2 * __restrict _this, uint32 address) {
-	return _this->get_instruction(address);
-}
-
-jit2::jit_instructionexec_t jit1_fetch_instruction(jit2* __restrict _this, uint32 address) {
-	return _this->fetch_instruction(address);
-}
-
-namespace {
-	void RI_Exception (instruction_t, processor & __restrict _processor) {
-		_processor.set_trapped_exception({ CPU_Exception::Type::RI, _processor.get_program_counter() });
-	}
-
-	void OV_Exception (uint32 code, processor & __restrict _processor) {
-		_processor.set_trapped_exception({ CPU_Exception::Type::Ov, _processor.get_program_counter(), code });
-	}
-
-	void TR_Exception (uint32 code, processor & __restrict _processor)
-	{
-		_processor.set_trapped_exception({ CPU_Exception::Type::Tr, _processor.get_program_counter(), code });
-	}
-
-	void AdEL_Exception (uint32 address, processor & __restrict _processor)
-	{
-		_processor.set_trapped_exception({ CPU_Exception::Type::AdEL, _processor.get_program_counter(), address });
-	}
-
-	void AdES_Exception(uint32 address, processor & __restrict _processor)
-	{
-		_processor.set_trapped_exception({ CPU_Exception::Type::AdES, _processor.get_program_counter(), address });
-	}
 }
 
 jit2::jit2(processor & __restrict _processor) : m_processor(_processor)
 {
 }
 
-jit2::~jit2()
-{
-}
+jit2::~jit2() = default;
 
-
-namespace
+void jit2::populate_chunk(Chunk & __restrict chunk, uint32 start_address, bool update) __restrict
 {
-	// // RCX, mov'd from the machine code	// RDX		 // R8
-	uint64 JumpFunction(instruction_t i, processor & __restrict p, uint64 f, uint64 rspv)
+	if (!chunk.data)
 	{
-		const mips::instructions::instructionexec_t executable = mips::instructions::instructionexec_t(f);
-		executable(i, p);
-		return rspv + 4;
+		chunk.populate_data();
 	}
 
-	struct bytes
-	{
-		const uint8 * __restrict m_data;
-		const size_t m_datasize;
+	xassert((start_address % 4) == 0);
+	const uint32 base_address = start_address & ~(jit2::ChunkSize - 1);
+	const uint32 last_address = base_address + (jit2::ChunkSize - 1);
 
-		template <size_t N>
-		bytes(const uint8(&data) [N]) :
-			m_data(data),
-			m_datasize(N)
-		{
+	const uint32 current_address = start_address;
+
+	const uint32 start_index = 0;
+	if (!update)
+	{
+		chunk.offset = base_address;
+	}
+
+	auto &&chunk_data = *chunk.data;
+
+	static constexpr uint32 num_instructions = jit2::NumInstructionsChunk;
+	for (uint32 i = start_index; i < num_instructions; ++i) {
+		const uint32 offset_address = base_address + (i * 4);
+
+		const instruction_t* __restrict ptr = m_processor.safe_mem_fetch_exec<const instruction_t>(offset_address);
+
+		if (!ptr) {
+			// AdEL
+			chunk_data[i] = { {}, {}, offset_address, CPU_Exception::Type::AdEL };
+			continue;
 		}
-	};
 
-	struct base_fixup
-	{
-		uint32 offset;
-		uint64 chunk_address = 0;
+		const instruction_t instruction = *ptr;
+		const auto instruction_info_ptr = mips::FindExecuteInstruction(instruction);
+		if (!instruction_info_ptr) {
+			// RI
+			chunk_data[i] = { {}, instruction, offset_address, CPU_Exception::Type::RI };
+			continue;
+		}
 
-		base_fixup(uint32 _offset) :
-			offset(_offset) {}
-	};
-	template <typename T>
-	struct fixup : public base_fixup
-	{
-		fixup(uint32 _offset) : base_fixup(_offset) {}
-	};
-
-	struct vector_wrapper
-	{
-		std::vector<uint8>& m_data;
-		std::vector<base_fixup>& m_fixups;
-
-		template <typename T>
-		vector_wrapper& operator << (const T& value);
-
-		template <typename U>
-		vector_wrapper& operator << (const fixup<U>& value);
-	};
-
-
-	template <typename T>
-	vector_wrapper& vector_wrapper::operator << (const T& value)
-	{
-		size_t sz = m_data.size();
-		m_data.resize(m_data.size() + sizeof(T));
-		*(T*)(m_data.data() + sz) = value;
-		return *this;
-	};
-
-	template<>
-	vector_wrapper& vector_wrapper::operator << <bytes> (const bytes& value)
-	{
-		size_t sz = m_data.size();
-		m_data.resize(m_data.size() + value.m_datasize);
-		memcpy(m_data.data() + sz, value.m_data, value.m_datasize);
-		return *this;
-	};
-
-	template <>
-	vector_wrapper& vector_wrapper::operator << <uint8> (const uint8& value)
-	{
-		m_data.push_back(value);
-		return *this;
-	};
-
-	using instruction_pack = std::pair<uint8[32], size_t>;
-
-	template <>
-	vector_wrapper& vector_wrapper::operator << <instruction_pack> (const instruction_pack& value) 
-	{
-		size_t sz = m_data.size();
-		m_data.resize(m_data.size() + value.second);
-		memcpy(m_data.data() + sz, value.first, value.second);
-		return *this;
-	};
-
-	template <typename U>
-	vector_wrapper& vector_wrapper::operator << (const fixup<U>& value)
-	{
-		fixup<U> _value = value;
-		_value.chunk_address = m_data.size();
-		m_fixups.push_back(_value);
-		*this << U(0);
-		return *this;
-	}
-
-	static uint32 should_debug_break(processor * __restrict proc)
-	{
-		return proc->get_guest_system()->get_debugger()->should_interrupt_execution();
-	}
-}
-
-void jit2::populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, uint32 start_address, bool update) __restrict
-{
-	if (!chunk.m_data)
-	{
-		chunk.m_datasize = MaxChunkRealSize;
-		chunk.m_data = (uint8 *)allocate_executable(MaxChunkRealSize);
+		chunk_data[i] = { instruction_info_ptr, instruction, offset_address };
 	}
 }
 
@@ -228,14 +97,14 @@ bool jit2::memory_touched(uint32 address)
 		if (mapped_address == (m_CurrentExecutingChunkAddress& ~(ChunkSize - 1)))
 		{
 			m_FlushAddress = adjusted_address;
-			m_processor.set_flags(processor::flag_bit(processor::flag::jit_mem_flush));
+			m_processor.set_flags(processor::flag::jit_mem_flush);
 			m_FlushChunk = dirty_chunk;
 			return true;
 		}
 		else
 		{
-			populate_chunk(*(dirty_chunk->m_chunk_offset), *dirty_chunk, adjusted_address, true);
-			if (adjusted_address + 4 == dirty_chunk->m_offset + ChunkSize)
+			populate_chunk(*dirty_chunk, adjusted_address, true);
+			if (adjusted_address + 4 == dirty_chunk->offset + ChunkSize)
 			{
 				// At the end of the chunk. Also update next chunk if it exists.
 				if (memory_touched(adjusted_address + 4))
@@ -280,27 +149,39 @@ bool jit2::memory_touched(uint32 address)
 void jit2::execute_instruction(uint32 address)
 {
 	m_CurrentExecutingChunkAddress = address;
-	// RCX, mov'd from the machine code	// RDX		 // R8
-	auto instruction = get_instruction(address);
-	__pragma(pack(1)) struct ParameterPack
-	{
-		uint64 coprocessor1;
-		uint32 flags;
-		uint32 delay_branch_target;
-		uint64 target_instruction;
-		uint32 frame_pointer;
-	} ppack;
-	ppack.coprocessor1 = uint64(m_processor.get_coprocessor(1));
-	ppack.flags = m_processor.m_flags;
-	ppack.delay_branch_target = m_processor.m_branch_target;
-	ppack.target_instruction = m_processor.m_target_instructions;
-	ppack.frame_pointer = m_processor.m_registers[30];
 
-	/*
-	const uint64 result = jit1_springboard(uint64(instruction), uint64(&m_processor), m_processor.m_instruction_count, uint64(&ppack), 0, 0);
-	if (m_processor.get_guest_system()->is_execution_complete())
+	auto&& processor = m_processor;
+	const auto guest = processor.get_guest_system();
+
+	auto chunk_offset = get_chunk_offset(address);
+	if (chunk_offset.chunk == nullptr) {
+		get_instruction(address);
+		chunk_offset = get_chunk_offset(address);
+	}
+	auto&& chunk_data = *chunk_offset.chunk->data;
+	for (size_t i = chunk_offset.offset; i < NumInstructionsChunk; ++i) {
+
+		auto&& chunk_instruction = chunk_data[i];
+		auto program_counter = processor.get_program_counter();
+		if _unlikely(chunk_instruction.instruction_info == nullptr) {
+			throw CPU_Exception{ chunk_instruction.exception, program_counter };
+		}
+		else {
+			if (!processor.execute_explicit(chunk_instruction.instruction_info, chunk_instruction.instruction)) {
+				break;
+			}
+			if (chunk_instruction.instruction_info->Flags.control) {
+				break;
+			}
+			if (program_counter + 4 != processor.get_program_counter()) {
+				break;
+			}
+		}
+	}
+
+	if (guest->is_execution_complete())
 	{
-		if (m_processor.get_guest_system()->is_execution_success())
+		if (guest->is_execution_success())
 		{
 			throw ExecutionCompleteException();
 		}
@@ -309,35 +190,32 @@ void jit2::execute_instruction(uint32 address)
 			throw ExecutionFailException();
 		}
 	}
-	if (m_processor.get_flags(processor::flag_bit(processor::flag::jit_mem_flush)))
+	if (processor.get_flags(processor::flag::jit_mem_flush))
 	{
-		populate_chunk(*m_FlushChunk->m_chunk_offset, *m_FlushChunk, m_FlushAddress, true);
-		if (m_FlushAddress + 4 == m_FlushChunk->m_offset + ChunkSize)
+		populate_chunk(*m_FlushChunk, m_FlushAddress, true);
+		if (m_FlushAddress + 4 == m_FlushChunk->offset + ChunkSize)
 		{
 			memory_touched(m_FlushAddress + 4);
 		}
 	}
-	if (m_processor.get_flags(processor::flag_bit(processor::flag::trapped_exception)))
+	if (processor.get_flags(processor::flag::trapped_exception))
 	{
 		// there was an exception.
-		m_processor.clear_flags(processor::flag_bit(processor::flag::trapped_exception));
-		throw m_processor.m_trapped_exception;
+		processor.clear_flags(processor::flag::trapped_exception);
+		throw processor.trapped_exception_;
 	}
-	*/
 }
 
-_forceinline jit2::jit_instructionexec_t jit2::get_instruction(uint32 address)
+_forceinline jit2::instruction_wrapper jit2::get_instruction(uint32 address)
 {
 	const uint32 mapped_address = address & ~(ChunkSize - 1);
 	const uint32 address_offset = (address - mapped_address) / 4u;
 
 	Chunk * __restrict chunk = nullptr;
-	ChunkOffset * __restrict chunk_offset = nullptr;
 
 	if (m_LastChunkAddress == mapped_address)
 	{
 		chunk = m_LastChunk;
-		chunk_offset = m_LastChunkOffset;
 	}
 	else
 	{
@@ -346,36 +224,32 @@ _forceinline jit2::jit_instructionexec_t jit2::get_instruction(uint32 address)
 		auto & __restrict cml2 = m_JitMap[address >> (32 - RemainingLog2)];
 		auto & __restrict cml1 = cml2[(address >> (32 - RemainingLog2 - 8)) & 0xFF];
 
-			const bool chunk_exists = cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF);
-			chunk = &cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
-			chunk_offset = &cml1.get_offsets((address >> (32 - RemainingLog2 - 16)) & 0xFF);
+		const bool chunk_exists = cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF);
+		chunk = &cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
 
 		if (!chunk_exists) {
-			populate_chunk(*chunk_offset, *chunk, mapped_address, false);
+			populate_chunk(*chunk, mapped_address, false);
 		}
 
 		m_LastChunk = chunk;
-		m_LastChunkOffset = chunk_offset;
 		m_LastChunkAddress = mapped_address;
 	}
 
-	const auto & __restrict chunk_instruction = chunk->m_data + (*chunk_offset)[address_offset];
+	const auto & __restrict chunk_instruction = (*chunk->data)[address_offset];
 	
-	return jit_instructionexec_t(chunk_instruction);
+	return chunk_instruction;
 }
 
-_forceinline jit2::jit_instructionexec_t jit2::fetch_instruction(uint32 address)
+_forceinline jit2::jit2::instruction_wrapper jit2::fetch_instruction(uint32 address)
 {
 	const uint32 mapped_address = address & ~(ChunkSize - 1);
 	const uint32 address_offset = (address - mapped_address) / 4u;
 
 	Chunk* __restrict chunk = nullptr;
-	ChunkOffset* __restrict chunk_offset = nullptr;
 
 	if (m_LastChunkAddress == mapped_address)
 	{
 		chunk = m_LastChunk;
-		chunk_offset = m_LastChunkOffset;
 	}
 	else
 	{
@@ -385,20 +259,18 @@ _forceinline jit2::jit_instructionexec_t jit2::fetch_instruction(uint32 address)
 		auto& __restrict cml1 = cml2[(address >> (32 - RemainingLog2 - 8)) & 0xFF];
 
 		if (!cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF)) {
-			return jit_instructionexec_t(nullptr);
+			return {};
 		}
 
 		chunk = &cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
-		chunk_offset = &cml1.get_offsets((address >> (32 - RemainingLog2 - 16)) & 0xFF);
 
 		m_LastChunk = chunk;
-		m_LastChunkOffset = chunk_offset;
 		m_LastChunkAddress = mapped_address;
 	}
 
-	const auto& __restrict chunk_instruction = chunk->m_data + (*chunk_offset)[address_offset];
+	const auto& __restrict chunk_instruction = (*chunk->data)[address_offset];
 
-	return jit_instructionexec_t(chunk_instruction);
+	return chunk_instruction;
 }
 
 jit2::Chunk * jit2::get_chunk(uint32 address)
@@ -439,4 +311,11 @@ jit2::Chunk * jit2::get_chunk(uint32 address)
 			return &cml1[cml1_idx];
 		}
 	}
+}
+
+jit2::chunk_data jit2::get_chunk_offset(uint32 address) {
+	const uint32 mapped_address = address & ~(ChunkSize - 1);
+	const uint32 address_offset = (address - mapped_address) / 4u;
+
+	return { get_chunk(address), address_offset };
 }

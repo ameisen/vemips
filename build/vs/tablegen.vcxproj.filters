@@ -34,6 +34,8 @@
       <Filter>mips\coprocessor\coprocessor1</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\tablegen\tablegen.cpp" />
+    <ClCompile Include="..\..\src\tablegen\writers.cpp" />
+    <ClCompile Include="..\..\src\tablegen\tablegen.pch.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\mips\instructions\coprocessor1_inst.hpp">
@@ -66,5 +68,9 @@
     <ClInclude Include="..\..\src\mips\config.hpp">
       <Filter>mips</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\tablegen\tablegen.hpp" />
+    <ClInclude Include="..\..\src\tablegen\options.hpp" />
+    <ClInclude Include="..\..\src\tablegen\tablegen.pch.hpp" />
+    <ClInclude Include="..\..\src\tablegen\writers.hpp" />
   </ItemGroup>
 </Project>

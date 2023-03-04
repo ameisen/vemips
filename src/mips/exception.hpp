@@ -38,7 +38,7 @@ namespace mips {
 			CacheErr = 30,
 		} m_ExceptionType;
 		uint32 m_InstructionAddress;
-		uint32 m_Code;
+		uint32 m_Code = 0;
 	};
 
 	struct ExecutionCompleteException {};

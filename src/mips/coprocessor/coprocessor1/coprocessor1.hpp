@@ -5,7 +5,7 @@
 #include "mips/coprocessor/coprocessor.hpp"
 
 namespace mips {
-	class coprocessor1 final : public coprocessor {
+	class _empty_bases coprocessor1 final : public coprocessor {
 		friend class jit1;
 		friend class Jit1_CodeGen;
 
@@ -14,7 +14,7 @@ namespace mips {
 		static_assert(sizeof(double) == 8, "Need custom FPU definition for this platform");
 		static_assert(sizeof(float) == 4, "Need custom FPU definition for this platform");
 
-		struct FIR final {
+		struct alignas(uint32) FIR final {
 			uint32 Revision : 8;
 			uint32 ProcessorID : 8;
 			uint32 SinglePrecision : 1;
@@ -29,16 +29,16 @@ namespace mips {
 			uint32 FREP : 1;
 			uint32 _Z2 : 2;
 
-			FIR();
-			void clock();
+			_nothrow FIR();
+			void _nothrow clock();
 
-			operator uint32 & __restrict () __restrict {
-				return *(uint32 * __restrict)this;
+			_nothrow operator uint32 () const __restrict {
+				return std::bit_cast<uint32>(*this);
 			}
 		};
 		static_assert(sizeof(FIR) == sizeof(uint32), "FIR register size mismatch");
 
-		struct FCSR final {
+		struct alignas(uint32) FCSR final {
 			uint32 RoundingMode : 2; // 0 = RN, 1 = RZ, 2 = RP, 3 = RM
 			uint32 Flags : 5;
 			uint32 Enables : 5;
@@ -51,27 +51,23 @@ namespace mips {
 			uint32 FlushZero : 1;
 			uint32 _Z2 : 7;
 
-			FCSR();
-			void clock();
+			_nothrow FCSR();
+			_nothrow void clock();
 
-			uint32 get_FEXR() const;
-			void set_FEXR(uint32 fexr);
+			_nothrow uint32 get_FEXR() const;
+			_nothrow void set_FEXR(uint32 fexr);
 
-			uint32 get_FENR() const;
-			void set_FENR(uint32 fenr);
+			_nothrow uint32 get_FENR() const;
+			_nothrow void set_FENR(uint32 fenr);
 
-			bool set_flag(uint32_t flag) __restrict noexcept
+			_nothrow bool set_flag(uint32_t flag) __restrict
 			{
 				Flags |= flag;
 				return (Enables & flag) != 0;
 			}
 
-			operator uint32 & __restrict () {
-				return *(uint32 * __restrict)this;
-			}
-
-			operator uint32 () const __restrict {
-				return *(uint32 * __restrict)this;
+			_nothrow operator uint32 () const __restrict {
+				return std::bit_cast<uint32>(*this);
 			}
 		};
 		static_assert(sizeof(FCSR) == sizeof(uint32), "FIR register size mismatch");
@@ -81,33 +77,33 @@ namespace mips {
 
 		std::array<register_type, NumRegisters>	m_registers{ 0 };
 		FIR													m_fir;
-		FCSR												  m_fcsr;
+		FCSR												m_fcsr;
 
 	public:
-		FIR & get_FIR() {
+		_nothrow FIR & get_FIR() {
 			return m_fir;
 		}
 
-		FIR get_FIR() const {
+		_nothrow FIR get_FIR() const {
 			return m_fir;
 		}
 
-		FCSR & get_FCSR() {
+		_nothrow FCSR & get_FCSR() {
 			return m_fcsr;
 		}
 
-		FCSR get_FCSR() const {
+		_nothrow FCSR get_FCSR() const {
 			return m_fcsr;
 		}
 
-		coprocessor1(processor & __restrict processor) : coprocessor(processor) {}
-		virtual ~coprocessor1() {}
+		_nothrow coprocessor1(processor & __restrict processor) : coprocessor(processor) {}
+		virtual _nothrow ~coprocessor1() {}
 
-		virtual void clock();
+		virtual _nothrow void clock();
 
 		// Get the register as a specific type
 		template <typename T>
-		T get_register(uint32 idx) const {
+		_nothrow T get_register(uint32 idx) const {
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
 			return ((T * __restrict)&m_registers[idx])[0];
@@ -115,7 +111,7 @@ namespace mips {
 
 		// Get the register as a specific type
 		template <typename T>
-		T get_register_upper(uint32 idx) const {
+		_nothrow T get_register_upper(uint32 idx) const {
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) == sizeof(register_type) / 2, "get_register_upper is casting to invalid size");
 			return ((T * __restrict)&m_registers[idx])[1];
@@ -123,7 +119,7 @@ namespace mips {
 
 		// Set the register from a given type
 		template <typename T>
-		void set_register(uint32 idx, T value) {
+		_nothrow void set_register(uint32 idx, T value) {
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
 			((T * __restrict)&m_registers[idx])[0] = value;
@@ -131,7 +127,7 @@ namespace mips {
 
 		// Set the register from a given type
 		template <typename T>
-		void set_register_upper(uint32 idx, T value) {
+		_nothrow void set_register_upper(uint32 idx, T value) {
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) == sizeof(register_type) / 2, "get_register_upper is casting to invalid size");
 			((T * __restrict)&m_registers[idx])[1] = value;

@@ -27,7 +27,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000101,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -45,7 +45,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000000,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -67,7 +67,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011011,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -76,46 +76,51 @@ namespace mips::instructions
 
 		union
 		{
-			struct ResultType
+			struct result_type
 			{
-				uint32_t SignalNan : 1;
-				uint32_t QuietNan : 1;
-				uint32_t NegInfinity : 1;
-				uint32_t NegNormal : 1;
-				uint32_t NegSubnormal : 1;
-				uint32_t NegZero : 1;
-				uint32_t PosInfinity : 1;
-				uint32_t PosNormal : 1;
-				uint32_t PosSubnormal : 1;
-				uint32_t PosZero : 1;
+				uint32_t signal_nan : 1;
+				uint32_t quiet_nan : 1;
+				uint32_t neg_infinity : 1;
+				uint32_t neg_normal : 1;
+				uint32_t neg_subnormal : 1;
+				uint32_t neg_zero : 1;
+				uint32_t pos_infinity : 1;
+				uint32_t pos_normal : 1;
+				uint32_t pos_subnormal : 1;
+				uint32_t pos_zero : 1;
 			} result_mask;
 			format_t as_format;
-		} Result;
-		memset(&Result.as_format, 0, sizeof(Result.as_format));
+		} result {
+			.as_format = {}
+		};
 
 		// int_equiv
 
-		const format_t signal_nan = std::numeric_limits<format_t>::signaling_NaN();
-		const format_t quiet_nan = std::numeric_limits<format_t>::quiet_NaN();
-		Result.result_mask.SignalNan = Cast<typename int_equiv<format_t>::type>(fs_val) == Cast<typename int_equiv<format_t>::type>(signal_nan);
-		Result.result_mask.QuietNan = Cast<typename int_equiv<format_t>::type>(fs_val) == Cast<typename int_equiv<format_t>::type>(quiet_nan);
+		constexpr format_t signal_nan = std::numeric_limits<format_t>::signaling_NaN();
+		constexpr format_t quiet_nan = std::numeric_limits<format_t>::quiet_NaN();
+		result.result_mask.signal_nan = Cast<int_equiv_t<format_t>>(fs_val) == Cast<int_equiv_t<format_t>>(signal_nan);
+		result.result_mask.quiet_nan = Cast<int_equiv_t<format_t>>(fs_val) == Cast<int_equiv_t<format_t>>(quiet_nan);
 
 		if (fs_val < 0)
 		{
-			Result.result_mask.NegInfinity = isinf(fs_val);
-			Result.result_mask.NegNormal = isnormal(fs_val);
-			Result.result_mask.NegZero = (fs_val == -0.0f);
-			Result.result_mask.NegSubnormal = !Result.result_mask.NegNormal && !Result.result_mask.SignalNan && !Result.result_mask.QuietNan && !Result.result_mask.NegInfinity;
+			constexpr format_t zero_value = -format_t{};
+
+			result.result_mask.neg_infinity = isinf(fs_val);
+			result.result_mask.neg_normal = isnormal(fs_val);
+			result.result_mask.neg_zero = (fs_val == zero_value);  // NOLINT(clang-diagnostic-float-equal)
+			result.result_mask.neg_subnormal = !result.result_mask.neg_normal && !result.result_mask.signal_nan && !result.result_mask.quiet_nan && !result.result_mask.neg_infinity;
 		}
 		else
 		{
-			Result.result_mask.PosInfinity = isinf(fs_val);
-			Result.result_mask.PosNormal = isnormal(fs_val);
-			Result.result_mask.PosZero = (fs_val == 0.0f);
-			Result.result_mask.PosSubnormal = !Result.result_mask.NegNormal && !Result.result_mask.SignalNan && !Result.result_mask.QuietNan && !Result.result_mask.NegInfinity;
+			constexpr format_t zero_value = {};
+
+			result.result_mask.pos_infinity = isinf(fs_val);
+			result.result_mask.pos_normal = isnormal(fs_val);
+			result.result_mask.pos_zero = (fs_val == zero_value);  // NOLINT(clang-diagnostic-float-equal)
+			result.result_mask.pos_subnormal = !result.result_mask.pos_normal && !result.result_mask.signal_nan && !result.result_mask.quiet_nan && !result.result_mask.pos_infinity;
 		}
 
-		return write_result(fd, Result.as_format);
+		return write_result(fd, result.as_format);
 	}
 
 	// TODO CVT commands need to handle the fixed-point types as well.
@@ -129,7 +134,7 @@ namespace mips::instructions
 		{ FormatBits::Double, FormatBits::Double },
 		{ FormatBits::Word, FormatBits::Word },
 		{ FormatBits::Long, FormatBits::Long }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -148,7 +153,7 @@ namespace mips::instructions
 		{ FormatBits::Double, FormatBits::Double },
 		{ FormatBits::Word, FormatBits::Word },
 		{ FormatBits::Long, FormatBits::Long }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -165,7 +170,7 @@ namespace mips::instructions
 		0b01000100000000000000000000100100,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -175,8 +180,7 @@ namespace mips::instructions
 		int32 fs_val = int32(fs_value);
 
 #if FPU_EXCEPTION_SUPPORT
-		const uint32 exStatus = _statusfp();
-		if (exStatus & (_SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID))
+		if (const uint32 exception_status = _statusfp(); exception_status & (_SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID))
 		{
 			if (isnan(fs_value))
 			{
@@ -203,7 +207,7 @@ namespace mips::instructions
 		0b01000100000000000000000000100101,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -213,8 +217,7 @@ namespace mips::instructions
 		int64 fs_val = int64(fs_value);
 
 #if FPU_EXCEPTION_SUPPORT
-		const uint32 exStatus = _statusfp();
-		if (exStatus & (_SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID))
+		if (const uint32 exception_status = _statusfp(); exception_status & (_SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID))
 		{
 			if (isnan(fs_value))
 			{
@@ -241,7 +244,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000011,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -263,7 +266,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011000,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -287,7 +290,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011001,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -311,7 +314,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011110,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -361,7 +364,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011100,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -411,7 +414,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011111,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -459,10 +462,7 @@ namespace mips::instructions
 			result = (ft_val >= fs_val) ? ft_val : fs_val;
 		}
 
-		if (isinf(result))
-		{
-			//__debugbreak();
-		}
+		xassert(!isinf(result));  // NOLINT(clang-diagnostic-assume)
 
 		return write_result(fd, result);
 	}
@@ -474,7 +474,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011101,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -522,10 +522,7 @@ namespace mips::instructions
 			result = (ft_val < fs_val) ? ft_val : fs_val;
 		}
 
-		if (isinf(result))
-		{
-			//__debugbreak();
-		}
+		xassert(!isinf(result));  // NOLINT(clang-diagnostic-assume)
 
 		return write_result(fd, result);
 	}
@@ -537,7 +534,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000110,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -554,7 +551,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000010,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -576,7 +573,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000111,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -594,7 +591,7 @@ namespace mips::instructions
 		0b01000110000000000000000000010101,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -614,7 +611,7 @@ namespace mips::instructions
 		0b01000110000000000000000000011010,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -632,7 +629,7 @@ namespace mips::instructions
 		0b01000110000000000000000000010110,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -653,7 +650,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000100,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<11, 5> fs{instruction, coprocessor};
 		FPRegister<6, 5> fd{instruction, coprocessor};
@@ -674,7 +671,7 @@ namespace mips::instructions
 		0b01000110000000000000000000010000,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -695,7 +692,7 @@ namespace mips::instructions
 		0b01000110000000000000000000010100,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -715,7 +712,7 @@ namespace mips::instructions
 		0b01000110000000000000000000010111,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -735,7 +732,7 @@ namespace mips::instructions
 		0b01000110000000000000000000000001,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -756,7 +753,7 @@ namespace mips::instructions
 		0b11111111111000000000011111111111,
 		0b01000100110000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		const GPRegister<16, 5> rt{instruction, processor};
 		FPCRegister<11, 5> fs{instruction, coprocessor};
@@ -775,7 +772,7 @@ namespace mips::instructions
 		0b11111111111000000000011111111111,
 		0b01000100010000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		GPRegister<16, 5> rt{instruction, processor};
 		const FPCRegister<11, 5> fs{instruction, coprocessor};
@@ -792,7 +789,7 @@ namespace mips::instructions
 		0b11111111111000000000011111111111,
 		0b01000100100000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		const GPRegister<16, 5> rt{instruction, processor};
 		FPRegister<11, 5> fs{instruction, coprocessor};
@@ -809,7 +806,7 @@ namespace mips::instructions
 		0b11111111111000000000011111111111,
 		0b01000100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		GPRegister<16, 5> rt{instruction, processor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -826,7 +823,7 @@ namespace mips::instructions
 		0b11111111111000000000011111111111,
 		0b01000100111000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		const GPRegister<16, 5> rt{instruction, processor};
 		FPRegister<11, 5> fs{instruction, coprocessor};
@@ -843,7 +840,7 @@ namespace mips::instructions
 		0b11111111111000000000011111111111,
 		0b01000100011000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		GPRegister<16, 5> rt{instruction, processor};
 		const FPRegister<11, 5> fs{instruction, coprocessor};
@@ -854,75 +851,84 @@ namespace mips::instructions
 		return true;
 	}
 
-	template <typename float_t>
-	bool COP1_CMP_condn_common(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
-	{
-		const FPRegister<16, 5> ft{instruction, coprocessor};
-		const FPRegister<11, 5> fs{instruction, coprocessor};
-		FPRegister<6, 5> fd{instruction, coprocessor};
-		const uint32 condn = instruction & Bits(5);
-
-		const float_t fs_val = fs.value<float_t>();
-		const float_t ft_val = ft.value<float_t>();
-
-		const bool IsUnordered = condn & 1;
-		const bool Throws = (condn >> 3) & 1;
-		const uint32 Relation = ((condn >> 1) & 0b11);
-		const uint32 Negated = (condn >> 4) & 1;
-
-		if (Negated)
+	namespace {
+		template <typename float_t>
+		static bool COP1_CMP_condn_common(const instruction_t instruction, processor& __restrict processor, coprocessor1& __restrict coprocessor)
 		{
-			if ((condn & 0b111) == 0 || (condn & 0b100) != 0)
+#if !VEMIPS_TABLEGEN
+			const FPRegister<16, 5> ft{ instruction, coprocessor };
+			const FPRegister<11, 5> fs{ instruction, coprocessor };
+			FPRegister<6, 5> fd{ instruction, coprocessor };
+			const uint32 condition = instruction & Bits(5);
+
+			const float_t fs_val = fs.value<float_t>();
+			const float_t ft_val = ft.value<float_t>();
+
+			const bool is_unordered = condition & 1;
+			const bool throws = (condition >> 3) & 1;
+			const uint32 relation = ((condition >> 1) & 0b11);
+			const uint32 negated = (condition >> 4) & 1;
+
+			if (negated)
 			{
-				throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+				if ((condition & 0b111) == 0 || (condition & 0b100) != 0)
+				{
+					throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+				}
 			}
-		}
 
-		if (is_signalling_nan(fs_val) || is_signalling_nan(ft_val) || (Throws && (isnan(fs_val) || isnan(ft_val))))
-		{
-			if (coprocessor.get_FCSR().set_flag(uint32_t(ExceptBits::InvalidOp)))
+			if (is_signalling_nan(fs_val) || is_signalling_nan(ft_val) || (throws && (isnan(fs_val) || isnan(ft_val))))
 			{
-				// TODO update cause?
-				throw CPU_Exception{ CPU_Exception::Type::FPE, processor.get_program_counter(), uint32_t(ExceptBits::InvalidOp) };
+				if (coprocessor.get_FCSR().set_flag(uint32_t(ExceptBits::InvalidOp)))
+				{
+					// TODO update cause?
+					throw CPU_Exception{ CPU_Exception::Type::FPE, processor.get_program_counter(), uint32_t(ExceptBits::InvalidOp) };
+				}
 			}
-		}
 
-		// Handle predicates
-		bool TestGreaterThan = false;
-		bool TestLessThan = (Relation & 0b10) != 0;
-		bool TestEqual = (Relation & 0b01) != 0;
-		bool TestUnordered = IsUnordered;
+			// Handle predicates
+			bool test_greater_than = false;
+			bool test_less_than = (relation & 0b10) != 0;
+			bool test_equal = (relation & 0b01) != 0;
+			bool test_unordered = is_unordered;
 
-		if (Negated)
-		{
-			TestGreaterThan = !TestGreaterThan;
-			TestLessThan = !TestLessThan;
-			TestEqual = !TestEqual;
-			TestUnordered = !TestUnordered;
-		}
+			if (negated) {
+				test_greater_than = !test_greater_than;
+				test_less_than = !test_less_than;
+				test_equal = !test_equal;
+				test_unordered = !test_unordered;
+			}
 
-		bool result = false;
-		if (TestUnordered)
-		{
-			result = result || (isnan(fs_val) || isnan(ft_val));
-		}
-		if (TestGreaterThan)
-		{
-			result = result || (fs_val > ft_val);
-		}
-		if (TestLessThan)
-		{
-			result = result || (fs_val < ft_val);
-		}
-		if (TestEqual)
-		{
-			result = result || (fs_val == ft_val);
-		}
+			bool result = false;
+			if (test_unordered) {
+				result = result || (isnan(fs_val) || isnan(ft_val));
+			}
+			if (test_equal) {
+				if (test_greater_than) {
+					result = result || (fs_val >= ft_val);
+				}
+				if (test_less_than) {
+					result = result || (fs_val <= ft_val);
+				}
+				else {
+					result = result || (fs_val == ft_val);  // NOLINT(clang-diagnostic-float-equal)
+				}
+			}
+			else {
+				if (test_greater_than) {
+					result = result || (fs_val > ft_val);
+				}
+				if (test_less_than) {
+					result = result || (fs_val < ft_val);
+				}
+			}
 
-		using result_t = typename uint_equiv<float_t>::type;
-		fd.set<result_t>(result ? result_t(-1) : 0);
+			using result_t = typename uint_equiv<float_t>::type;
+			fd.set<result_t>(result ? result_t(-1) : 0);
+#endif
 
-		return true;
+			return true;
+		}
 	}
 
 	Cop1InstructionDef(
@@ -931,7 +937,7 @@ namespace mips::instructions
 		0b11111111111000000000000000100000,
 		0b01000110100000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_CMP_condn_common<float>(instruction, processor, coprocessor);
 	}
@@ -942,7 +948,7 @@ namespace mips::instructions
 		0b11111111111000000000000000100000,
 		0b01000110101000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_CMP_condn_common<double>(instruction, processor, coprocessor);
 	}
@@ -953,16 +959,14 @@ namespace mips::instructions
 		0b11111111111000000000000000000000,
 		0b01000101001000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const int32 offset = TinyInt<18>(instruction << 2U).sextend<int32>();
 
 		const uint32 ft_val = ft.value<uint32>();
 
-		const bool Set = (ft_val & 1) != 0;
-
-		if (!Set)
+		if (const bool set = (ft_val & 1) != 0; !set)
 		{
 			processor.delay_branch(
 				processor.get_program_counter() + 4 + offset
@@ -970,7 +974,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			processor.set_flags(processor::flag_bit(processor::flag::no_cti));
+			processor.set_flags(processor::flag::no_cti);
 		}
 
 		return true;
@@ -982,16 +986,12 @@ namespace mips::instructions
 		0b11111111111000000000000000000000,
 		0b01000101101000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const int32 offset = TinyInt<18>(instruction << 2U).sextend<int32>();
 
-		const uint32 ft_val = ft.value<uint32>();
-
-		const bool Set = (ft_val & 1) != 0;
-
-		if (Set)
+		if (const uint32 ft_val = ft.value<uint32>(); (ft_val & 1) != 0)
 		{
 			processor.delay_branch(
 				processor.get_program_counter() + 4 + offset
@@ -999,67 +999,59 @@ namespace mips::instructions
 		}
 		else
 		{
-			processor.set_flags(processor::flag_bit(processor::flag::no_cti));
+			processor.set_flags(processor::flag::no_cti);
 		}
 
 		return true;
 	}
 
-	/* All of the rounding code uses _the same_ logic, so I will just write one procedure. */
-	template <typename format_t, typename fixed_t, OpFlags round_state>
-	bool COP1_ROUND_Common(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
-	{
-		const FPRegister<11, 5> fs{instruction, coprocessor};
-		FPRegister<6, 5> ft{instruction, coprocessor};
+	namespace {
+		/* All of the rounding code uses _the same_ logic, so I will just write one procedure. */
+		template <typename format_t, typename fixed_t, OpFlags round_state>
+		static bool COP1_ROUND_Common(const instruction_t instruction, processor& __restrict, coprocessor1& __restrict coprocessor)
+		{
+			const FPRegister<11, 5> fs{ instruction, coprocessor };
+			FPRegister<6, 5> ft{ instruction, coprocessor };
 
-		fixed_t Result;
-		const format_t fs_val = fs.value<format_t>();
-		if (isinf(fs_val))
-		{
-			//__debugbreak();
-		}
-		switch (round_state)
-		{
+			fixed_t result;
+			const format_t fs_val = fs.value<format_t>();
+			switch (round_state)  // NOLINT(clang-diagnostic-switch-enum)
+			{
 			case OpFlags::Round_ToNearest:
-				Result = fixed_t(std::round(fs_val)); break;
+				result = fixed_t(std::round(fs_val)); break;
 			case OpFlags::Round_Up:
-				Result = fixed_t(std::ceil(fs_val)); break;
+				result = fixed_t(std::ceil(fs_val)); break;
 			case OpFlags::Round_Down:
-				Result = fixed_t(std::floor(fs_val)); break;
+				result = fixed_t(std::floor(fs_val)); break;
 			case OpFlags::Round_ToZero:
-				Result = fixed_t(fs_val);
+				result = fixed_t(fs_val); break;
 			default:
-				_assume(0);
-		}
+				xassert(false);
+			}
 
 #if FPU_EXCEPTION_SUPPORT
-		const uint32 exStatus = _statusfp();
-		if (exStatus & (_SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID))
-		{
-			const uint64_t test_val = uint64_t(fabs(fs_val));
-			const bool overflow = test_val > uint64_t(std::numeric_limits<fixed_t>::max());
-
-			if (isinf(fs_val) || overflow)
+			if (const uint32 exception_status = _statusfp(); exception_status & (_SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID))
 			{
-				if (fs_val < 0)
+				const uint64_t test_val = uint64_t(fabs(fs_val));
+				const bool overflow = test_val > uint64_t(std::numeric_limits<fixed_t>::max());
+
+				if (isinf(fs_val) || overflow)
 				{
-					Result = std::numeric_limits<fixed_t>::lowest();
+					result = fs_val < 0 ?
+						std::numeric_limits<fixed_t>::lowest() :
+						std::numeric_limits<fixed_t>::max();
 				}
-				else
+
+				if (isnan(fs_val))
 				{
-					Result = std::numeric_limits<fixed_t>::max();
+					result = 0;
 				}
 			}
-
-			if (isnan(fs_val))
-			{
-				Result = 0;
-			}
-		}
 #endif
 
-		ft.set<fixed_t>(Result);
-		return true;
+			ft.set<fixed_t>(result);
+			return true;
+		}
 	}
 
 	Cop1InstructionDef(
@@ -1069,7 +1061,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001000,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int64, OpFlags::Round_ToNearest>(instruction, processor, coprocessor);
 	}
@@ -1081,7 +1073,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001100,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int32, OpFlags::Round_ToNearest>(instruction, processor, coprocessor);
 	}
@@ -1093,7 +1085,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001010,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int64, OpFlags::Round_Up>(instruction, processor, coprocessor);
 	}
@@ -1105,7 +1097,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001110,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int32, OpFlags::Round_Up>(instruction, processor, coprocessor);
 	}
@@ -1117,7 +1109,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001011,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int64, OpFlags::Round_Down>(instruction, processor, coprocessor);
 	}
@@ -1129,7 +1121,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001111,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int32, OpFlags::Round_Down>(instruction, processor, coprocessor);
 	}
@@ -1141,7 +1133,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001001,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int64, OpFlags::Round_ToZero>(instruction, processor, coprocessor);
 	}
@@ -1153,7 +1145,7 @@ namespace mips::instructions
 		0b01000110000000000000000000001101,
 		{ FormatBits::Single, FormatBits::Single },
 		{ FormatBits::Double, FormatBits::Double }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		return COP1_ROUND_Common<format_t, int32, OpFlags::Round_ToZero>(instruction, processor, coprocessor);
 	}
@@ -1164,7 +1156,7 @@ namespace mips::instructions
 		0b11111100000000000000000000000000,
 		0b11010100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		FPRegister<16, 5> ft{instruction, coprocessor};
 		const GPRegister<21, 5> base{instruction, processor};
@@ -1187,7 +1179,7 @@ namespace mips::instructions
 		0b11111100000000000000000000000000,
 		0b11000100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		FPRegister<16, 5> ft{instruction, coprocessor};
 		const GPRegister<21, 5> base{instruction, processor};
@@ -1210,7 +1202,7 @@ namespace mips::instructions
 		0b11111100000000000000000000000000,
 		0b11110100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const GPRegister<21, 5> base{instruction, processor};
@@ -1232,7 +1224,7 @@ namespace mips::instructions
 		0b11111100000000000000000000000000,
 		0b11100100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
-	) (instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 	{
 		const FPRegister<16, 5> ft{instruction, coprocessor};
 		const GPRegister<21, 5> base{instruction, processor};

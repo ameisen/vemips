@@ -2,9 +2,7 @@
 
 #include "pch.hpp"
 
-extern mips::processor * __restrict get_current_processor();
-extern mips::coprocessor * __restrict get_current_coprocessor();
-extern void set_current_coprocessor(mips::coprocessor * __restrict cop);
+#include "processor/processor_support.hpp"
 
 #if defined(_MSC_VER)
 #  define FPU_EXCEPTION_SUPPORT 1
@@ -27,11 +25,11 @@ namespace mips::instructions
 	enum class ExceptBits : uint32_t
 	{
 		Inexact = 0b1,
-		Underflow = 0b01,
-		Overflow = 0b001,
-		DivZero = 0b0001,
-		InvalidOp = 0b00001,
-		UnsupportedOp = 0b000001,
+		Underflow = 0b10,
+		Overflow = 0b100,
+		DivZero = 0b1000,
+		InvalidOp = 0b10000,
+		UnsupportedOp = 0b100000,
 		All = 0b111111,
 	};
 
@@ -105,9 +103,10 @@ namespace mips::instructions
 				return RoundingState::Up;
 			case 3:
 				return RoundingState::Down;
+			default:
+				xassert(false);
+				return RoundingState::None;
 		}
-		_assume(0);
-		return RoundingState::None;
 	}
 
 	// TODO remove this to simplify
@@ -162,7 +161,7 @@ namespace mips::instructions
 			// 1 (RZ) // Supplies the format’s largest finite number with the sign of the intermediate result.
 			// 2 (RP) // For positive overflow values, supplies positive infinity. For negative overflow values, supplies the format’s most negative finite number.
 			// 3 (RM) // For positive overflow values, supplies the format’s largest finite number. For negative overflow values, supplies minus infinity.
-			coprocessor1::FCSR _fcsr = ((coprocessor1 *)get_current_coprocessor())->get_FCSR();
+			coprocessor1::FCSR _fcsr = (get_current_coprocessor<coprocessor1>())->get_FCSR();
 			switch (_fcsr.RoundingMode)
 			{
 				case 0:
@@ -203,7 +202,7 @@ namespace mips::instructions
 					}
 			}
 
-			_assume(0);
+			xassert(false);
 		}
 		return value;
 	}
@@ -257,7 +256,7 @@ namespace mips::instructions
 		const FormatBits Type;
 	};
 
-	class _InstructionInitializer
+	class _instruction_initializer
 	{
 		struct instruction_tuple final {
 			const instructionexec_t executor;
@@ -285,7 +284,7 @@ namespace mips::instructions
 		}
 
 	public:
-		_InstructionInitializer(
+		_instruction_initializer(
 			const char *name,
 			uint32 instructionMask,
 			uint32 instructionRef,
@@ -311,15 +310,6 @@ namespace mips::instructions
 				FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
 				instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
 			}
-#else
-			// We want to make sure these instructions get compiled in.
-			// ReSharper disable CppEntityAssignedButNoRead CppAssignedValueIsNeverUsed CppJoinDeclarationAndAssignment
-			volatile instructionexec_t fake_exec;
-			fake_exec = exec_f;
-			fake_exec = exec_d;
-			fake_exec = exec_l;
-			fake_exec = exec_w;
-			// ReSharper restore CppEntityAssignedButNoRead CppAssignedValueIsNeverUsed CppJoinDeclarationAndAssignment
 #endif
 		}
 	};
@@ -413,7 +403,7 @@ namespace mips::instructions
 	};
 
 	template <bool enable = true>
-	class ScopedFloatDenormalState
+	class ScopedFloatDenormalState final
 	{
 		DenormalState m_SetState;
 		unsigned m_State;
@@ -448,7 +438,7 @@ namespace mips::instructions
 	};
 
 	template <bool enable = true>
-	class ScopedFloatRoundingState
+	class ScopedFloatRoundingState final
 	{
 		RoundingState m_SetState;
 		unsigned m_State;
@@ -528,9 +518,13 @@ namespace mips::instructions
 	template<> struct int_equiv<float> { using type = int32; };
 	template<> struct int_equiv<double> { using type = int64; };
 
+	template <typename T> using int_equiv_t = typename int_equiv<T>::type;
+
 	template <typename T> struct uint_equiv;
 	template<> struct uint_equiv<float> { using type = uint32; };
 	template<> struct uint_equiv<double> { using type = uint64; };
+
+	template <typename T> using uint_equiv_t = typename uint_equiv<T>::type;
 
 	template <typename T>
 	static bool is_signalling_nan(T val)
@@ -565,7 +559,7 @@ namespace mips::instructions
 #if FPU_EXCEPTION_SUPPORT
 		if (uint32(Flags & OpFlags::Signals_All))
 		{
-				auto fpu = (coprocessor1 * __restrict)get_current_coprocessor();
+			auto fpu = (coprocessor1 * __restrict)get_current_coprocessor();
 
 			// Set the cause bits
 			if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
@@ -594,50 +588,50 @@ namespace mips::instructions
 				fpu->get_FCSR().Cause |= uint32(ExceptBits::InvalidOp);
 			}
 
-				 if (fpu->get_FCSR().Enables) {
-					 if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
-					 {
-						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Inexact))
-						 {
-							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
-						 }
-					 }
-					 if (exStatus & _SW_UNDERFLOW && uint32(Flags & OpFlags::Signals_Underflow))
-					 {
-						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Underflow))
-						 {
-							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
-						 }
-					 }
-					 if (exStatus & _SW_OVERFLOW && uint32(Flags & OpFlags::Signals_Overflow))
-					 {
-						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Overflow))
-						 {
-							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
-						 }
-					 }
-					 if (exStatus & _SW_ZERODIVIDE && uint32(Flags & OpFlags::Signals_DivZero))
-					 {
-						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::DivZero))
-						 {
-							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
-						 }
-					 }
-					 if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp))
-					 {
-						 if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp))
-						 {
-							 throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
-						 }
-					 }
-				 }
+			if (fpu->get_FCSR().Enables) {
+				if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
+				{
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Inexact))
+					{
+						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+					}
+				}
+				if (exStatus & _SW_UNDERFLOW && uint32(Flags & OpFlags::Signals_Underflow))
+				{
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Underflow))
+					{
+						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+					}
+				}
+				if (exStatus & _SW_OVERFLOW && uint32(Flags & OpFlags::Signals_Overflow))
+				{
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Overflow))
+					{
+						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+					}
+				}
+				if (exStatus & _SW_ZERODIVIDE && uint32(Flags & OpFlags::Signals_DivZero))
+				{
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::DivZero))
+					{
+						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+					}
+				}
+				if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp))
+				{
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp))
+					{
+						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+					}
+				}
+			}
 		}
 #endif
 	}
 
 	inline void raise_signal(ExceptBits exception)
 	{
-		if (((coprocessor1 *)get_current_coprocessor())->get_FCSR().Enables & uint32_t(exception))
+		if ((get_current_coprocessor<coprocessor1>())->get_FCSR().Enables & uint32_t(exception))
 		{
 			throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(exception) };
 		}
@@ -671,8 +665,9 @@ namespace mips::instructions
 		{
 			throw_signal<Flags>(exStatus);
 
-			if (uint32(Flags & OpFlags::NoWriteOnSignal))
+			if (uint32(Flags & OpFlags::NoWriteOnSignal)) {
 				return true;
+			}
 
 			if (uint32(Flags & OpFlags::CustomDefault))
 			{
@@ -680,14 +675,15 @@ namespace mips::instructions
 				return false;
 			}
 
-			ExceptionReason reason;
-			reason.InvalidOp = (exStatus & _SW_INVALID) != 0;
-			reason.DivZero = (exStatus & _SW_ZERODIVIDE) != 0;
-			reason.Overflow = (exStatus & _SW_OVERFLOW) != 0;
-			reason.Underflow = (exStatus & _SW_UNDERFLOW) != 0;
-			reason.Precision = (exStatus & _SW_INEXACT) != 0;
+			const ExceptionReason reason = {
+				.InvalidOp = (exStatus & _SW_INVALID) != 0,
+				.DivZero = (exStatus & _SW_ZERODIVIDE) != 0,
+				.Overflow = (exStatus & _SW_OVERFLOW) != 0,
+				.Underflow = (exStatus & _SW_UNDERFLOW) != 0,
+				.Precision = (exStatus & _SW_INEXACT) != 0,
+			};
 
-			value = COP1DefaultValueGenerator<format_t>::Get(*((coprocessor1 *)get_current_coprocessor()), value, reason);
+			value = COP1DefaultValueGenerator<format_t>::Get(*(raw_ptr<coprocessor1>(get_current_coprocessor())), value, reason);
 
 			dest.template set<format_t>(value);
 			return true;
@@ -708,11 +704,11 @@ namespace mips::instructions
 	template <typename T>
 	struct format_type<T, false> { using type = void; };
 
-	class COP1_Helper
+	class COP1_Helper final
 	{
+	public:
 		COP1_Helper() = delete;
 
-	public:
 		template <typename format_t, typename InsT>
 		static void Execute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor)
 		{
@@ -730,25 +726,13 @@ namespace mips::instructions
 					coprocessor.get_FCSR().Cause = 0;
 				}
 
-				RoundingState roundingState;
-				if (HasRoundingBits<InsT::Flags>())
-				{
-					roundingState = GetRoundingStateFromFlags<InsT::Flags>();
-				}
-				else
-				{
-					roundingState = GetRoundingStateFromFCSR(coprocessor.get_FCSR());
-				}
+				RoundingState roundingState = HasRoundingBits<InsT::Flags>() ?
+					GetRoundingStateFromFlags<InsT::Flags>() :
+					GetRoundingStateFromFCSR(coprocessor.get_FCSR());
 
-				DenormalState denormalState;
-				if (HasDenormalBits<InsT::Flags>())
-				{
-					denormalState = GetDenormalStateFromFlags<InsT::Flags>();
-				}
-				else
-				{
-					denormalState = GetDenormalStateFromFCSR(coprocessor.get_FCSR());
-				}
+				DenormalState denormalState = HasDenormalBits<InsT::Flags>() ?
+					GetDenormalStateFromFlags<InsT::Flags>() :
+					GetDenormalStateFromFCSR(coprocessor.get_FCSR());
 
 				constexpr bool ShouldSetDenormal = !HasDenormalBits<InsT::Flags>() ||
 					(GetDenormalStateFromFlags<InsT::Flags>() != DefaultSysDenormal && GetDenormalStateFromFlags<InsT::Flags>() != DenormalState::None);
@@ -787,76 +771,76 @@ namespace mips::instructions
 	}
 }
 
-#define Cop1InstructionDef(InsInstruction, InsOperFlags, InsOpMask, InsOpRef, ...)																			  \
-struct COP1_ ## InsInstruction																																					\
-{																																														  \
-	COP1_ ## InsInstruction() = delete;																																		 \
-	static_assert(std::is_same<decltype(InsOperFlags), OpFlags>::value, "Operation Flags field must be of type 'OpFlags'");						 \
-	static constexpr uint32 OpMask = InsOpMask;																															  \
-	static constexpr OpFlags Flags = InsOperFlags | OpFlags::COP1;																									 \
-	static constexpr MaskType ExtMasks[] = {__VA_ARGS__};																												 \
-	static constexpr FormatBits Formats = GetFormatBitsFromExtMask(ExtMasks);																					  \
-																																															\
-	template <typename format_t>																																				  \
-	static _forceinline bool SubExecute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor); \
-																																															\
-	template <typename reg_t, typename format_t>																															 \
-	static _forceinline bool write_result(reg_t &dest, format_t value)																							  \
-	{																																													  \
-		return _write_result<reg_t, format_t, Flags>(dest, value);																									  \
-	}																																													  \
-};																																														 \
-namespace COP1_ ## InsInstruction ## _NS																																	  \
-{																																														  \
-	template <typename format_t>																																				  \
-	uint64 Execute(instruction_t instruction, processor & __restrict processor)																					\
-	{																																													  \
-		COP1_Helper::Execute<format_t, COP1_ ## InsInstruction >(																										\
-			instruction, processor, *(coprocessor1 * __restrict)processor.get_coprocessor(1)																	 \
-		);																																												 \
-		return 0;																																										\
-	}																																													  \
-	class _StaticInit : public _InstructionInitializer																													 \
-	{																																													  \
-		template <typename T, bool null, bool valid>																														 \
-		struct functor;																																								\
-																																															\
-		template <typename T, bool null>																																		 \
-		struct functor<T, null, true>																																			 \
-		{																																												  \
-			static constexpr auto _functor = &Execute<T>;																													\
-		};																																												 \
-																																															\
-		template <typename T>																																						\
-		struct functor<T, false, false>																																		  \
-		{																																												  \
-			static constexpr auto _functor = &Execute<void>;																												\
-		};																																												 \
-																																															\
-		template <typename T>																																						\
-		struct functor<T, true, false>																																			\
-		{																																												  \
-			static constexpr auto _functor = nullptr;																														 \
-		};																																												 \
-	public:																																											  \
-		_StaticInit() :																																								\
-			_InstructionInitializer(																																				\
-				"COP1_" #InsInstruction,																																			\
-				COP1_ ## InsInstruction::OpMask,																																 \
-				InsOpRef,																																								\
-				{__VA_ARGS__},																																						 \
-				functor<float, false, uint32(COP1_ ## InsInstruction::Formats & FormatBits::Single) != 0>::_functor,									  \
-				functor<double, false, uint32(COP1_ ## InsInstruction::Formats & FormatBits::Double) != 0>::_functor,									 \
-				functor<int32,																																						 \
-					uint32(COP1_ ## InsInstruction::Formats) != 0,																										  \
-					(COP1_ ## InsInstruction::Formats & FormatBits::Word) == FormatBits::Word>::_functor,													  \
-				functor<int64,																																						 \
-					uint32(COP1_ ## InsInstruction::Formats) != 0,																										  \
-					(COP1_ ## InsInstruction::Formats & FormatBits::Long) == FormatBits::Long>::_functor,													  \
-				uint32(COP1_ ## InsInstruction::Flags),																														\
-				uint32(COP1_ ## InsInstruction::Flags & OpFlags::ControlInstruction) != 0																		  \
-			)																																											  \
-		{}																																												 \
-	} static _StaticInitObj;																																						\
-}																																														  \
+#define Cop1InstructionDef(InsInstruction, InsOperFlags, InsOpMask, InsOpRef, ...)																													\
+struct COP1_ ## InsInstruction																																																							\
+{																																																																						\
+	COP1_ ## InsInstruction() = delete;																																																				\
+	static_assert(std::is_same<decltype(InsOperFlags), OpFlags>::value, "Operation Flags field must be of type 'OpFlags'");										\
+	static constexpr uint32 OpMask = InsOpMask;																																																\
+	static constexpr OpFlags Flags = InsOperFlags | OpFlags::COP1;																																						\
+	static constexpr MaskType ExtMasks[] = {__VA_ARGS__};																																											\
+	static constexpr FormatBits Formats = GetFormatBitsFromExtMask(ExtMasks);																																	\
+																																																																						\
+	template <typename format_t>																																				  																		\
+	static _forceinline bool SubExecute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor);	\
+																																																																						\
+	template <typename reg_t, typename format_t>																																															\
+	static _forceinline bool write_result(reg_t &dest, format_t value)																																				\
+	{																																													  																							\
+		return _write_result<reg_t, format_t, Flags>(dest, value);																																							\
+	}																																													  																							\
+};																																																																					\
+namespace COP1_ ## InsInstruction ## _NS																																																		\
+{																																														  																							\
+	template <typename format_t>																																																							\
+	_used uint64 Execute(instruction_t instruction, processor & __restrict processor)																													\
+	{																																													  																							\
+		COP1_Helper::Execute<format_t, COP1_ ## InsInstruction >(																																								\
+			instruction, processor, *(coprocessor1 * __restrict)processor.get_coprocessor(1)																											\
+		);																																																																			\
+		return 0;																																																																\
+	}																																													  																							\
+	class _StaticInit : public _instruction_initializer																																												\
+	{																																													  																							\
+		template <typename T, bool null, bool valid>																																														\
+		struct functor;																																																													\
+																																																																						\
+		template <typename T, bool null>																																																				\
+		struct functor<T, null, true>																																																						\
+		{																																												  																							\
+			static constexpr auto _functor = &Execute<T>;																																													\
+		};																																																																			\
+																																																																						\
+		template <typename T>																																																										\
+		struct functor<T, false, false>																																																					\
+		{																																												  																							\
+			static constexpr auto _functor = &Execute<void>;																																											\
+		};																																																																			\
+																																																																						\
+		template <typename T>																																																										\
+		struct functor<T, true, false>																																																					\
+		{																																												  																							\
+			static constexpr auto _functor = nullptr;																																															\
+		};																																																																			\
+	public:																																																																		\
+		_StaticInit() :																																																													\
+			_instruction_initializer(																																																							\
+				"COP1_" #InsInstruction,																																																						\
+				COP1_ ## InsInstruction::OpMask,																																																		\
+				InsOpRef,																																																														\
+				{__VA_ARGS__},																																																											\
+				functor<float, false, uint32(COP1_ ## InsInstruction::Formats & FormatBits::Single) != 0>::_functor,																\
+				functor<double, false, uint32(COP1_ ## InsInstruction::Formats & FormatBits::Double) != 0>::_functor,																\
+				functor<int32,																																																											\
+					uint32(COP1_ ## InsInstruction::Formats) != 0,																																										\
+					(COP1_ ## InsInstruction::Formats & FormatBits::Word) == FormatBits::Word>::_functor,																							\
+				functor<int64,																																																											\
+					uint32(COP1_ ## InsInstruction::Formats) != 0,																																										\
+					(COP1_ ## InsInstruction::Formats & FormatBits::Long) == FormatBits::Long>::_functor,																							\
+				uint32(COP1_ ## InsInstruction::Flags),																																															\
+				uint32(COP1_ ## InsInstruction::Flags & OpFlags::ControlInstruction) != 0																														\
+			)																																																																			\
+		{}																																																																			\
+	} static _StaticInitObj;																																																									\
+}																																																																						\
 template <typename format_t> _forceinline bool COP1_ ## InsInstruction::SubExecute

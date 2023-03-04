@@ -26,24 +26,27 @@
 */
 
 #include "pch.hpp"
+
+#if EMSCRIPTEN
+
 #include "base64.hpp"
 
 #include <iostream>
 
 namespace {
-  static constexpr const std::string_view base64_chars =
+  static constinit const std::string_view base64_chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
     "0123456789+/";
 
-  static inline bool is_alphanumeric(char c) {
+  static constexpr inline bool is_alphanumeric(const char c) {
     return
       (c >= '0' && c <= '9') ||
       (c >= 'A' && c <= 'Z') ||
       (c >= 'a' && c <= 'z');
   }
 
-  static inline bool is_base64(char c) {
+  static constexpr inline bool is_base64(const char c) {
     return (is_alphanumeric(c) || (c == '+') || (c == '/'));
   }
 }
@@ -67,7 +70,7 @@ namespace base64 {
       i = 0;
 
       for (auto& c : char_array_4) {
-        c = (unsigned char)base64_chars.find(c);
+        c = uint8_t(base64_chars.find(char(c)));
       }
 
       char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
@@ -75,24 +78,26 @@ namespace base64 {
       char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
       for (auto c : char_array_3) {
-        ret.push_back(c);
+        ret.push_back(char(c));
       }
     }
 
     if (i) {
       for (auto& c : char_array_4) {
-        c = (unsigned char)base64_chars.find(c);
+        c = uint8_t(base64_chars.find(char(c)));
       }
 
-      ret.push_back((char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4));
+      ret.push_back(char((char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4)));
       if (i >= 2) {
-        ret.push_back(((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2));
+        ret.push_back(char(((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2)));
       }
       if (i == 3) {
-        ret.push_back(((char_array_4[2] & 0x3) << 6) + char_array_4[3]);
+        ret.push_back(char(((char_array_4[2] & 0x3) << 6) + char_array_4[3]));
       }
     }
 
     return ret;
   }
 }
+
+#endif

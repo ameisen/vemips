@@ -1,10 +1,10 @@
 #pragma once
 
-// TABLEGEN is 1 if we are building the tablegen. It is 0/undefined otherwise.
+// VEMIPS_TABLEGEN is 1 if we are building the tablegen. It is 0/undefined otherwise.
 
 #define WIDE_INSTRUCTION_BRANCHES 1
 
-#if TABLEGEN
+#if VEMIPS_TABLEGEN
 #  define USE_STATIC_INSTRUCTION_SEARCH 0
 #else
 #  define USE_STATIC_INSTRUCTION_SEARCH 1

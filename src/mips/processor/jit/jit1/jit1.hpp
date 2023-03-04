@@ -1,5 +1,7 @@
 #pragma once
 
+#define USE_LEVELED_MAP 1
+
 #include "common.hpp"
 
 #include <unordered_map>
@@ -8,25 +10,45 @@
 #include <cassert>
 #include <list>
 #include <limits>
-
-#define IS_INSTRUCTION(instr, ref) \
-	[&]() -> bool { \
-		return &mips::instructions::StaticProc_ ## ref == (const mips::instructions::InstructionInfo *)&(instr); \
-	}()
+#include "runtime/basic_allocator.hpp"
+#include "runtime/leveled_map.hpp"
+#include "runtime/associate_cache.hpp"
 
 namespace mips {
 	namespace instructions {
 		struct InstructionInfo;
-	};
+	}
+}
 
+namespace {
+	namespace _detail {
+		using instruction_info = mips::instructions::InstructionInfo;
+
+		static inline bool is_instruction(const instruction_info &lhs, const instruction_info *rhs) {
+			return &lhs == rhs;
+		}
+
+		static inline bool is_instruction(const instruction_info &lhs, const instruction_info &rhs) {
+			return &lhs == &rhs;
+		}
+	}
+}
+
+#define IS_INSTRUCTION(instr, ref) \
+	[&]() -> bool { \
+		return _detail::is_instruction(mips::instructions::StaticProc_ ## ref, instr); \
+	}()
+
+namespace mips {
 	class processor;
 	class jit1 final {
 		friend class Jit1_CodeGen;
 
-		template <size_t x>
-		struct log2 { enum { value = 1 + log2<x/2>::value }; };
+		template <size_t X>
+		struct log2 { enum { value = 1 + log2<X/2>::value }; };
   
 		template <> struct log2<1> { enum { value = 1 }; };
+		template <> struct log2<0> { enum { value = 0 }; };
 
 		static constexpr const uint32 ChunkSize = 0x100; // ChunkSize represents the size for MIPS memory.
 		static constexpr const size_t MaxChunkRealSize = (ChunkSize / 0x100) * 8192;
@@ -45,7 +67,7 @@ namespace mips {
 				uint32 offset;
 				uint32 target;
 			};
-			std::list<patch> m_patches;
+			std::vector<patch> m_patches;
 		};
 
 		template <typename T>
@@ -55,33 +77,79 @@ namespace mips {
 			}
 		};
 
-		processor & __restrict m_processor;
+		static _nothrow void free_executable(void*);
 
+		struct chunk_data;
+		static void initialize_chunk(chunk_data& __restrict chunk);
+
+		static inline basic_allocator<ChunkOffset> m_chunkoffset_allocator;
+
+		struct chunk_data final {
+			Chunk* __restrict chunk = nullptr;
+			ChunkOffset* __restrict offset = nullptr;
+
+			
+			_nothrow chunk_data() noexcept = default;
+			chunk_data(const chunk_data&) = delete;
+			_nothrow chunk_data(chunk_data && data) noexcept : chunk(data.chunk), offset(data.offset) {
+				data.chunk = nullptr;
+				data.offset = nullptr;
+			}
+
+			chunk_data& operator = (const chunk_data &) = delete;
+			_nothrow chunk_data& operator = (chunk_data&& data) noexcept {
+				chunk = data.chunk;
+				offset = data.offset;
+				data.chunk = nullptr;
+				data.offset = nullptr;
+				return *this;
+			}
+
+			_nothrow ~chunk_data() noexcept {
+				m_chunkoffset_allocator.release(offset);
+			}
+
+			_forceinline _nothrow void initialize() {
+				initialize_chunk(*this);
+			}
+
+			_forceinline _nothrow void release() const {
+				if (chunk) {
+					free_executable(chunk);
+				}
+			}
+
+			_forceinline _nothrow bool contained() const __restrict {
+				return chunk != nullptr;
+			}
+		};
+
+#if !USE_LEVELED_MAP
 		class MapLevel1 final {
-			std::array<Chunk * __restrict, 256> m_Data = { 0 };
-			std::array<ChunkOffset * __restrict, 256> m_DataOffsets = { 0 };
+			std::array<chunk_data, 256> m_Data = { 0 };
 
 		public:
-			_forceinline ~MapLevel1();
-			_forceinline const bool contains(uint32 idx) const {
-				return m_Data[idx] != nullptr;
+			~MapLevel1();
+			[[nodiscard]]
+			_forceinline bool contains(const uint32 idx) const {
+				return m_Data[idx].contained();
 			}
-			_forceinline Chunk & __restrict operator [] (uint32 idx);
-			_forceinline ChunkOffset & __restrict get_offsets(uint32 idx);
+			_forceinline chunk_data& operator [] (uint32 idx);
 		};
 
 		class MapLevel2 final {
 				std::array<MapLevel1* __restrict, 256> m_Data = { 0 };
 		public:
 			_forceinline ~MapLevel2() {
-				for (auto * __restrict ptr : m_Data) {
+				for (const auto * __restrict ptr : m_Data) {
 					delete ptr;
 				}
 			}
-			_forceinline const bool contains(uint32 idx) const {
+			[[nodiscard]]
+			_forceinline bool contains(const uint32 idx) const {
 				return m_Data[idx] != nullptr;
 			}
-			_forceinline MapLevel1 & __restrict operator [] (uint32 idx) {
+			_forceinline MapLevel1 & operator [] (uint32 idx) {
 				MapLevel1 * __restrict &result = m_Data[idx];
 				if (!result) {
 					result = new MapLevel1;
@@ -98,10 +166,11 @@ namespace mips {
 					delete ptr;
 				}
 			}
-			_forceinline const bool contains(uint32 idx) const {
+			[[nodiscard]]
+			_forceinline bool contains(const uint32 idx) const {
 				return m_Data[idx] != nullptr;
 			}
-			_forceinline MapLevel2 & __restrict operator [] (uint32 idx) {
+			_forceinline MapLevel2 & operator [] (uint32 idx) {
 				MapLevel2 * __restrict &result = m_Data[idx];
 				if (!result) {
 					result = new MapLevel2;
@@ -109,22 +178,33 @@ namespace mips {
 				return *result;
 			}
 		};
+#endif
 
-		MapLevel3 m_JitMap;
+	public:
+		using jit_instructionexec_t = uint64(*)  (uint64 instruction, uint64 processor, uint32 pc_runner, uint64, uint64, uint64);
 
-		Chunk * __restrict m_LastChunk = nullptr;
-		ChunkOffset * __restrict m_LastChunkOffset = nullptr;
-		uint32 m_LastChunkAddress = uint32(-1);
-		std::vector<Chunk *> m_Chunks;
-		uint32 m_CurrentExecutingChunkAddress;
-		uint32 m_FlushAddress;
-		Chunk * __restrict m_FlushChunk;
-		size_t m_largest_instruction = 0;
+	private:
+
+#if USE_LEVELED_MAP
+		leveled_map<chunk_data, true, 1 << RemainingLog2, 256, 256> jit_map_;
+#else
+		MapLevel3 jit_map;
+#endif
+		std::vector<Chunk*> chunks_;
+		using instruction_cache_t = sentinel_associate_cache<uint32, jit1::jit_instructionexec_t, 0, uintptr(-1)>;
+		_no_unique
+		instruction_cache_t lookup_cache_;
+		processor& __restrict processor_;
+		Chunk * __restrict last_chunk_ = nullptr;
+		ChunkOffset * __restrict last_chunk_offset_ = nullptr;
+		Chunk* __restrict flush_chunk_;
+		size_t largest_instruction_ = 0;
+		uint32 last_chunk_address_ = uint32(-1);
+		uint32 current_executing_chunk_address_;
+		uint32 flush_address_;
 
 		void populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, uint32 start_address, bool update);
 	public:
-		using jit_instructionexec_t = uint64 (*)  (uint64 instruction, uint64 processor, uint32 pc_runner, uint64, uint64, uint64);
-
 		jit1(processor & __restrict _processor);
 		~jit1();
 
@@ -134,8 +214,9 @@ namespace mips {
 		Chunk * get_chunk(uint32 address);
 		bool memory_touched(uint32 address);
 
+		[[nodiscard]]
 		size_t get_max_instruction_size() const __restrict {
-			return m_largest_instruction;
+			return largest_instruction_;
 		}
 	};
 }

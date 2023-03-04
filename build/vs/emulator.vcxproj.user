@@ -3,16 +3,16 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.Os.bin</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.Os.bin</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.Os.bin</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
   </PropertyGroup>
 </Project>

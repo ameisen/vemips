@@ -34,7 +34,7 @@ namespace mips {
 			uint16 debug_port = 0;
 			bool read_only_exec = false;
 			bool record_instruction_stats = false;
-				 bool disable_cti = false;
+			bool disable_cti = false;
 			bool ticked = false;
 			bool instruction_cache = false;
 			bool debug = false;
@@ -51,31 +51,39 @@ namespace mips {
 		virtual ~system();
 
 		virtual void clock(uint64 clocks) __restrict;
-		
+
+		[[nodiscard]]
 		uint64 get_instruction_count() const __restrict;
 
+		[[nodiscard]]
 		const std::unordered_map<const char *, size_t> & get_stats_map() const __restrict;
 
+		[[nodiscard]]
 		size_t get_jit_max_instruction_size() const __restrict;
 
 		virtual uint32 handle_exception(const CPU_Exception & __restrict ex) __restrict = 0;
 
+		[[nodiscard]]
 		bool is_execution_complete() const __restrict {
 			return m_execution_complete;
 		}
 
+		[[nodiscard]]
 		bool is_execution_success() const __restrict {
 			return m_execution_success;
 		}
 
+		[[nodiscard]]
 		bool is_debugger_owned() const __restrict {
 			return m_options.debug_owned;
 		}
 
+		[[nodiscard]]
 		processor * get_processor() const __restrict {
 			return m_processor;
 		}
 
+		[[nodiscard]]
 		debugger * get_debugger() const __restrict {
 			return m_debugger;
 		}
