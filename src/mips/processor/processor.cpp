@@ -39,13 +39,23 @@ namespace mips::instructions {
 #endif
 
 processor::processor(const options & __restrict options) :
+	// if there is no MMU, we need to set up some basic pointers.
+	memory_ptr_(options.mmu_type != mmu::emulated ? uintptr(options.mem_ptr) : 0),
+	memory_size_(options.mmu_type != mmu::emulated ? options.mem_size : 0),
 	stack_size_(options.stack),
+	coprocessors_{
+		nullptr,
+		new coprocessor1(*this), // Set up coprocessor 1 (FPU)
+		nullptr,
+		nullptr
+	},
 	memory_source_(options.mem_src),
 	jit_type_(options.jit_type),
 	readonly_exec_(options.rox),
 	ticked_(options.ticked),
 	collect_stats_(options.collect_stats),
 	disable_cti_(options.disable_cti),
+	instruction_stats_(options.collect_stats ? std::make_unique<decltype(instruction_stats_)::element_type>() : decltype(instruction_stats_){}),
 	mmu_type_(options.mmu_type),
 	guest_system_(options.guest_system),
 	debugging_(options.debugging)
@@ -53,8 +63,6 @@ processor::processor(const options & __restrict options) :
 #if !USE_STATIC_INSTRUCTION_SEARCH
 	mips::instructions::finish_map_build();
 #endif
-	// Set up coprocessor 1 (FPU)
-	coprocessors_[1] = new coprocessor1(*this);
 	if (memory_source_) {
 		memory_source_->register_processor(this);
 	}
@@ -69,16 +77,10 @@ processor::processor(const options & __restrict options) :
 			jit2_ = new jit2(*this); break;
 	}
 #endif
-
-	if (mmu_type_ != mmu::emulated) {
-		// if there is no MMU, we need to set up some basic pointers.
-		memory_ptr_ = uint64(options.mem_ptr);
-		memory_size_ = options.mem_size;
-	}
 }
 
 processor::~processor() {
-	for (coprocessor * __restrict coprocessor : coprocessors_) {
+	for (const coprocessor * __restrict coprocessor : coprocessors_) {
 		delete coprocessor;
 	}
 	if (memory_source_) {
@@ -180,7 +182,7 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 		instruction_t instruction = get_instruction();
 		if (collect_stats_) {
 			if (const auto * __restrict info = instructions::get_instruction(instruction)) {
-				++instruction_stats_[info->Name];
+				++(*instruction_stats_)[info->Name];
 				info->Proc(instruction, *this);
 			}
 			else {
@@ -211,7 +213,7 @@ void processor::ExecuteInstructionExplicit(const instructions::InstructionInfo* 
 		g_currentprocessor = this;
 
 		if (collect_stats_) {
-			++instruction_stats_[instruction_info->Name];
+			++(*instruction_stats_)[instruction_info->Name];
 		}
 		instruction_info->Proc(instruction, *this);
 	}

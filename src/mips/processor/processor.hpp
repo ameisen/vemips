@@ -6,7 +6,7 @@
 #include <mips/memory_source.hpp>
 
 #include <unordered_map>
-#include <variant>
+#include <memory>
 
 #include <map>
 #include "mips/mmu.hpp"
@@ -56,38 +56,42 @@ namespace mips {
 		uint32												program_counter_ = 0;
 		uint64												instruction_count_ = 0;
 		uint64												target_instructions_ = std::numeric_limits<uint64>::max();
-		uint64												memory_ptr_ = 0;
-		uint32												memory_size_ = 0;
-		uint32												stack_size_ = 0;
+		const uintptr									memory_ptr_ = 0;
+		const uint32									memory_size_ = 0;
+		const uint32									stack_size_ = 0;
 
 	public:
 		uint32												user_value_ = 0; // TODO REPLACE WITH COP0
 
 	private:
 
-		std::array<coprocessor* __restrict, 4> coprocessors_ = { nullptr };
-		memory_source  * __restrict memory_source_ = nullptr;
+		const std::array<coprocessor* __restrict, 4> coprocessors_ = { nullptr };
+		memory_source  * const __restrict memory_source_ = nullptr;
 
 	public: // TODO : clean up later, though not using std::variant most likely (exception overhead)
 		union {
-			jit1 * __restrict							 jit1_;
-			jit2 * __restrict							 jit2_;
+			// TODO : wrap these in a lightweight variant
+			jit1 * __restrict								jit1_;
+			jit2 * __restrict								jit2_;
 		};
 	private:
-		JitType											  jit_type_;
+		const JitType											  jit_type_;
 
 		CPU_Exception									  trapped_exception_ = {};
-		
-		const bool												  readonly_exec_;
-		const bool										ticked_;
-		const bool												  collect_stats_;
-		const bool																			disable_cti_;
-		std::unordered_map<const char *, size_t>  instruction_stats_;
 
-		bool												  from_exception_ = false;
-		mips::mmu											mmu_type_;
-		system												*guest_system_ = nullptr;
-		const bool												  debugging_ = false;
+		const std::unique_ptr<std::unordered_map<const char *, size_t>>  instruction_stats_;
+
+		const mips::mmu											mmu_type_;
+		system												* const guest_system_ = nullptr;
+
+		struct {
+			const bool readonly_exec_ : 1;
+			const bool ticked_ : 1;
+			const bool collect_stats_ : 1;
+			const bool disable_cti_ : 1;
+			const bool debugging_ : 1 = false;
+			bool from_exception_ : 1 = false;
+		};
 
 		void ExecuteInstruction(bool branch_delay);
 		void ExecuteInstructionExplicit(const instructions::InstructionInfo* instruction_info, instruction_t instruction, bool branch_delay);
@@ -96,12 +100,12 @@ namespace mips {
 		void compare(const processor& __restrict other, uint32 /*previous_pc*/) const;
 
 		void add_stat(const char *name) {
-			++instruction_stats_[name];
+			++(*instruction_stats_)[name];
 		}
 
 		[[nodiscard]]
 		const std::unordered_map<const char *, size_t> & get_stats_map() const {
-			return instruction_stats_;
+			return (*instruction_stats_);
 		}
 
 		[[nodiscard]]
