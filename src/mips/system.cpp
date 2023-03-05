@@ -26,20 +26,24 @@ public:
 		return m_Memory.data();
 	}
 
-	virtual uint32 get_size() override {
+	virtual const void * get_ptr() const override {
+		return m_Memory.data();
+	}
+
+	virtual uint32 get_size() const override {
 		return uint32(m_Memory.size());
 	}
 
 	virtual const void * at(const uint32 offset, const uint32 size) const override {
 		const size_t end_offset = size_t(offset) + size;
-		if (end_offset > uint32(m_Memory.size())) {
+		if _unlikely(end_offset > uint32(m_Memory.size())) [[unlikely]] {
 			return nullptr;
 		}
 		return m_Memory.data() + offset;
 	}
 	virtual const void * at_exec(const uint32 offset, const uint32 size) const override {
 		const size_t end_offset = size_t(offset) + size;
-		if (end_offset > uint32(m_Memory.size())) {
+		if _unlikely(end_offset > uint32(m_Memory.size())) [[unlikely]] {
 			return nullptr;
 		}
 		if (!m_ExecutableBlocks.empty()) {
@@ -56,12 +60,12 @@ public:
 	}
 	virtual void * write_at(const uint32 offset, const uint32 size) override {
 		const size_t end_offset = size_t(offset) + size;
-		if (end_offset > uint32(m_Memory.size())) {
+		if _unlikely(end_offset > uint32(m_Memory.size())) [[unlikely]] {
 			return nullptr;
 		}
 		// Check Executable Blocks
 		for (auto&& pair : m_ExecutableBlocks) {
-			if (offset >= pair.first && end_offset <= pair.second) {
+			if _unlikely(offset >= pair.first && end_offset <= pair.second) [[unlikely]] {
 				return nullptr;
 			}
 		}
@@ -332,12 +336,12 @@ system::~system() {
 }
 
 void system::clock(const uint64 clocks) __restrict {
-	if (!m_processor) {
+	if _unlikely(!m_processor) [[unlikely]] {
 		return;
 	}
 
 	while (!m_options.ticked || m_processor->instruction_count_ < m_processor->target_instructions_) {
-		if (m_debugger && m_debugger->should_pause()) {
+		if _unlikely(m_debugger && m_debugger->should_pause()) [[unlikely]] {
 			m_debugger->wait();
 			if (m_debugger->should_kill()) {
 				exit(1);

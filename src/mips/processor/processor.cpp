@@ -179,8 +179,8 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 		}
 		
 		const instruction_t instruction = get_instruction();
-		if (collect_stats_) {
-			if (const auto * __restrict info = instructions::get_instruction(instruction)) {
+		if _unlikely(collect_stats_) [[unlikely]] {
+			if (const auto * __restrict info = instructions::get_instruction(instruction)) [[likely]] {
 				++(*instruction_stats_)[info->Name];
 				info->Proc(instruction, *this);
 			}
@@ -189,7 +189,7 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 			}
 		}
 		else {
-			if (!instructions::execute_instruction(instruction, *this)) {
+			if _unlikely(!instructions::execute_instruction(instruction, *this)) [[unlikely]] {
 				throw CPU_Exception{ CPU_Exception::Type::RI, this->get_program_counter() };
 			}
 		}
@@ -211,7 +211,7 @@ void processor::ExecuteInstructionExplicit(const instructions::InstructionInfo* 
 	try {
 		g_currentprocessor = this;
 
-		if (collect_stats_) {
+		if _unlikely(collect_stats_) [[unlikely]] {
 			++(*instruction_stats_)[instruction_info->Name];
 		}
 		instruction_info->Proc(instruction, *this);
@@ -235,7 +235,7 @@ struct cti_clear final {
 
 void processor::execute(const uint64 clocks) {
 	if (ticked_) {
-		if (debugging_) {
+		if _unlikely(debugging_) [[unlikely]] {
 			return execute_internal<true, true>(clocks);
 		}
 		else {
@@ -243,7 +243,7 @@ void processor::execute(const uint64 clocks) {
 		}
 	}
 	else {
-		if (debugging_) {
+		if _unlikely(debugging_) [[unlikely]] {
 			return execute_internal<false, true>(clocks);
 		}
 		else {
@@ -260,7 +260,7 @@ _forceinline void processor::execute_internal(const uint64 clocks) {
 
 	const mips::system* const __restrict guest_system = debugging ? guest_system_ : nullptr;
 
-	while (!ticked || instruction_count_ < target_instructions_) {
+	while _likely(!ticked || instruction_count_ < target_instructions_) [[likely]] {
 		registers_[0] = 0; // $0 is _always_ 0
 		for (coprocessor* __restrict cop : coprocessors_) {
 			if (cop) {
@@ -316,7 +316,7 @@ _forceinline void processor::execute_internal(const uint64 clocks) {
 }
 
 bool processor::execute_explicit(const instructions::InstructionInfo* instruction_info, instruction_t instruction) {
-	if (ticked_ && instruction_count_ >= target_instructions_) {
+	if _unlikely(ticked_ && instruction_count_ >= target_instructions_) [[unlikely]] {
 		return false;
 	}
 

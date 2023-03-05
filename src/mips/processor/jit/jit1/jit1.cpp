@@ -160,13 +160,13 @@ namespace
 
 	struct bytes final
 	{
-		const uint8 * __restrict m_data;
-		const size_t m_datasize;
+		const uint8 * __restrict data;
+		const size_t size;
 
 		template <size_t N>
 		bytes(const uint8(&data) [N]) :
-			m_data(data),
-			m_datasize(N)
+			data(data),
+			size(N)
 		{
 		}
 	};
@@ -189,8 +189,8 @@ namespace
 
 	struct vector_wrapper
 	{
-		std::vector<uint8> &data;
-		std::vector<base_fixup> &fixups;
+		std::vector<uint8> & __restrict data;
+		std::vector<base_fixup> & __restrict fixups;
 
 		template <typename T>
 		vector_wrapper & operator << (const T &value);
@@ -213,8 +213,8 @@ namespace
 	vector_wrapper & vector_wrapper::operator << <bytes> (const bytes &value)
 	{
 		const size_t sz = data.size();
-		data.resize(sz + value.m_datasize);
-		memcpy(data.data() + sz, value.m_data, value.m_datasize);
+		data.resize(sz + value.size);
+		memcpy(data.data() + sz, value.data, value.size);
 		return *this;
 	};
 
@@ -1089,16 +1089,16 @@ void jit1::execute_instruction(uint32 address)
 	};
 
 	const uintptr result = jit1_springboard(uintptr(instruction), uintptr(&processor), processor.instruction_count_, uintptr(&parameter_pack), 0, 0);
-	if (guest->is_execution_complete())
+	if _unlikely(guest->is_execution_complete()) [[unlikely]]
 	{
-		if (guest->is_execution_success()) {
+		if _likely(guest->is_execution_success()) [[likely]] {
 			throw ExecutionCompleteException();
 		}
 		else {
 			throw ExecutionFailException();
 		}
 	}
-	if (processor.get_flags(processor::flag::jit_mem_flush))
+	if _unlikely(processor.get_flags(processor::flag::jit_mem_flush)) [[unlikely]]
 	{
 		populate_chunk(*flush_chunk_->m_chunk_offset, *flush_chunk_, flush_address_, true);
 		const auto next_flush_address = flush_address_ + 4;
@@ -1122,7 +1122,7 @@ jit1::jit_instructionexec_t jit1::get_instruction(const uint32 address)
 	Chunk * __restrict chunk;
 	ChunkOffset * __restrict chunk_offset;
 
-	if (last_chunk_address_ == mapped_address)
+	if _likely(last_chunk_address_ == mapped_address) [[likely]]
 	{
 		chunk = last_chunk_;
 		chunk_offset = last_chunk_offset_;
@@ -1130,7 +1130,7 @@ jit1::jit_instructionexec_t jit1::get_instruction(const uint32 address)
 	else
 	{
 		const auto cached_value = lookup_cache_.get(address);
-		if _likely(!lookup_cache_.is_sentinel(cached_value)) {
+		if _likely(!lookup_cache_.is_sentinel(cached_value)) [[likely]] {
 			return cached_value;
 		}
 		/*
@@ -1177,7 +1177,7 @@ jit1::jit_instructionexec_t jit1::fetch_instruction(const uint32 address)
 	Chunk* __restrict chunk;
 	ChunkOffset* __restrict chunk_offset;
 
-	if (last_chunk_address_ == mapped_address)
+	if _likely(last_chunk_address_ == mapped_address) [[likely]]
 	{
 		chunk = last_chunk_;
 		chunk_offset = last_chunk_offset_;
@@ -1190,7 +1190,7 @@ jit1::jit_instructionexec_t jit1::fetch_instruction(const uint32 address)
 		auto& __restrict cml1 = cml2[(address >> (32 - RemainingLog2 - 8)) & 0xFF];
 
 		if (!cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF)) {
-			return jit_instructionexec_t(nullptr);
+			return nullptr;
 		}
 
 		auto&& __restrict chunk_data = cml1[(address >> (32 - RemainingLog2 - 16)) & 0xFF];
@@ -1212,7 +1212,7 @@ jit1::Chunk * jit1::get_chunk(uint32 address)
 	const uint32 mapped_address = address & ~(ChunkSize - 1);
 	const uint32 address_offset = (address - mapped_address) / 4u;
 
-	if (last_chunk_address_ == mapped_address)
+	if _likely(last_chunk_address_ == mapped_address) [[likely]]
 	{
 		return last_chunk_;
 	}

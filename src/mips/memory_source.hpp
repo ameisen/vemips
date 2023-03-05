@@ -21,7 +21,8 @@ namespace mips {
 		virtual void unregister_processor (processor * __restrict cpu) __restrict = 0;
 
 		virtual void * get_ptr() = 0;
-		virtual uint32 get_size() = 0;
+		virtual const void * get_ptr() const = 0;
+		virtual uint32 get_size() const = 0;
 
 		virtual void set_executable_memory(const elf::binary & __restrict binary) __restrict = 0;
 	};

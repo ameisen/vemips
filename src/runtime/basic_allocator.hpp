@@ -28,7 +28,7 @@ class contiguous_allocator final {
 public:
 	_allocator
 	T* allocate() {
-		if _likely(!free.empty()) {
+		if _likely(!free.empty()) [[likely]] {
 			auto index = free.back();
 			free.pop_back();
 			T* result = &allocated[index.chunk]->value[index.element];
@@ -48,7 +48,7 @@ public:
 	}
 
 	void release(const T* __restrict ptr) {
-		if _unlikely(!ptr) {
+		if _unlikely(!ptr) [[unlikely]] {
 			return;
 		}
 

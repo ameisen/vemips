@@ -92,7 +92,7 @@ namespace mips::instructions
 		{
 			try
 			{
-				if (uint32(InsT::Flags & OpFlags::ControlInstruction) && processor.get_no_cti())
+				if _unlikely(uint32(InsT::Flags & OpFlags::ControlInstruction) && processor.get_no_cti()) [[unlikely]]
 				{
 					throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
 				}

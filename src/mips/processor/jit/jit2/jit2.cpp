@@ -163,7 +163,7 @@ void jit2::execute_instruction(uint32 address)
 
 		auto&& chunk_instruction = chunk_data[i];
 		auto program_counter = processor.get_program_counter();
-		if _unlikely(chunk_instruction.instruction_info == nullptr) {
+		if _unlikely(chunk_instruction.instruction_info == nullptr) [[unlikely]] {
 			throw CPU_Exception{ chunk_instruction.exception, program_counter };
 		}
 		else {

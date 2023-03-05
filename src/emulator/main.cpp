@@ -523,7 +523,7 @@ namespace {
 int main(const int argc, const char **argv) {
 	argument_data argument_data;
 
-	if (const int result = initialize({ argv, argv + argc }, argument_data); _unlikely(result != 0)) {
+	if (const int result = initialize({ argv, argv + argc }, argument_data); _unlikely(result != 0)) [[unlikely]] {
 		return result;
 	}
 

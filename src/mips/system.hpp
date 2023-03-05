@@ -18,8 +18,8 @@ namespace mips {
 		memory_source * __restrict m_memory_source = nullptr;
 		std::vector<char> m_memory;
 		platform::host_mmu *m_host_mmu = nullptr;
+		debugger* m_debugger = nullptr;
 		uint32 m_system_break = 0;
-		debugger *m_debugger = nullptr;
 
 		// Termination
 		bool m_execution_complete = false;
@@ -32,13 +32,13 @@ namespace mips {
 			mips::JitType jit_type = JitType::None;
 			mmu mmu_type = mmu::emulated;
 			uint16 debug_port = 0;
-			bool read_only_exec = false;
-			bool record_instruction_stats = false;
-			bool disable_cti = false;
-			bool ticked = false;
-			bool instruction_cache = false;
-			bool debug = false;
-			bool debug_owned = false;
+			bool read_only_exec : 1 = false;
+			bool record_instruction_stats : 1 = false;
+			bool disable_cti : 1 = false;
+			bool ticked : 1 = false;
+			bool instruction_cache : 1 = false;
+			bool debug : 1 = false;
+			bool debug_owned : 1 = false;
 
 			void validate() const __restrict;
 		};

@@ -419,21 +419,21 @@ namespace mips {
 
 	inline void processor::compare(const processor& __restrict other, uint32 /*previous_pc*/) const {
 		for (size_t i = 1; i < num_registers; ++i) { // don't check $zero
-			if _unlikely(registers_[i] != other.registers_[i]) {
+			if _unlikely(registers_[i] != other.registers_[i]) [[unlikely]] {
 				__debugbreak();
 			}
 		}
-		if _unlikely(!from_exception_ && (program_counter_ != other.program_counter_)) {
+		if _unlikely(!from_exception_ && (program_counter_ != other.program_counter_)) [[unlikely]] {
 			__debugbreak();
 		}
-		if _unlikely(instruction_count_ != other.instruction_count_) {
+		if _unlikely(instruction_count_ != other.instruction_count_) [[unlikely]] {
 			__debugbreak();
 		}
-		if _unlikely((flags_ & ~flag::jit_mem_flush) != (other.flags_ & ~flag::jit_mem_flush)) {
+		if _unlikely((flags_ & ~flag::jit_mem_flush) != (other.flags_ & ~flag::jit_mem_flush)) [[unlikely]] {
 			__debugbreak();
 		}
 		if (get_flags(flag::branch_delay)) {
-			if _unlikely(branch_target_ != other.branch_target_) {
+			if _unlikely(branch_target_ != other.branch_target_) [[unlikely]] {
 				__debugbreak();
 			}
 		}

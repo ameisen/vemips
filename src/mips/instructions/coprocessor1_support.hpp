@@ -631,7 +631,7 @@ namespace mips::instructions
 
 	inline void raise_signal(ExceptBits exception)
 	{
-		if ((get_current_coprocessor<coprocessor1>())->get_FCSR().Enables & uint32_t(exception))
+		if _unlikely((get_current_coprocessor<coprocessor1>())->get_FCSR().Enables & uint32_t(exception)) [[unlikely]]
 		{
 			throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(exception) };
 		}
@@ -643,7 +643,7 @@ namespace mips::instructions
 			if (!fpu->get_FCSR().Cause) {
 				return;
 			}
-			if (fpu->get_FCSR().Enables) {
+			if _unlikely(fpu->get_FCSR().Enables) [[unlikely]] {
 				for (auto ex : { ExceptBits::Inexact, ExceptBits::Underflow, ExceptBits::Overflow, ExceptBits::DivZero, ExceptBits::InvalidOp }) {
 					if ((fpu->get_FCSR().Enables & uint32_t(ex)) && (fpu->get_FCSR().Cause & uint32_t(ex))) {
 						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ex) };
@@ -716,7 +716,7 @@ namespace mips::instructions
 			{
 				set_current_coprocessor(processor.get_coprocessor(1));
 
-				if (uint32(InsT::Flags & OpFlags::ControlInstruction) && processor.get_no_cti())
+				if _unlikely(uint32(InsT::Flags & OpFlags::ControlInstruction) && processor.get_no_cti()) [[unlikely]]
 				{
 					throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
 				}
