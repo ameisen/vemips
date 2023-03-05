@@ -2,7 +2,6 @@
 
 #include <string>
 #include <span>
-#include "fileutils/fileutils.hpp"
 
 using std::string;
 
@@ -15,13 +14,13 @@ namespace buildcarbide {
 		const string out_file;
 		const string sdk_path;
 
-		options(string &&_project_file, string &&_configuration, string &&_platform, string &&_command, string &&_out_file, string &&_sdk_path) : 
-			project_file(std::move(_project_file)),
-			configuration(std::move(_configuration)),
-			platform(std::move(_platform)),
-			command(std::move(_command)),
-			out_file(std::move(_out_file)),
-			sdk_path(std::move(_sdk_path))
+		options(string &&project_file, string &&configuration, string &&platform, string &&command, string &&out_file, string &&sdk_path) : 
+			project_file(std::move(project_file)),
+			configuration(std::move(configuration)),
+			platform(std::move(platform)),
+			command(std::move(command)),
+			out_file(std::move(out_file)),
+			sdk_path(std::move(sdk_path))
 		{
 		}
 

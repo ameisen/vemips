@@ -103,5 +103,6 @@
       <Filter>toolchain</Filter>
     </ClInclude>
     <ClInclude Include="options.hpp" />
+    <ClInclude Include="buildcarbide.hpp" />
   </ItemGroup>
 </Project>

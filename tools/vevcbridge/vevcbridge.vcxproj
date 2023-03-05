@@ -185,6 +185,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="async\task.hpp" />
+    <ClInclude Include="buildcarbide.hpp" />
     <ClInclude Include="build\build.hpp" />
     <ClInclude Include="configuration.hpp" />
     <ClInclude Include="fileutils\fileutils.hpp" />

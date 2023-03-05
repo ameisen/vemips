@@ -5,62 +5,54 @@
 #include <unordered_set>
 #include <string>
 
-namespace buildcarbide
-{
-	class project
-	{
+namespace buildcarbide {
+	class project {
 	public:
-		enum class output_type : uint32_t
-		{
+		enum class output_type {
 			none = 0,
 			executable,
 			library
 		};
 
-		struct target_pair
-		{
+		struct target_pair final{
 			std::string target;
 			std::string configuration;
 
-			bool operator == (const target_pair & __restrict pair) const __restrict
-			{
-				return (const std::string & __restrict)target == pair.target && (const std::string & __restrict)configuration == pair.configuration;
+			bool operator == (const target_pair & pair) const {
+				return target == pair.target && configuration == pair.configuration;
 			}
 
-			struct hash
-			{
-				uint64_t operator () (const target_pair & __restrict pair) const __restrict
-				{
-					return std::hash<std::string>{}(pair.target) ^ std::hash<std::string>{}(pair.configuration);
+			struct hash final {
+				uint64_t operator () (const target_pair & pair) const {
+					const auto hash0 = std::hash<std::string>{}(pair.target);
+					const auto hash1 = std::hash<std::string>{}(pair.configuration);
+
+					// Boost's hash_combine algorithm
+					return hash0 ^ (hash1 + 0x9e3779b9u + (hash0 << 6) + (hash0 >> 2));
 				}
 			};
 		};
 
-		struct condition
-		{
+		struct condition final {
 			std::string reference;
-			enum class operation : uint32_t
-			{
+			enum class operation {
 				equals,
 				not_equals,
 			} op;
 
-			bool operator ()(const std::string & __restrict value) const __restrict
-			{
-				switch (op)
-				{
+			bool operator ()(const std::string & value) const {
+				switch (op) {
 					case operation::equals:
-						return value == (const std::string & __restrict)reference;
+						return value == reference;
 					case operation::not_equals:
-						return value != (const std::string & __restrict)reference;
+						return value != reference;
 					default:
 						return false;
 				}
 			}
 		};
 
-		struct element
-		{
+		struct element final {
 			std::string filename;
 			std::unordered_map<std::string, condition> conditions;
 			bool enabled = true;
@@ -68,36 +60,41 @@ namespace buildcarbide
 
 	protected:
 		project() = default;
+		project(project&&) = default;
 
-		std::unordered_set<std::string>	m_Targets;
-		std::unordered_set<std::string>	m_Configurations;
-		std::unordered_map<target_pair, std::unordered_set<std::string>, target_pair::hash>	m_IncludePaths;
+		std::unordered_set<std::string>	targets_;
+		std::unordered_set<std::string>	configurations_;
+		std::unordered_map<target_pair, std::unordered_set<std::string>, target_pair::hash>	include_paths_;
 		// A list of all files the project file describes
-		std::vector<element>	m_AllFiles;
+		std::vector<element>	all_files_;
 		// A list of all sources files in the project
-		std::vector<element>	m_RawSourceFiles;
-		std::string				m_Path;
+		std::vector<element>	raw_source_files_;
+		std::string						path_;
 	
 		// The type of output this project emits
-		output_type					 m_OutputType = output_type::none;
+		output_type					 output_type_ = output_type::none;
 	public:
-		virtual ~project() {}
+		virtual ~project() = default;
 
-		output_type get_output_type() const __restrict { return m_OutputType; }
+		[[nodiscard]]
+		output_type get_output_type() const { return output_type_; }
 
-		const std::vector<element> & __restrict get_all_files() const __restrict { return (const std::vector<element> & __restrict)m_AllFiles; }
-		const std::vector<element> & __restrict get_raw_source_files() const __restrict { return (const std::vector<element> & __restrict)m_RawSourceFiles; }
-		const std::unordered_set<std::string> * __restrict get_include_paths(const target_pair & __restrict pair) const /*__restrict*/
-		{
-			auto fiter = m_IncludePaths.find(pair);
-			if (fiter == m_IncludePaths.end())
-			{
+		[[nodiscard]]
+		const std::vector<element> & get_all_files() const { return all_files_; }
+		[[nodiscard]]
+		const std::vector<element> & get_raw_source_files() const { return raw_source_files_; }
+		[[nodiscard]]
+		const std::unordered_set<std::string> * get_include_paths(const target_pair & __restrict pair) const {
+			const auto find_iterator = include_paths_.find(pair);
+			if (find_iterator == include_paths_.end()) {
 				return nullptr;
 			}
-			return &fiter->second;
+			return &find_iterator->second;
 		}
-		const std::string & __restrict get_path() const __restrict { return (const std::string & __restrict)m_Path; }
+		[[nodiscard]]
+		const std::string & get_path() const { return path_; }
 	};
 
-	extern project * __restrict get_project(const std::string & __restrict filename);
+	[[nodiscard]]
+	extern project * get_project(const std::string & __restrict filename);
 }

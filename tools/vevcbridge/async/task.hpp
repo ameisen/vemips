@@ -2,10 +2,8 @@
 
 #include <cstdint>
 
-namespace buildcarbide::async
-{
-	class task
-	{
-		static const uint32_t sm_num_cores;
+namespace buildcarbide::async {
+	class task {
+		static const uint32_t num_cores;
 	};
 }

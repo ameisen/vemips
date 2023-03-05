@@ -1,8 +1,6 @@
 #pragma once
 
-namespace buildcarbide::toolchain
-{
-	class toolchain
-	{
+namespace buildcarbide::toolchain {
+	class toolchain {
 	};
 }

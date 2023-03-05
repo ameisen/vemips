@@ -13,9 +13,8 @@ using std::string_view;
 
 using namespace std::literals::string_view_literals;
 
-namespace buildcarbide::fileutils
-{
-	static constexpr size_t string_length(string_view str) {
+namespace buildcarbide::fileutils {
+	static constexpr size_t string_length(const string_view str) {
 		return str.size();
 	}
 
@@ -37,14 +36,14 @@ namespace buildcarbide::fileutils
 		return strlen(str);
 	}
 
-	static constexpr size_t string_length(char c) {
-		return 1;
+	static constexpr size_t string_length(const char c) {
+		return c == '\0' ? 0 : 1;
 	}
 
 	static void fix_up_in_place(std::string& __restrict path) {
-		for (size_t i = 0; i < path.size(); ++i) {
-			if (path[i] == '\\') {
-				path[i] = '/';
+		for (char &i : path) {
+			if (i == '\\') {
+				i = '/';
 			}
 		}
 
@@ -53,7 +52,7 @@ namespace buildcarbide::fileutils
 			sanitized_path.reserve(path.size() - 1);
 
 			char last_char = '\0';
-			for (char c : path) {
+			for (const char c : path) {
 				if (last_char == '/' && c == '/') {
 					continue;
 				}
@@ -71,14 +70,13 @@ namespace buildcarbide::fileutils
 		}
 	}
 
-	static std::string fix_up(const std::string& __restrict path)
-	{
+	static std::string fix_up(const std::string& __restrict path) {
 		auto result = path;
 		fix_up_in_place(result);
 		return result;
 	}
 
-	static std::string fix_up(string_view path) {
+	static std::string fix_up(const string_view path) {
 		return fix_up(string(path));
 	}
 
@@ -90,9 +88,12 @@ namespace buildcarbide::fileutils
 	static std::string build_path(Ts... args)
 	{
 		size_t total_length = 0;
-		([&] {
-			total_length += string_length(args);
-			}(), ...);
+		(
+			[&] {
+				total_length += string_length(args);
+			}(),
+			...
+		);
 
 		string combined;
 		combined.reserve(total_length);
@@ -114,9 +115,8 @@ namespace buildcarbide::fileutils
 		return combined;
 	}
 
-	static std::string get_base_path(const std::string & __restrict path)
-	{
-		const auto is_slash = [](char c) {
+	static std::string get_base_path(const std::string & __restrict path) {
+		const auto is_slash = [](const char c) {
 			return c == '/';
 		};
 
@@ -124,25 +124,22 @@ namespace buildcarbide::fileutils
 		for (; current_index > 0 && !is_slash(path[current_index]); --current_index) {}
 		for (; current_index > 0 && is_slash(path[current_index]); --current_index) {}
 
-		if (current_index < 0) {
-			return {};
-		}
-
 		return path.substr(0, current_index + 1);
 	}
 
-	static std::string strip_extension(const std::string & __restrict filename)
-	{
+	static std::string strip_extension(const std::string & __restrict filename) {
 		// Is there a filename?
-		if (filename.empty())
-		{
+		if (filename.empty()) {
 			return {};
 		}
 
 		const size_t dot_index = filename.rfind('.');
-		const size_t slash_index = filename.rfind('/');
+		if (dot_index == string::npos) {
+			return filename;
+		}
 
-		if (dot_index == string::npos || dot_index < slash_index) {
+		const size_t slash_index = filename.rfind('/');
+		if (dot_index < slash_index) {
 			return filename;
 		}
 

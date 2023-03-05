@@ -1,11 +1,15 @@
-#include "tinyxml2/tinyxml2.h"
-
-#include <string>
 #include <string_view>
+#include <string>
 #include <vector>
+#include <format>
+
 #include <Windows.h>
 #include <ShlObj.h>
 #include <direct.h>
+
+#include "tinyxml2/tinyxml2.h"
+
+#include "buildcarbide.hpp"
 #include "project/project.hpp"
 #include "fileutils/fileutils.hpp"
 #include "options.hpp"
@@ -20,53 +24,56 @@ using namespace buildcarbide;
 
 namespace buildcarbide {
 	static constexpr void replace(string& __restrict str, const string& __restrict from, const string& __restrict to) {
-		size_t start_pos = str.find(from);
-		if (start_pos == string::npos)
+		const size_t start_pos = str.find(from);
+		if (start_pos == string::npos) {
 			return;
+		}
 		str.replace(start_pos, from.length(), to);
 	}
 
 	static constexpr void replace(string& __restrict str, const char * __restrict from, const string& __restrict to) {
-		size_t start_pos = str.find(from);
-		if (start_pos == string::npos)
+		const size_t start_pos = str.find(from);
+		if (start_pos == string::npos) {
 			return;
+		}
 		str.replace(start_pos, strlen(from), to);
 	}
 
-	template <uintptr_t invalid_value>
-	class Handle {
+	template <uintptr_t InvalidValue>
+	class system_handle final {
 	public:
-		const HANDLE invalid = HANDLE(invalid_value);
+		static constexpr uintptr_t invalid = uintptr_t(InvalidValue);
 
 	private:
-		const HANDLE handle_ = invalid;
+		HANDLE handle_ = HANDLE(invalid);
 
 	public:
-		Handle(HANDLE handle) : handle_(handle) {
+		system_handle(const HANDLE handle) : handle_(handle) {
 		}
 		
-		Handle(const Handle&) = delete;
+		system_handle(const system_handle&) = delete;
 
-		Handle(Handle&& handle) : handle_(handle.handle_) {
+		system_handle(system_handle&& handle) noexcept : handle_(handle.handle_) {
 			handle.handle_ = handle.invalid;
 		}
 
-		~Handle() {
-			if (handle_ != invalid) {
+		~system_handle() {
+			if (handle_ != HANDLE(invalid)) {  // NOLINT(performance-no-int-to-ptr)
 				CloseHandle(handle_);
 			}
 		}
 
-		Handle& operator = (HANDLE handle) {
-			if (handle_ != invalid) {
+		system_handle& operator = (const HANDLE handle) {
+			if (handle_ != HANDLE(invalid)) {
 				CloseHandle(handle_);
 			}
 			handle_ = handle;
+			return *this;
 		}
 
-		Handle& operator = (const Handle&) = delete;
+		system_handle& operator = (const system_handle&) = delete;
 
-		Handle& operator = (Handle&& handle) {
+		system_handle& operator = (system_handle&& handle) noexcept {
 			auto sub_handle = handle.handle_;
 			handle.handle_ = handle.invalid;
 			return this = sub_handle;
@@ -74,37 +81,41 @@ namespace buildcarbide {
 
 		operator HANDLE() const { return handle_; }
 
-		operator bool() const { return handle_ != invalid; }
+		operator bool() const { return handle_ != HANDLE(invalid); }  // NOLINT(performance-no-int-to-ptr)
 	};
 
-	using FileHandle = Handle<uintptr_t(/*INVALID_HANDLE_VALUE*/-1)>;
+	using file_handle = system_handle<uintptr_t(/*INVALID_HANDLE_VALUE*/-1)>;
 
-	static uint64_t get_file_time(const string& __restrict filename, uint64_t def = uint64_t(-1))
-	{
+	static uint64_t get_file_time(const string& __restrict filename, const uint64_t def = uint64_t(-1)) {
+		const file_handle file_handle = CreateFile(
+			filename.c_str(), 
+			GENERIC_READ, 
+			FILE_SHARE_READ, 
+			nullptr,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			nullptr
+		);
+		if (!file_handle) {
+			return def;
+		}
+
 		FILETIME file_time;
-		FileHandle hFile = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-		if (!hFile)
-		{
+		if (GetFileTime(file_handle, nullptr, nullptr, &file_time) == 0) {
 			return def;
 		}
 
-		if (GetFileTime(hFile, nullptr, nullptr, &file_time) == 0)
-		{
-			return def;
-		}
-
-		ULARGE_INTEGER ints = {
+		const ULARGE_INTEGER file_time_union = {
 			{
 				.LowPart = file_time.dwLowDateTime,
 				.HighPart = file_time.dwHighDateTime
 			}
 		};
-		return ints.QuadPart;
+		return file_time_union.QuadPart;
 	}
 
-	static string get_file_name(const string& __restrict path)
-	{
-		size_t last_index = path.rfind('/');
+	static string get_file_name(const string& __restrict path) {
+		const size_t last_index = path.rfind('/');
 		if (last_index == string::npos) {
 			return path;
 		}
@@ -112,337 +123,369 @@ namespace buildcarbide {
 		return path.substr(last_index + 1);
 	}
 
-	static string get_compile_args(const options& __restrict options, const string& __restrict filepath, const string& __restrict configuration, const string& __restrict intermediate, string& __restrict object_file)
-	{
-		const string filename = get_file_name(filepath);
-		const string filedir = buildcarbide::fileutils::get_base_path(filepath);
-
-		// TODO rework this.
-
-		string cfg;
-
-		string incxx = buildcarbide::fileutils::build_path(options.sdk_path, "incxx");
-		string inc = buildcarbide::fileutils::build_path(options.sdk_path, "inc");
-
-		if (configuration == "Debug")
-		{
-			cfg +=
-				"mipsc -ffunction-sections -fdata-sections -mcompact-branches=always -fasynchronous-unwind-tables -funwind-tables "
-				"-fexceptions -fcxx-exceptions -mips32r6 -O0 -glldb ";
-		}
-		else if (configuration == "Release")
-		{
-			cfg +=
-				"mipsc -ffunction-sections -fdata-sections -mno-check-zero-division -mcompact-branches=always -fasynchronous-unwind-tables -funwind-tables "
-				"-fexceptions -fcxx-exceptions -mips32r6 -O3 -Os ";
+	static string merge_arg_tokens(const std::span<string> tokens) {
+		size_t length = 0;
+		for (const auto& token : tokens) {
+			length += token.length() + 1;
 		}
 
-		cfg += string("-I") + incxx + " ";
-		cfg += string("-I") + inc + " ";
-		cfg += "-c ";
+		string result;
+		result.reserve(length);
+		for (auto&& token : tokens) {
+			result += token;
+			result += ' ';
+		}
 
-		object_file = buildcarbide::fileutils::build_path(intermediate, (filename + ".o"));
-
-		cfg += filepath + " ";
-		cfg += "-o ";
-		cfg += object_file;
-		return cfg;
+		return result;
 	}
 
-	static string get_link_args(const options& __restrict options, const std::vector<string>& __restrict objectfiles, const string& __restrict filepath, const string& __restrict configuration)
-	{
-		const string filename = get_file_name(filepath);
-		const string filedir = buildcarbide::fileutils::get_base_path(filepath);
-
-		// lld --discard-all -znorelro --gc-sections --icf=all --strip-all --eh-frame-hdr -Llib -lc -lc++ -lc++abi -lllvmunwind
-
+	static string get_compile_args(
+		const options& __restrict options,
+		const string& __restrict filepath,
+		const string& __restrict configuration,
+		const string& __restrict intermediate,
+		string& __restrict object_file
+	) {
 		// TODO rework this.
 
-		string libs = buildcarbide::fileutils::build_path(options.sdk_path, "lib");
+		std::vector<string> cfg = {
+			"mipsc",
+			"-ffunction-sections",
+			"-fdata-sections",
+			"-mcompact-branches=always",
+			"-fasynchronous-unwind-tables",
+			"-funwind-tables",
+			"-fexceptions",
+			"-fcxx-exceptions",
+			"-mips32r6"
+		};
 
-		string cfg;
 
-		if (configuration == "Debug")
-		{
-			cfg += "mipsld --discard-none -znorelro --eh-frame-hdr -lc -lc++ -lc++abi -lllvmunwind ";
+		if (configuration == "Debug") {
+			static constexpr const char* const args[] = {
+				"-O0",
+				"-glldb"
+			};
+			cfg.append_range(args);
 		}
-		else if (configuration == "Release")
-		{
-			cfg += "mipsld --discard-all -znorelro --gc-sections --icf=all --strip-all --eh-frame-hdr -lc -lc++ -lc++abi -lllvmunwind ";
-		}
-		cfg += string("-L") + libs + " ";
-
-		for (const string& objectfile : objectfiles)
-		{
-			cfg += objectfile;
-			cfg += " ";
+		else if (configuration == "Release") {
+			static constexpr const char* const args[] = {
+				"-mno-check-zero-division",
+				"-O3",
+				"-Os"
+			};
+			cfg.append_range(args);
 		}
 
-		cfg += "-o ";
-		cfg += filepath;
-		return cfg;
+		const string incxx = fileutils::build_path(options.sdk_path, "incxx");
+		const string inc = fileutils::build_path(options.sdk_path, "inc");
+
+		cfg.push_back(std::format("-I{}", incxx));
+		cfg.push_back(std::format("-I{}", inc));
+		cfg.emplace_back("-c");
+
+		cfg.push_back(filepath);
+
+		const string filename = get_file_name(filepath);
+		object_file = fileutils::build_path(intermediate, (filename + ".o"));
+
+		cfg.emplace_back("-o");
+		cfg.push_back(object_file);
+
+		return merge_arg_tokens(cfg);
+	}
+
+	static string get_link_args(
+		const options& __restrict options,
+		const std::vector<string>& __restrict object_files,
+		const string& __restrict filepath,
+		const string& __restrict configuration
+	) {
+		// TODO rework this.
+
+		std::vector<string> cfg = {
+			"mipsld",
+			"-znorelro",
+			"--eh-frame-hdr"
+		};
+
+		if (configuration == "Debug") {
+			static constexpr const char* const args[] = {
+				"--discard-none"
+			};
+			cfg.append_range(args);
+		}
+		else if (configuration == "Release") {
+			static constexpr const char* const args[] = {
+				"--discard-all",
+				"--gc-sections",
+				"--icf=all",
+				"--strip-all"
+			};
+			cfg.append_range(args);
+		}
+
+		{
+			static constexpr const char* const args[] = {
+				"-lc",
+				"-lc++",
+				"-lc++abi",
+				"-lllvmunwind"
+			};
+			cfg.append_range(args);
+		}
+
+		const string libs = fileutils::build_path(options.sdk_path, "lib");
+		cfg.push_back(std::format("-L{}", libs));
+
+		cfg.append_range(object_files);
+
+		cfg.emplace_back("-o");
+		cfg.push_back(filepath);
+
+		return merge_arg_tokens(cfg);
+	}
+
+	static void validate_options(const options& __restrict options) {
+		for (
+			const std::pair<const string&, const char * __restrict> checks[] = {
+			 { options.project_file, "No project file provided" },
+			 { options.configuration, "No configuration provided" },
+			 { options.platform, "No platform provided" },
+			 { options.command, "No command provided" },
+			 { options.out_file, "No output file provided" },
+			};
+			const auto& [value, error_string] : checks
+		) {
+			if (value.empty()) [[unlikely]] {
+				fail<1>(error_string);
+			}
+		}
 	}
 }
 
-int main(int argc, const char **argv)
-{
-	if (argc != 6)
-	{
-		fprintf(stderr, "Incorrect number of arguments\n");
-		return 1;
+int main(int argc, const char **argv) {
+	if (argc != 6) [[unlikely]] {
+		fail<1>("Incorrect number of arguments\n");
 	}
 
 	options build_options = options::build(std::span(argv, argc));
+	validate_options(build_options);
 
-	if (build_options.project_file.empty()) {
-		fprintf(stderr, "No project file provided");
-		exit(1);
-	}
-	if (build_options.configuration.empty()) {
-		fprintf(stderr, "No configuration provided");
-		exit(1);
-	}
-	if (build_options.platform.empty()) {
-		fprintf(stderr, "No platform provided");
-		exit(1);
-	}
-	if (build_options.command.empty()) {
-		fprintf(stderr, "No command provided");
-		exit(1);
-	}
-	if (build_options.out_file.empty()) {
-		fprintf(stderr, "No output file provided");
-		exit(1);
-	}
-
-	string intermediate_location = build_options.out_file;
-
-	string OutfileStr = build_options.out_file;
+	const string & intermediate_location = build_options.out_file;
 
 	const string base_dir = buildcarbide::fileutils::get_base_path(build_options.project_file);
 
 	_chdir(base_dir.c_str());
 
-	if (OutfileStr.length() < 3 || (OutfileStr[2] != '/' && OutfileStr[2] != '\\'))
-	{
-		OutfileStr = buildcarbide::fileutils::build_path(base_dir, OutfileStr);
+	string out_file = build_options.out_file;
+	if (out_file.length() < 3 || (out_file[2] != '/' && out_file[2] != '\\')) {
+		out_file = fileutils::build_path(base_dir, out_file);
 	}
 
-	buildcarbide::configuration config;
-	config.target = build_options.platform;
-	config.config = build_options.configuration;
-	config.base_path = buildcarbide::fileutils::fix_up(base_dir);
-	config.intermediate_dir = buildcarbide::fileutils::build_path(base_dir, intermediate_location);
+	configuration config = {
+		.target = build_options.platform,
+		.config = build_options.configuration,
+		.base_path = fileutils::fix_up(base_dir),
+		.intermediate_dir = fileutils::build_path(base_dir, intermediate_location)
+	};
 
-	auto *proj = buildcarbide::get_project(build_options.project_file);
-	buildcarbide::build builder(config, *proj);
-	delete proj;
+	build builder(
+		config,
+		[&]() { return get_project(build_options.project_file); }
+	);
 
-	const auto IsExcluded = [&](tinyxml2::XMLElement * __restrict element) -> bool
-	{
-		if (!element)
-		{
+	const auto is_excluded = [&](const tinyxml2::XMLElement * __restrict element) -> bool {
+		if (!element) {
 			return false;
 		}
 
-		auto true_false = element->FirstChild();
-		if (!true_false)
-		{
+		const auto true_false = element->FirstChild();
+		if (!true_false) {
 			return false;
 		}
 
-		auto true_false_text = true_false->ToText();
-		if (!true_false_text)
-		{
+		const auto true_false_text = true_false->ToText();
+		if (!true_false_text) {
 			return false;
 		}
 
-		if (strcmp(true_false_text->Value(), "false") == 0)
-		{
+		if (strcmp(true_false_text->Value(), "false") == 0) {
 			return false;
 		}
 
 		const char *condition_text = element->Attribute("Condition");
-		if (!condition_text)
-		{
+		if (!condition_text) {
 			return false;
 		}
+		const char* const condition_text_base = condition_text;
 
 		// parse the condition format, which looks like this:
-		// $(Configuration)|$(Platform)'=='Release|Win32'
-		string format;
-		string values;
+		// '$(Configuration)|$(Platform)'=='Release|Win32'
 
 		// this is not a stable solution at all.
-		if (*condition_text == '\'' || *condition_text == '\"')
-		{
-			++condition_text;
-		}
+		const auto extract_substring = [](const char*& __restrict str) {
+			const bool quote_start = *str == '\'' || *str == '\"';
+			if (quote_start) {
+				++str;
+			}
 
-		while (*condition_text != '\'' && *condition_text != '\"')
-		{
-			format += *condition_text++;
-		}
+			string result;
+
+			if (quote_start) {
+				while (*str != '\'' && *str != '\"') {
+					result += *str++;
+				}
+			}
+			else {
+				while (!isspace(*str)) {
+					result += *str++;
+				}
+			}
+
+			return result;
+		};
+		string format = extract_substring(condition_text);
 
 		++condition_text;
-
-		while (*condition_text == '=')
-		{
-			++condition_text;
+		if (condition_text[0] != '=' || condition_text[1] != '=') {
+			fail<-1>("Syntax error in Condition string '%s'\n", condition_text_base);
 		}
+		condition_text += 2;
 
-		if (*condition_text == '\'' || *condition_text == '\"')
-		{
-			++condition_text;
-		}
+		const string values = extract_substring(condition_text);
 
-		while (*condition_text != '\'' && *condition_text != '\"')
-		{
-			values += *condition_text++;
-		}
+		replace(format, "$(Configuration)", build_options.configuration);
+		replace(format, "$(Platform)", build_options.platform);
 
-		string test = format;
-		replace(test, "$(Configuration)", build_options.configuration);
-		replace(test, "$(Platform)", build_options.platform);
-
-		return values == test;
+		return values == format;
 	};
 
 	try
 	{
-		std::vector<string> ClCompile;
-		std::vector<string> ClInclude;
+		std::vector<string> cl_compile;
+		std::vector<string> cl_include;
 
 		tinyxml2::XMLDocument doc;
 		doc.LoadFile(build_options.project_file.c_str());
-		if (doc.Error())
-		{
+		if (doc.Error()) {
 			throw 0;
 		}
 
 		const auto project = doc.FirstChildElement("Project");
-		if (!project)
-		{
+		if (!project) {
 			throw 0;
 		}
 
 		auto item_group = project->FirstChildElement("ItemGroup");
-		if (!item_group)
-		{
+		if (!item_group) {
 			throw 0;
 		}
-		while (item_group)
-		{
+
+		while (item_group) {
 			// Iterate over all item groups.
 			// source files
 			{
-				auto compile_element = item_group->FirstChildElement("ClCompile");
-				for (; compile_element; compile_element = compile_element->NextSiblingElement("ClCompile"))
-				{
-					auto exclusion_element = compile_element->FirstChildElement("ExcludedFromBuild");
-					if (IsExcluded(exclusion_element))
-					{
+				for (
+					auto compile_element = item_group->FirstChildElement("ClCompile");
+					compile_element;
+					compile_element = compile_element->NextSiblingElement("ClCompile")
+				) {
+					if (
+						const auto exclusion_element = compile_element->FirstChildElement("ExcludedFromBuild");
+						is_excluded(exclusion_element)
+					) {
 						continue;
 					}
 
-					const char *file_name = compile_element->Attribute("Include");
-					if (!file_name)
-					{
+					const char * const file_name = compile_element->Attribute("Include");
+					if (!file_name) {
 						continue;
 					}
-					ClCompile.push_back(buildcarbide::fileutils::build_path(base_dir, file_name));
+					cl_compile.push_back(fileutils::build_path(base_dir, file_name));
 				}
 			}
 
 			// header files
 			{
-				auto compile_element = item_group->FirstChildElement("ClInclude");
-				for (; compile_element; compile_element = compile_element->NextSiblingElement("ClInclude"))
-				{
-					auto exclusion_element = compile_element->FirstChildElement("ExcludedFromBuild");
-					if (IsExcluded(exclusion_element))
-					{
+				for (
+					auto compile_element = item_group->FirstChildElement("ClInclude");
+					compile_element;
+					compile_element = compile_element->NextSiblingElement("ClInclude")
+				) {
+					if (
+						const auto exclusion_element = compile_element->FirstChildElement("ExcludedFromBuild");
+						is_excluded(exclusion_element)
+					) {
 						continue;
 					}
 
-					const char *file_name = compile_element->Attribute("Include");
-					if (!file_name)
-					{
+					const char * const file_name = compile_element->Attribute("Include");
+					if (!file_name) {
 						continue;
 					}
-					ClInclude.push_back(buildcarbide::fileutils::build_path(base_dir, file_name));
+					cl_include.push_back(fileutils::build_path(base_dir, file_name));
 				}
 			}
 
 			item_group = item_group->NextSiblingElement("ItemGroup");
 		}
 
-		struct BuildFile
-		{
+		struct build_file final {
 			string filename;
-			uint64_t modtime;
+			uint64_t mod_time;
 		};
 
-		std::vector<BuildFile> FilesToBuild;
-
-		bool DoClean = false;
-
-		const uint64_t OutFileBuildTime = get_file_time(OutfileStr, 0);
+		std::vector<build_file> build_files;
+		bool do_clean = false;
+		const uint64_t out_file_build_time = get_file_time(out_file, 0);
 
 		// If we are rebuilding, they are all built.
 		// In this situation, we also clean.
-		if (build_options.command == "rebuild")
-		{
-			for (const string &file : ClCompile)
-			{
-				FilesToBuild.push_back({file, uint64_t(-1)});
+		if (build_options.command == "rebuild") {
+			for (const string &file : cl_compile) {
+				build_files.push_back({ file, uint64_t(-1) });
 			}
-			DoClean = true;
+			do_clean = true;
 		}
-		else if (build_options.command == "clean")
-		{
-			DoClean = true;
+		else if (build_options.command == "clean") {
+			do_clean = true;
 		}
-		else if (build_options.command == "build")
-		{
+		else if (build_options.command == "build") {
 			// TODO we need to do dependency checks. However, for now, we will just check if the headers have changed and flag everything as dirty.
-			bool RebuildAll = false;
-			for (const string &file : ClInclude)
-			{
-				if (get_file_time(file) > OutFileBuildTime)
-				{
-					RebuildAll = true;
+			bool rebuild_all = false;
+			for (const string &file : cl_include) {
+				if (get_file_time(file) > out_file_build_time) {
+					rebuild_all = true;
 					break;
 				}
 			}
 
-			for (const string &file : ClCompile)
-			{
-				FilesToBuild.push_back({ file, RebuildAll ? uint64_t(-1) : get_file_time(file) });
+			for (const string &file : cl_compile) {
+				build_files.push_back({ file, rebuild_all ? uint64_t(-1) : get_file_time(file) });
 			}
 		}
 
-		if (DoClean)
-		{
-			SHFILEOPSTRUCT fileStruct;
-			memset(&fileStruct, 0, sizeof(fileStruct));
-			fileStruct.wFunc = FO_DELETE;
-			std::vector<char> InterLoc(intermediate_location.length() + 2, '\0');
-			memcpy(InterLoc.data(), intermediate_location.data(), intermediate_location.length());
-			fileStruct.pFrom = InterLoc.data();
-			fileStruct.fFlags = FOF_NO_UI;
+		if (do_clean) {
+			SHFILEOPSTRUCT shell_file = {
+				.hwnd = nullptr,
+				.wFunc = FO_DELETE,
+				.pFrom = intermediate_location.data(),
+				.pTo = nullptr,
+				.fFlags = FOF_NO_UI,
+				.fAnyOperationsAborted = FALSE,
+				.hNameMappings = nullptr,
+				.lpszProgressTitle = nullptr
+			};
 
-			SHFileOperation(&fileStruct);
+			SHFileOperation(&shell_file);
 
-			std::vector<char> OutLoc(OutfileStr.length() + 2, '\0');
-			memcpy(OutLoc.data(), OutfileStr.data(), OutfileStr.length());
-			fileStruct.pFrom = OutLoc.data();
+			shell_file.pFrom = out_file.data();
 
-			SHFileOperation(&fileStruct);
+			SHFileOperation(&shell_file);
 		}
 
-		if (FilesToBuild.empty())
-		{
+		if (build_files.empty()) {
 			// just return
 			return 0;
 		}
@@ -450,10 +493,8 @@ int main(int argc, const char **argv)
 		std::vector<string> object_files;
 
 		// Do the build.
-		for (const auto &build_file : FilesToBuild)
-		{
-			if (build_file.modtime <= OutFileBuildTime)
-			{
+		for (const auto &build_file : build_files) {
+			if (build_file.mod_time <= out_file_build_time) {
 				continue;
 			}
 
@@ -461,39 +502,39 @@ int main(int argc, const char **argv)
 			const string compile_args = get_compile_args(build_options, build_file.filename, build_options.configuration, intermediate_location, object_file);
 			object_files.push_back(object_file);
 
-			SHCreateDirectoryEx( nullptr, buildcarbide::fileutils::get_base_path(buildcarbide::fileutils::build_path(base_dir, object_file)).c_str(), nullptr );
+			SHCreateDirectoryEx( 
+				nullptr, 
+				fileutils::get_base_path(fileutils::build_path(base_dir, object_file)).c_str(), 
+				nullptr
+			);
 
 			// Do the build.
 			printf("%s\n", compile_args.c_str());
-			int res = system(compile_args.c_str());
-			if (res != 0)
-			{
-				fprintf(stderr, "Error compiling \'%s\'\n", build_file.filename.c_str());
-				return 1;
+			if (
+				const int res = system(compile_args.c_str());
+				res != 0
+			) {
+				fail<2>("Error compiling \'%s\'\n", build_file.filename.c_str());
 			}
 		}
 
-		if (object_files.empty())
-		{
+		if (object_files.empty()) {
 			return 0;
 		}
 
-		SHCreateDirectoryEx( nullptr, buildcarbide::fileutils::get_base_path(OutfileStr).c_str(), nullptr );
+		SHCreateDirectoryEx( nullptr, fileutils::get_base_path(out_file).c_str(), nullptr );
 
-		const string link_args = get_link_args(build_options, object_files, OutfileStr, build_options.configuration);
+		const string link_args = get_link_args(build_options, object_files, out_file, build_options.configuration);
 		printf("%s\n", link_args.c_str());
-		int res = system(link_args.c_str());
-		if (res != 0)
-		{
-			fprintf(stderr, "Error linking\n");
-			return 1;
+		if (
+			const int res = system(link_args.c_str());
+			res != 0
+		) {
+			fail<3>("Error linking\n");
 		}
-
 	}
-	catch (...)
-	{
-		fprintf(stderr, "Failed to parser project file \'%s\'\n", build_options.project_file.c_str());
-		return 1;
+	catch (...) {
+		fail<4>("Failed to parser project file \'%s\'\n", build_options.project_file.c_str());
 	}
 
 	return 0;

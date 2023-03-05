@@ -1,5 +1,6 @@
 #include "clang.hpp"
 
+// ReSharper disable once IdentifierTypo
 #define NOMINMAX 1
 #include <Windows.h>
 
