@@ -1051,7 +1051,7 @@ bool jit1::memory_touched(const uint32 address)
 			if (mapped_address == (m_CurrentExecutingChunkAddress& ~(ChunkSize - 1)))
 			{
 				m_FlushAddress = adjusted_address;
-				m_processor.m_jit_meta = 1;
+				processor_.m_jit_meta = 1;
 				m_FlushChunk = chunk;
 			}
 			else

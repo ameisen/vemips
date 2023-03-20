@@ -117,7 +117,7 @@ namespace mips {
 		}
 
 		[[nodiscard]]
-		JitType get_jit_type() const {
+		JitType get_jit_type() const __restrict {
 			return jit_type_;
 		}
 
@@ -134,12 +134,12 @@ namespace mips {
 			mips::mmu mmu_type = mips::mmu::emulated;
 			uint32 stack = 0;
 			uint32 mem_size = 0;
-			bool rox = false;
-			bool collect_stats = false;
-			bool disable_cti = false;
-			bool ticked = false;
-			bool icache = false;
-			bool debugging = false;
+			bool rox : 1 = false;
+			bool collect_stats : 1 = false;
+			bool disable_cti : 1 = false;
+			bool ticked : 1 = false;
+			bool icache : 1 = false;
+			bool debugging : 1 = false;
 		};
 
 		processor(const options & __restrict options);
@@ -154,6 +154,7 @@ namespace mips {
 		void set_program_counter(uint32 address) __restrict;
 
 		// Gets the program counter
+		[[nodiscard]]
 		uint32 get_program_counter() const __restrict;
 
 		// Execute Clock
@@ -164,19 +165,22 @@ namespace mips {
 
 		// Get the register as a specific type
 		template <typename T>
+		[[nodiscard]]
 		T get_register(const uint32 idx) const {
 			if constexpr (_constant_p(idx) && idx == 0) {
 				return {};
 			}
 
 			// Strict-aliasing rules apply
-			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
-			union {
-				register_type  src;
-				T				  dst;
-			} caster;
-			caster.src = registers_[idx];
-			return caster.dst;
+			if constexpr (std::is_same_v<T, register_type>) {
+				return registers_[idx];
+			}
+			else {
+				static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
+				T result;
+				memcpy(&result, &registers_[idx], sizeof(result));
+				return result;
+			}
 		}
 
 		// Set the register from a given type
@@ -187,13 +191,19 @@ namespace mips {
 			}
 
 			// Strict-aliasing rules apply
-			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
-			union {
-				register_type  dst;
-				T				  src;
-			} caster;
-			caster.src = value;
-			registers_[idx] = caster.dst;
+			if constexpr (std::is_same_v<T, register_type>) {
+				registers_[idx] = value;
+			}
+			else {
+				static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
+				union {
+					register_type	dst;
+					T							src;
+				} caster{
+					.src = value
+				};
+				registers_[idx] = caster.dst;
+			}
 		}
 
 		// Set up a delay branch for the processor to the given pointer
@@ -226,18 +236,18 @@ namespace mips {
 				memory_source_->at(address, sizeof(T)); // TODO this doesn't actually work
 			}
 			else {
-				if (address == 0) {
+				if _unlikely(address == 0) [[unlikely]] {
 					throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, address };
 				}
 
 				address += stack_size_;
 
 				if (mmu_type_ == mmu::emulated) {
-					if (!memory_source_->at(address, sizeof(T))) {
+					if _unlikely(!memory_source_->at(address, sizeof(T))) [[unlikely]] {
 						throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
 					}
 				}
-				else if (address >= memory_size_) {
+				else if _unlikely(address >= memory_size_) [[unlikely]] {
 					throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
 				}
 			}
@@ -250,7 +260,7 @@ namespace mips {
 				return *(const T * __restrict)(uintptr_t(memory_ptr_) + address);
 			}
 			else {
-				if (address == 0) {
+				if _unlikely(address == 0) [[unlikely]] {
 					throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, address };
 				}
 
@@ -258,11 +268,11 @@ namespace mips {
 
 				if (mmu_type_ == mmu::emulated) {
 					const T* __restrict val_ptr = (const T * __restrict)memory_source_->at(address, sizeof(T));
-					if (val_ptr) {
+					if _likely(val_ptr) [[likely]] {
 						return *val_ptr;
 					}
 				}
-				else if (address < memory_size_) {
+				else if _likely(address < memory_size_) [[likely]] {
 					return *(const T * __restrict)(uintptr_t(memory_ptr_) + address);
 				}
 			}
@@ -276,7 +286,7 @@ namespace mips {
 				return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
 			}
 			else {
-				if (address == 0) {
+				if _unlikely(address == 0) [[unlikely]] {
 					return nullptr;
 				}
 
@@ -284,9 +294,11 @@ namespace mips {
 
 				if (mmu_type_ == mmu::emulated) {
 					const T* __restrict val_ptr = (const T * __restrict)memory_source_->at(address, sizeof(T));
-					return val_ptr;
+					if _likely(val_ptr) [[likely]] {
+						return val_ptr;
+					}
 				}
-				else if (address < memory_size_) {
+				else if _likely(address < memory_size_) [[likely]] {
 					return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
 				}
 			}
@@ -299,7 +311,7 @@ namespace mips {
 				return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
 			}
 			else {
-				if (address == 0) {
+				if _unlikely(address == 0) [[unlikely]] {
 					return nullptr;
 				}
 
@@ -307,10 +319,12 @@ namespace mips {
 
 				if (mmu_type_ == mmu::emulated) {
 					const T* __restrict val_ptr = (const T * __restrict)memory_source_->at_exec(address, sizeof(T));
-					return val_ptr;
+					if _likely(val_ptr) [[likely]] {
+						return val_ptr;
+					}
 				}
 				else {
-					if (address < memory_size_) {
+					if _likely(address < memory_size_) [[likely]] {
 						return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
 					}
 					else {
@@ -328,7 +342,7 @@ namespace mips {
 				return;
 			}
 			else {
-				if (address == 0) {
+				if _unlikely(address == 0) [[unlikely]] {
 					throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, address };
 				}
 
@@ -336,13 +350,13 @@ namespace mips {
 
 				if (mmu_type_ == mmu::emulated) {
 					T* __restrict val_ptr = (T * __restrict)memory_source_->write_at(address, sizeof(T));
-					if (val_ptr) {
+					if _likely(val_ptr) [[likely]] {
 						*val_ptr = value;
 						memory_touched(address, sizeof(T));
 						return;
 					}
 				}
-				else if (address < memory_size_) {
+				else if _likely(address < memory_size_) [[likely]] {
 					*(T * __restrict)(uintptr_t(memory_ptr_) + address) = value;
 					memory_touched(address, sizeof(T));
 					return;
@@ -356,7 +370,7 @@ namespace mips {
 				address += stack_size_;
 			}
 			const uintptr_t val_ptr = (uintptr_t)memory_source_->at(address, size);
-			if (val_ptr) {
+			if _likely(val_ptr) [[likely]] {
 				memory_touched(address, size);
 			}
 			return val_ptr;

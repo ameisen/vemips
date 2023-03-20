@@ -4,6 +4,8 @@
 #include "mips/processor/jit/xbyak/xbyak.h"
 #include "mips/processor/jit/jit1/jit1.hpp"
 
+#include <fmt/format.h>
+
 namespace mips
 {
 	class jit1;
@@ -26,22 +28,13 @@ namespace mips
 			return address_ + getSize();
 		}
 
-		template <size_t N>
-		static constexpr size_t length_const(const char (& __restrict)[N]) {
-			return N;
-		}
-
 		std::string get_unique_label () __restrict {
-			char buffer[length_const("unique_") + std::numeric_limits<uint32>::digits10 + 1];
-			sprintf(buffer, "unique_%u", unique_label_index_++);
-			return buffer;
-		};
+			return fmt::format("unique_{}", unique_label_index_++);
+		}
 
 		static std::string get_index_label(uint32 index) {
 			xassert(index < jit1::NumInstructionsChunk);
-			char buffer[length_const("unique_") + std::numeric_limits<uint32>::digits10 + 1];
-			sprintf(buffer, "index_%u", index);
-			return buffer;
+			return fmt::format("index_{}", index);
 		}
 
 		static constexpr const uint32 mips_fp = 30;

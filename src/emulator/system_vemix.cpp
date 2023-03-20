@@ -21,39 +21,39 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 		// 6
 		// 7
 		// new calls (musl)
-		const uint32 code = m_processor->get_register<uint32>(2);
+		const uint32 code = processor_->get_register<uint32>(2);
 		switch (code) {
 			case __NR_futex: {
 				// do nothing substantial for now, though we do need to actually handle this.
-				m_processor->set_register<uint32>(2, uint32(-1));
+				processor_->set_register<uint32>(2, uint32(-1));
 			} break;
 			case __NR_sbrk: { // sbrk
 				// todo move to system object
-				static uint32 system_break = m_system_break;
+				static uint32 system_break = system_break_;
 
-				const uint32 increment = m_processor->get_register<uint32>(4);
+				const uint32 increment = processor_->get_register<uint32>(4);
 
 				if (!increment) {
-					m_processor->set_register<uint32>(2, system_break);
+					processor_->set_register<uint32>(2, system_break);
 					break;
 				}
 
 				// make sure it just makes sense, first.
 				const uint32 end_address = system_break + increment;
 				if (end_address < system_break) {
-					m_processor->set_register<uint32>(2, std::numeric_limits<uint32>::max());
+					processor_->set_register<uint32>(2, std::numeric_limits<uint32>::max());
 					break;
 				}
 
 				// now let's check if we blow our memory constraints.
-				if (const uint32 max_data_seg = m_options.total_memory - m_options.stack_memory; end_address > max_data_seg) {
-					m_processor->set_register<uint32>(2, std::numeric_limits<uint32>::max());
+				if (const uint32 max_data_seg = options_.total_memory - options_.stack_memory; end_address > max_data_seg) {
+					processor_->set_register<uint32>(2, std::numeric_limits<uint32>::max());
 					break;
 				}
 
 				// Now let's just make sure it doesn't go past stack.
-				if (const uint32 stack_ptr = m_processor->get_register<uint32>(29); end_address > stack_ptr) {
-					m_processor->set_register<uint32>(2, std::numeric_limits<uint32>::max());
+				if (const uint32 stack_ptr = processor_->get_register<uint32>(29); end_address > stack_ptr) {
+					processor_->set_register<uint32>(2, std::numeric_limits<uint32>::max());
 					break;
 				}
 
@@ -61,9 +61,9 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				const uint32 ret_value = system_break;
 
 				system_break += increment;
-				m_system_break = system_break;
-				m_processor->set_register<uint32>(7, 0);
-				m_processor->set_register<uint32>(2, ret_value);
+				system_break_ = system_break;
+				processor_->set_register<uint32>(7, 0);
+				processor_->set_register<uint32>(2, ret_value);
 			} break;
 			case __NR_mmap2: {
 				// ReSharper disable CppDeclaratorNeverUsed
@@ -97,32 +97,32 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 
 				// what... what do we do with memory mapping?
 				/*
-				const uint32 addr = m_processor->get_register<uint32>(4);
-				const uint32 length = m_processor->get_register<uint32>(5);
-				const uint32 prot = m_processor->get_register<uint32>(6);
-				const uint32 flags = m_processor->get_register<uint32>(7);
-				const int fd = m_processor->mem_fetch<int>(m_processor->get_register<uint32>(29) + 16);
-				const int offset = m_processor->mem_fetch<int>(m_processor->get_register<uint32>(29) + 20);
+				const uint32 addr = processor_->get_register<uint32>(4);
+				const uint32 length = processor_->get_register<uint32>(5);
+				const uint32 prot = processor_->get_register<uint32>(6);
+				const uint32 flags = processor_->get_register<uint32>(7);
+				const int fd = processor_->mem_fetch<int>(processor_->get_register<uint32>(29) + 16);
+				const int offset = processor_->mem_fetch<int>(processor_->get_register<uint32>(29) + 20);
 				*/
 
 				// we ignore 'addr', because the hint is meaningless to us.
 				// THe only thing we are going to do is keep track of what has already
 				// been mapped, and try to make it so we don't map things that would
 				// pass the stack pointer ($29)
-				m_processor->set_register<uint32>(2, uint32(-1));
+				processor_->set_register<uint32>(2, uint32(-1));
 			} break;
 			case __NR_rt_sigaction: {
 				// do nothing substantial for now, though we do need to actually handle this.
-				m_processor->set_register<uint32>(2, uint32(-1));
+				processor_->set_register<uint32>(2, uint32(-1));
 			} break;
 			case SYS_rt_sigprocmask: {
 				// do nothing substantial for now, though we do need to actually handle this.
-				m_processor->set_register<uint32>(2, uint32(-1));
+				processor_->set_register<uint32>(2, uint32(-1));
 			} break;
 			case __NR_writev: {
-				const uint32 fd = m_processor->get_register<uint32>(4);
-				const uint32 iov = m_processor->get_register<uint32>(5);
-				const uint32 iovcnt = m_processor->get_register<uint32>(6);
+				const uint32 fd = processor_->get_register<uint32>(4);
+				const uint32 iov = processor_->get_register<uint32>(5);
+				const uint32 iovcnt = processor_->get_register<uint32>(6);
 				FILE * __restrict fp;
 				switch (fd) {
 					case 0:
@@ -136,7 +136,7 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				}
 				if (fp == nullptr) {
 					// TODO set errno
-					m_processor->set_register<uint32>(2, uint32(-1));
+					processor_->set_register<uint32>(2, uint32(-1));
 					break;
 				}
 
@@ -147,11 +147,11 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 
 				uint32 iov_ptr = iov;
 				for (uint32 i = 0; i < iovcnt; ++i) {
-					const iovec _iovec = m_processor->mem_fetch<iovec>(iov_ptr);
+					const iovec _iovec = processor_->mem_fetch<iovec>(iov_ptr);
 						
 					// TODO this can be done far more quickly.
 					for (uint32 t = 0; t < _iovec.iov_len; ++t) {
-						const char c = m_processor->mem_fetch<char>(_iovec.iov_base + t);
+						const char c = processor_->mem_fetch<char>(_iovec.iov_base + t);
 						fwrite(&c, 1, 1, fp);
 					}
 
@@ -163,10 +163,10 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 			} break;
 			case __NR_ioctl: {
 				/*
-				const uint32 fd = m_processor->get_register<uint32>(4);
-				const uint32 request = m_processor->get_register<uint32>(5);
-				const uint32 arg1 = m_processor->get_register<uint32>(6);
-				const uint32 arg2 = m_processor->get_register<uint32>(7);
+				const uint32 fd = processor_->get_register<uint32>(4);
+				const uint32 request = processor_->get_register<uint32>(5);
+				const uint32 arg1 = processor_->get_register<uint32>(6);
+				const uint32 arg2 = processor_->get_register<uint32>(7);
 				*/
 
 				//switch (request)
@@ -187,44 +187,44 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				//	mem_write<winsize>(arg1, ws);
 				//} break;
 				//default:
-				m_processor->set_register<uint32>(2, uint32(-1)); // don't know this ioctl
+				processor_->set_register<uint32>(2, uint32(-1)); // don't know this ioctl
 																				  //break;
 																				  //}
-				m_processor->set_register<uint32>(2, 0);
+				processor_->set_register<uint32>(2, 0);
 			}  break;
 			case __NR_exit_group:
 			case __NR_exit:
-				m_execution_success = true;
-				m_execution_complete = true;
-				if (m_processor->get_jit_type() != JitType::None) {
+				execution_success_ = true;
+				execution_complete_ = true;
+				if (processor_->get_jit_type() != JitType::None) {
 					return 1;
 				}
 				throw ExecutionCompleteException();
 				break;
 			case __NR_set_thread_area:
 				// m_user_value
-				m_processor->user_value_ = m_processor->get_register<uint32>(4);
-				m_processor->set_register<uint32>(2, 0);
+				processor_->user_value_ = processor_->get_register<uint32>(4);
+				processor_->set_register<uint32>(2, 0);
 				break; //do nothing.
 			case __NR_set_tid_address: {
 				// pretend to do something meaningful.
 				/*
-				const uint32 ptr = m_processor->get_register<uint32>(4);
+				const uint32 ptr = processor_->get_register<uint32>(4);
 				*/
-				//m_processor->mem_write<uint32>(ptr, 0);
-				m_processor->set_register<uint32>(2, 0);
+				//processor_->mem_write<uint32>(ptr, 0);
+				processor_->set_register<uint32>(2, 0);
 			}  break;
 			case __NR_gettid: {
-				m_processor->set_register<uint32>(2, 0);
+				processor_->set_register<uint32>(2, 0);
 			}  break;
 			case __NR_tkill: {
 
 			}  break;
 			default:
 				printf("** Unknown System Call Code: %u @ 0x%08X\n", code, ex.m_InstructionAddress);
-				m_execution_success = false;
-				m_execution_complete = true;
-				if (m_processor->get_jit_type() != JitType::None) {
+				execution_success_ = false;
+				execution_complete_ = true;
+				if (processor_->get_jit_type() != JitType::None) {
 					return 1;
 				}
 				throw ExecutionFailException();
@@ -292,9 +292,9 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				exName = "CacheErr"; break;
 		}
 		printf("** Unhandled %s CPU Exception: %X @ 0x%08X\n", exName, ex.m_Code, ex.m_InstructionAddress);
-		m_execution_success = false;
-		m_execution_complete = true;
-		if (m_processor->get_jit_type() != JitType::None) {
+		execution_success_ = false;
+		execution_complete_ = true;
+		if (processor_->get_jit_type() != JitType::None) {
 			return 1;
 		}
 		throw ExecutionFailException();

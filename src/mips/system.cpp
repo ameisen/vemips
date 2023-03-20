@@ -3,7 +3,10 @@
 #include "system.hpp"
 #include "elf/elf.hpp"
 
+#include <fmt/format.h>
+
 #include <cassert>
+#include <string>
 
 using namespace mips;
 
@@ -90,7 +93,34 @@ public:
 	}
 };
 
-void mips::system::options::validate() const __restrict {
+namespace mips {
+	namespace {
+		class options_validation_exception final : std::exception {
+			std::string message_;
+
+		public:
+			explicit options_validation_exception(const std::string &message) : message_(message) {
+			}
+
+			explicit options_validation_exception(std::string&& message) : message_(message) {
+			}
+
+			//template <typename... Args>
+			//explicit options_validation_exception(fmt::format_string<Args...> format, Args&&... args) : options_validation_exception(
+			//	fmt::format(format, std::forward<Args>(args)...)
+			//) {
+			//}
+
+			virtual ~options_validation_exception() noexcept override = default;
+
+			virtual const char * what () const noexcept override {
+				return message_.c_str();
+			}
+		};
+	}
+}
+
+void mips::system::options::validate() const {
 	uint32 required_align = 1;
 	if (mmu_type == mmu::host) {
 		required_align = 0x1000;
@@ -99,64 +129,56 @@ void mips::system::options::validate() const __restrict {
 	constexpr const uint32 min_stack = 0x1000u;
 
 	if ((total_memory % required_align) != 0) {
-		char buffer[512];
-		sprintf(buffer, "total memory (%u) is not aligned to required alignment of %u", total_memory, required_align);
-		throw std::string(buffer);
+		throw options_validation_exception(fmt::format("total memory ({}) is not aligned to required alignment of {}", total_memory, required_align));
 	}
 
 	if (total_memory < min_memory) {
-		char buffer[512];
-		sprintf(buffer, "total memory (%u) is less than the minimum requirement of %u", total_memory, min_memory);
-		throw std::string(buffer);
+		throw options_validation_exception(fmt::format("total memory ({}) is less than the minimum requirement of {}", total_memory, min_memory));
 	}
 
 	if (stack_memory && (stack_memory % required_align) != 0) {
-		char buffer[512];
-		sprintf(buffer, "stack memory (%u) is not aligned to required alignment of %u", stack_memory, required_align);
-		throw std::string(buffer);
+		throw options_validation_exception(fmt::format("stack memory ({}) is not aligned to required alignment of {}", stack_memory, required_align));
 	}
 
 	if (stack_memory && stack_memory < min_stack) {
-		char buffer[512];
-		sprintf(buffer, "total stack memory (%u) is less than the minimum requirement of %u", stack_memory, min_stack);
-		throw std::string(buffer);
+		throw options_validation_exception(fmt::format("total stack memory ({}) is less than the minimum requirement of {}", stack_memory, min_stack));
 	}
 
 	if (read_only_exec && mmu_type != mmu::emulated) {
-		throw std::string("rox requires the emulated MMU to be enabled");
+		throw options_validation_exception("'rox' requires the emulated MMU to be enabled");
 	}
 }
 
 void system::initialize(const elf::binary & __restrict binary) {
 	char * __restrict mem_data;
 	uint32 mem_size;
-	if (m_options.mmu_type == mmu::emulated) {
-		mem_data = (char *)m_memory_source->get_ptr();
-		mem_size = m_memory_source->get_size();
+	if (options_.mmu_type == mmu::emulated) {
+		mem_data = (char *)memory_source_->get_ptr();
+		mem_size = memory_source_->get_size();
 	}
 	else {
-		mem_data = m_memory.data();
-		mem_size = uint32(m_memory.size());
+		mem_data = memory_.data();
+		mem_size = uint32(memory_.size());
 	}
 
-	uint32 stack_offset = m_options.stack_memory;
-	if (m_options.mmu_type == mmu::host) {
+	uint32 stack_offset = options_.stack_memory;
+	if (options_.mmu_type == mmu::host) {
 		stack_offset = 0;
-		mem_data = (char *)m_host_mmu->get_pointer();
-		mem_size = m_options.total_memory;
+		mem_data = (char *)host_mmu_->get_pointer();
+		mem_size = options_.total_memory;
 	}
 
-	uint32 highest_used_addr = 0;
+	uint32 highest_used_address = 0;
 	// Validate that there is enough memory to hold the binary.
 	if (!binary.sections_.empty()) {
 		const uint32 preadjusted_final_mapped_address = binary.sections_.back().memory_extent.end_offset();
-		const uint32_t finalMappedAddress = preadjusted_final_mapped_address + stack_offset;
-		highest_used_addr = std::max(highest_used_addr, preadjusted_final_mapped_address);
-		if (finalMappedAddress > mem_size) {
+		const uint32_t final_mapped_address = preadjusted_final_mapped_address + stack_offset;
+		highest_used_address = std::max(highest_used_address, preadjusted_final_mapped_address);
+		if _unlikely(final_mapped_address > mem_size) [[unlikely]] {
 			throw std::runtime_error("ELF Binary's mappings are out of range for System");
 		}
-		if (m_options.mmu_type == mmu::host) {
-			if (finalMappedAddress + m_options.stack_memory > mem_size) {
+		if (options_.mmu_type == mmu::host) {
+			if _unlikely(final_mapped_address + options_.stack_memory > mem_size) [[unlikely]] {
 				throw std::runtime_error("ELF Binary's mappings are out of range for System");
 			}
 		}
@@ -179,21 +201,21 @@ void system::initialize(const elf::binary & __restrict binary) {
 			}
 		}
 	}
-	m_system_break = highest_used_addr;
+	system_break_ = highest_used_address;
 
 	// validate that the entry address is at least somewhat sensible
-	if ((binary.entry_address_ + m_options.stack_memory) > mem_size) {
+	if _unlikely((binary.entry_address_ + options_.stack_memory) > mem_size) [[unlikely]] {
 		throw std::runtime_error("ELF Entry Address is out of range of the system");
 	}
 
 	// Set program counter.
-	m_processor->set_program_counter(binary.entry_address_);
+	processor_->set_program_counter(binary.entry_address_);
 
 	// Set up stack.
 
 	// Set stack pointer
 	uint64 stack_start;
-	if (m_options.stack_memory == 0) {
+	if (options_.stack_memory == 0) {
 		stack_start = mem_size;
 	}
 	else {
@@ -278,11 +300,11 @@ void system::initialize(const elf::binary & __restrict binary) {
 	if (stack_offset) {
 		stack_start -= stack_offset;
 	}
-	m_processor->set_register<uint32>(29, uint32(stack_start));
+	processor_->set_register<uint32>(29, uint32(stack_start));
 }
 
 
-system::system(const options & __restrict init_options, const elf::binary & __restrict binary) : m_options(init_options)
+system::system(const options & __restrict init_options, const elf::binary & __restrict binary) : options_(init_options)
 {
 	mips::processor::options cpu_options = {
 		.guest_system = this,
@@ -299,66 +321,66 @@ system::system(const options & __restrict init_options, const elf::binary & __re
 
 	switch (init_options.mmu_type) {
 	case mmu::emulated:
-		m_memory_source = new sys_memory_source(init_options.total_memory);
-		cpu_options.mem_src = m_memory_source;
+		memory_source_ = new sys_memory_source(init_options.total_memory);
+		cpu_options.mem_src = memory_source_;
 		break;
 	case mmu::host:
-		m_host_mmu = new platform::host_mmu(init_options.total_memory, init_options.stack_memory);
-		cpu_options.mem_ptr = (char*)m_host_mmu->get_pointer();
+		host_mmu_ = new platform::host_mmu(init_options.total_memory, init_options.stack_memory);
+		cpu_options.mem_ptr = (char*)host_mmu_->get_pointer();
 		cpu_options.mem_size = init_options.total_memory;
 		break;
 	default:
-		m_memory.resize(init_options.total_memory);
-		cpu_options.mem_ptr = m_memory.data();
-		cpu_options.mem_size = uint32(m_memory.size());
+		memory_.resize(init_options.total_memory);
+		cpu_options.mem_ptr = memory_.data();
+		cpu_options.mem_size = uint32(memory_.size());
 		break;
 	}
 
-	m_processor = new processor(cpu_options);
+	processor_ = new processor(cpu_options);
 	initialize(binary);
 	if (init_options.read_only_exec) {
-		m_memory_source->set_executable_memory(binary);
+		memory_source_->set_executable_memory(binary);
 	}
 
 	if (init_options.debug) {
-		m_debugger = new debugger(init_options.debug_port, *this);
+		debugger_ = new debugger(init_options.debug_port, *this);
 		printf("** Waiting for debugger connection on port %u\n", init_options.debug_port);
-		m_debugger->wait();
+		debugger_->wait();
 		printf("** Debugger attached.\n");
 	}
 }
 
 system::~system() {
-	delete m_debugger;
-	delete m_processor;
-	delete m_memory_source;
-	delete m_host_mmu;
+	delete debugger_;
+	delete processor_;
+	delete memory_source_;
+	delete host_mmu_;
 }
 
 void system::clock(const uint64 clocks) __restrict {
-	if _unlikely(!m_processor) [[unlikely]] {
+	if _unlikely(!processor_) [[unlikely]] {
 		return;
 	}
 
-	while (!m_options.ticked || m_processor->instruction_count_ < m_processor->target_instructions_) {
-		if _unlikely(m_debugger && m_debugger->should_pause()) [[unlikely]] {
-			m_debugger->wait();
-			if (m_debugger->should_kill()) {
+	while _likely(!options_.ticked || processor_->instruction_count_ < processor_->target_instructions_) [[likely]] {
+		if _unlikely(debugger_ && debugger_->should_pause()) [[unlikely]] {
+			debugger_->wait();
+			if _unlikely(debugger_->should_kill()) [[unlikely]] {
 				exit(1);
 			}
 		}
-		m_processor->execute(clocks);
+		processor_->execute(clocks);
 	}
 }
 
 uint64 system::get_instruction_count() const __restrict {
-	return m_processor->get_instruction_count();
+	return processor_->get_instruction_count();
 }
 
 const std::unordered_map<const char *, size_t> & system::get_stats_map() const __restrict {
-	return m_processor->get_stats_map();
+	return processor_->get_stats_map();
 }
 
 size_t system::get_jit_max_instruction_size() const __restrict {
-	return m_processor->get_jit_max_instruction_size();
+	return processor_->get_jit_max_instruction_size();
 }

@@ -17,6 +17,12 @@
 using namespace mips;
 
 namespace {
+	static std::array<char, 2> checksum_to_chars(uint32 sum) {
+		char chars[3];
+		sprintf(chars, "%02x", sum);
+		return { chars[0], chars[1] };
+	}
+
 	static WSADATA g_wsa_data;
 
 	static std::vector<char> assemble_packet(const std::vector<char> & __restrict payload) {
@@ -31,14 +37,13 @@ namespace {
 		}
 		sum %= 256;
 
-		char test_checksum[3];
-		sprintf(test_checksum, "%02x", sum);
+		const auto checksum_chars = checksum_to_chars(sum);
 
 		memcpy(packet.data() + 1, payload.data(), payload.size());
 
 		packet[packet.size() - 3] = '#';
-		packet[packet.size() - 2] = test_checksum[0];
-		packet[packet.size() - 1] = test_checksum[1];
+		packet[packet.size() - 2] = checksum_chars[0];
+		packet[packet.size() - 1] = checksum_chars[1];
 
 		return packet;
 	}
@@ -250,10 +255,9 @@ static bool test_checksum(const std::vector<char> & __restrict packet) {
 	}
 	sum %= 256;
 
-	char test_checksum[3];
-	sprintf(test_checksum, "%02x", sum);
+	const auto checksum_chars = checksum_to_chars(sum);
 
-	return checksum[0] == test_checksum[0] && checksum[1] == test_checksum[1];
+	return checksum[0] == checksum_chars[0] && checksum[1] == checksum_chars[1];
 }
 
 namespace {
@@ -279,7 +283,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		return false;
 	}
 
-	const auto SendResponse = [&](const std::string & __restrict str) {
+	const auto send_response = [&](std::string_view str) {
 		response.insert(response.end(), str.begin(), str.end());
 	};
 
@@ -360,24 +364,24 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 
 	if (get_token(0) == "QStartNoAckMode") {
 		m_ack_mode = false;
-		SendResponse("OK");
+		send_response("OK");
 	}
 	else if (get_token(0) == "qC") {
 		if (m_active_thread == uint32(-1)) {
 			m_active_thread = 1;
 		}
 
-		SendResponse("QC ");
-		char buffer[100];
+		send_response("QC ");
+		char buffer[std::numeric_limits<decltype(m_active_thread)>::digits10 + 2];
 		sprintf(buffer, "%x", m_active_thread);
-		SendResponse(buffer);
+		send_response(buffer);
 	}
 	else if (get_token(0) == "qHostInfo") {
-		SendResponse("triple:mipsel;");
-		SendResponse("ptrsize:4;");
-		SendResponse("watchpoint_exceptions_received:before;");
-		SendResponse("endian:little;");
-		SendResponse("hostname:76656d69707300;");
+		send_response("triple:mipsel;");
+		send_response("ptrsize:4;");
+		send_response("watchpoint_exceptions_received:before;");
+		send_response("endian:little;");
+		send_response("hostname:76656d69707300;");
 	}
 	else if (get_token(0) == "qGetWorkingDir") {
 		// send empty response
@@ -391,7 +395,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	else if (get_token(0) == "qSupported") {
 		// multiprocess
 		// xmlRegisters
-		SendResponse("qRelocInsn+;QAllow+;QPassSignals+;QThreadEvents+;QCatchSyscalls+;QStartNoAckMode+;ConditionalBreakpoints+;swbreak-;hwbreak+;QThreadEvents+;vContSupported+;");
+		send_response("qRelocInsn+;QAllow+;QPassSignals+;QThreadEvents+;QCatchSyscalls+;QStartNoAckMode+;ConditionalBreakpoints+;swbreak-;hwbreak+;QThreadEvents+;vContSupported+;");
 	}
 	else if (get_token(0) == "QThreadSuffixSupported") {
 		// I don't know what this is.
@@ -400,43 +404,43 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		// I don't know what this is.
 	}
 	else if (get_token(0) == "VCont?") {
-		SendResponse("vCont;c;t;s;");
+		send_response("vCont;c;t;s;");
 	}
 	else if (get_token(0) == "qVAttachOrWaitSupported") {
 		// I don't know what this is.
 	}
 	else if (get_token(0) == "qProcessInfo") {
-		SendResponse("pid:1;");
-		SendResponse("parent-pid:1;");
-		SendResponse("real-uid:1;");
-		SendResponse("real-gid:1;");
-		SendResponse("effective-uid:1;");
-		SendResponse("effective-gid:1;");
-		SendResponse("triple:mipsel;");
-		SendResponse("ptrsize:4;");
-		SendResponse("endian:little;");
+		send_response("pid:1;");
+		send_response("parent-pid:1;");
+		send_response("real-uid:1;");
+		send_response("real-gid:1;");
+		send_response("effective-uid:1;");
+		send_response("effective-gid:1;");
+		send_response("triple:mipsel;");
+		send_response("ptrsize:4;");
+		send_response("endian:little;");
 	}
 	else if (get_token(0) == "qfThreadInfo") {
-		SendResponse("m ");
+		send_response("m ");
 		// TODO all threads should be reported here. We only have one thread presently.
 
-		char buffer[100];
+		char buffer[std::numeric_limits<decltype(m_threads[0])>::digits10 + 2];
 		sprintf(buffer, "%x", m_threads[0]);
-		SendResponse(buffer);
+		send_response(buffer);
 	}
 	else if (get_token(0) == "qsThreadInfo") {
-		SendResponse("l");
+		send_response("l");
 	}
 	else if (get_token(0) == "?") {
 		// Basically, the program must start halted. Thus, we need a debugger flag.
-		SendResponse("S 36");
+		send_response("S 36");
 	}
 	else if (get_token(0) == "k") {
-		SendResponse("OK");
+		send_response("OK");
 		handle_kill();
 	}
 	else if (get_token(0) == "vCont?") {
-		SendResponse("vCont;c;t;s;");
+		send_response("vCont;c;t;s;");
 	}
 	else if (begins(get_token(0), "qRegisterInfo")) {
 		//  sr; lo; hi; bad; cause; pc; 32 floating-point registers; fsr; fir; fp
@@ -452,7 +456,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 					"name:r%u;alt-name:zero;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:zero;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 1:
 			case 2:
 			case 3:
@@ -481,63 +485,63 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 					"name:r%u;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 4: // a0
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:arg1;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg1;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 5: // a1
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:arg2;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg2;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 6: // a2
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:arg3;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg3;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 7: // a3
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:arg4;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg4;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 28: // gp
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:gp;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:gp;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 29:
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:sp;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:sp;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 30:
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:fp;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:fp;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 31: // ra
 				sprintf(
 					buffer,
 					"name:r%u;alt-name:ra;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:ra;",
 					register_number, register_number * 4, register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 32:
 			case 33:
 			case 34:
@@ -575,15 +579,15 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 					"name:f%u;bitsize:64;offset:%u;encoding:ieee754;format:float;set:Floating Point Registers;gcc:%u;dwarf:%u;",
 					register_number - 32, (32 * 4) + (register_number * 8), register_number, register_number
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			case 64: // IP
 				sprintf(
 					buffer,
 					"name:pc;alt-name:pc;bitsize:32;encoding:uint;format:hex;set:General Purpose Registers;generic:pc;"
 				);
-				SendResponse(buffer); break;
+				send_response(buffer); break;
 			default:
-				SendResponse("E45");
+				send_response("E45");
 		}
 	}
 	else if (begins(get_token(0), "Hg")) {
@@ -591,7 +595,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		uint32 thread_id;
 		sscanf(get_token(0).c_str(), "Hg%x", &thread_id);
 		m_active_thread = thread_id;
-		SendResponse("OK");
+		send_response("OK");
 	}
 	else if (begins(get_token(0), "p")) {
 		// register info query.
@@ -617,7 +621,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 			// error, send nothing.
 		}
 
-		SendResponse(buffer);
+		send_response(buffer);
 	}
 	else if (get_token(0) == "qStructuredDataPlugins") {
 		// no idea
@@ -630,7 +634,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 			m_system.get_processor()->set_program_counter(address);
 		}
 		this->m_paused = false;
-		SendResponse("OK");
+		send_response("OK");
 	}
 	else if (get_token(0) == "jThreadExtendedInfo") {
 		// no idea
@@ -640,7 +644,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	}
 	else if (get_token(0) == "qSymbol") {
 		if (tokens.size() == 1) {
-			SendResponse("OK");
+			send_response("OK");
 		}
 		else {
 			// otherwise they're setting symbols
@@ -662,10 +666,10 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		bool has_response = false;
 
 		for (uint32 i = 0; i < length; ++i) {
-			char buffer[8];
 			if (auto *ptr = m_system.get_processor()->mem_fetch_debugger<uint8>(addr)) {
+				char buffer[3];
 				sprintf(buffer, "%02x", *ptr);
-				SendResponse(buffer);
+				send_response(buffer);
 				has_response = true;
 			}
 			else {
@@ -676,7 +680,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		}
 
 		if (!has_response) {
-			SendResponse("E 00");
+			send_response("E 00");
 		}
 	}
 	else if (get_token(0)[0] == 'Z') {
@@ -687,12 +691,10 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		sscanf(get_token(0).c_str(), "Z%x,%x,%x", &type, &address, &kind);
 
 		{
-			{
-				std::unique_lock _bplock(m_breakpoint_lock);
-				m_breakpoints.emplace_back(type, address, kind);
-			}
-			SendResponse("OK");
+			std::unique_lock _bplock(m_breakpoint_lock);
+			m_breakpoints.emplace_back(type, address, kind);
 		}
+		send_response("OK");
 	}
 	else if (get_token(0)[0] == 'z') {
 		// The command we get is malformed?
@@ -702,16 +704,14 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		sscanf(get_token(0).c_str(), "z%x,%x,%x", &type, &address, &kind);
 
 		{
-			{
-				std::unique_lock _bplock(m_breakpoint_lock);
-				breakpoint_t bpt{ type, address, kind };
-				if (const auto fiter = std::find(m_breakpoints.begin(), m_breakpoints.end(), bpt); fiter != m_breakpoints.end()) {
-					m_breakpoints.erase(fiter);
-				}
+			std::unique_lock _bplock(m_breakpoint_lock);
+			breakpoint_t bpt{ type, address, kind };
+			if (const auto fiter = std::find(m_breakpoints.begin(), m_breakpoints.end(), bpt); fiter != m_breakpoints.end()) {
+				m_breakpoints.erase(fiter);
 			}
-
-			SendResponse("OK");
 		}
+
+		send_response("OK");
 	}
 	else if (begins(get_token(0), "vCont")) {
 		// register info query.
@@ -730,7 +730,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 			m_paused = false;
 		}
 
-		SendResponse("OK");
+		send_response("OK");
 	}
 	else if (get_token(0)[0] == 'H') {
 		// register info query.
@@ -743,7 +743,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		else {
 			m_thread_next_g = thread;
 		}
-		SendResponse("OK");
+		send_response("OK");
 	}
 	else if (begins(get_token(0), "s")) {
 		if (get_token(1).empty()) {
@@ -753,7 +753,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 			// step TODO
 		}
 		m_paused = false;
-		SendResponse("OK");
+		send_response("OK");
 	}
 	else {
 		// no response, unknown packet.
@@ -764,7 +764,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 
 void debugger::wait() {
 	std::vector<char> response;
-	const auto SendResponse = [&](const std::string &str) {
+	const auto send_response = [&](std::string_view str) {
 		response.insert(response.end(), str.begin(), str.end());
 	};
 
@@ -779,36 +779,36 @@ void debugger::wait() {
 
 		// report back the breakpoint being hit.
 		if (std::get<0>(breakpoint) == uint32(-1)) { // step
-			SendResponse("S 05 ");
+			send_response("S 05 ");
 		}
 		else {
-			SendResponse("T 05 "); // TARGET_SIGNAL_TRAP
+			send_response("T 05 "); // TARGET_SIGNAL_TRAP
 			char buffer[32];
 			sprintf(buffer, "thread:%x;", thread_id);
-			SendResponse(buffer);
+			send_response(buffer);
 			sprintf(buffer, "%02x:%08x;", 64, endian_swap(m_system.get_processor()->get_program_counter()));
-			SendResponse(buffer);
+			send_response(buffer);
 			sprintf(buffer, "%02x:%08x;", 0x1d, endian_swap(m_system.get_processor()->get_register<uint32>(0x1d)));
-			SendResponse(buffer);
+			send_response(buffer);
 			sprintf(buffer, "%02x:%08x;", 0x1f, endian_swap(m_system.get_processor()->get_register<uint32>(0x1f)));
-			SendResponse(buffer);
+			send_response(buffer);
 			if (std::get<0>(breakpoint) == 0) {
-				SendResponse("swbreak:;");
+				send_response("swbreak:;");
 			}
 			else if (std::get<0>(breakpoint) == 1) {
-				SendResponse("hwbreak:;");
+				send_response("hwbreak:;");
 			}
 		}
 
-		const auto out_packet = assemble_packet(response);
+		auto out_packet = assemble_packet(response);
 
 		xassert(out_packet.size() <= std::numeric_limits<int>::max());
 		send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
 
-		std::string out;
-		out.resize(out_packet.size());
-		memcpy(out.data(), out_packet.data(), out_packet.size());
-		printf("Sent: %s\n", out.data());
+		if (out_packet.back() != '\0') {
+			out_packet.push_back('\0');
+		}
+		printf("Sent: %s\n", out_packet.data());
 	}
 	
 	while (m_paused) {

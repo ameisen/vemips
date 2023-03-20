@@ -14,16 +14,16 @@ namespace mips {
 	protected:
 		friend class processor;
 
-		processor * __restrict m_processor = nullptr;
-		memory_source * __restrict m_memory_source = nullptr;
-		std::vector<char> m_memory;
-		platform::host_mmu *m_host_mmu = nullptr;
-		debugger* m_debugger = nullptr;
-		uint32 m_system_break = 0;
+		processor * __restrict processor_ = nullptr;
+		memory_source * __restrict memory_source_ = nullptr;
+		std::vector<char> memory_;
+		platform::host_mmu *host_mmu_ = nullptr;
+		debugger* debugger_ = nullptr;
+		uint32 system_break_ = 0;
 
 		// Termination
-		bool m_execution_complete = false;
-		bool m_execution_success = false;
+		bool execution_complete_ : 1 = false;
+		bool execution_success_ : 1 = false;
 
 	public:
 		struct options final {
@@ -40,10 +40,10 @@ namespace mips {
 			bool debug : 1 = false;
 			bool debug_owned : 1 = false;
 
-			void validate() const __restrict;
+			void validate() const;
 		};
 	protected:
-		const options m_options;
+		const options options_;
 
 		void initialize(const elf::binary & __restrict binary);
 	public:
@@ -65,27 +65,27 @@ namespace mips {
 
 		[[nodiscard]]
 		bool is_execution_complete() const __restrict {
-			return m_execution_complete;
+			return execution_complete_;
 		}
 
 		[[nodiscard]]
 		bool is_execution_success() const __restrict {
-			return m_execution_success;
+			return execution_success_;
 		}
 
 		[[nodiscard]]
 		bool is_debugger_owned() const __restrict {
-			return m_options.debug_owned;
+			return options_.debug_owned;
 		}
 
 		[[nodiscard]]
 		processor * get_processor() const __restrict {
-			return m_processor;
+			return processor_;
 		}
 
 		[[nodiscard]]
 		debugger * get_debugger() const __restrict {
-			return m_debugger;
+			return debugger_;
 		}
 	};
 }

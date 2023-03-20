@@ -76,11 +76,11 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;$(ProjectDir)..\..\src\external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
       <AdditionalOptions>/std:c++latest /volatile:iso %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;FMT_HEADER_ONLY=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FloatingPointModel>Strict</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
@@ -100,11 +100,11 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>
       </SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;$(ProjectDir)..\..\src\external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
       <AdditionalOptions>/std:c++latest /Ob3 /volatile:iso %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;FMT_HEADER_ONLY=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <InlineFunctionExpansion>
       </InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -136,11 +136,11 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>
       </SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;$(ProjectDir)..\..\src\external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
       <AdditionalOptions>/std:c++latest /volatile:iso -flto=thin -Wno-assume -Wno-invalid-offsetof %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;FMT_HEADER_ONLY=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
