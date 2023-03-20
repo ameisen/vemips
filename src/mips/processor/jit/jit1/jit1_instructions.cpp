@@ -113,7 +113,7 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
 		// check if 'rt' is zero or not. If it's zero, we write zero to rd.
 		// otherwise, we throw OV
 		cmp(get_register_op32(rt), 0);
-		jne("intrinsic_ov_ex", T_NEAR);
+		jne(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), 0);
 	}
 	else if (rt.get_register() == 0)
@@ -125,7 +125,7 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
 	{
 		mov(eax, get_register_op32(rs));
 		sub(eax, get_register_op32(rt));
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), eax);
 	}
 }
@@ -633,7 +633,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 	{
 		if (immediate < 0)
 		{
-			jmp("intrinsic_ov_ex", T_NEAR);
+			jmp(intrinsics_.ov, T_NEAR);
 		}
 		else if (immediate == 0)
 		{
@@ -661,14 +661,14 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		{
 			mov(eax, get_register_op32(rt));
 			inc(eax);
-			jo("intrinsic_ov_ex", T_NEAR);
+			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
 		}
 		else if (immediate == -1)
 		{
 			mov(eax, get_register_op32(rt));
 			dec(eax);
-			jo("intrinsic_ov_ex", T_NEAR);
+			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
 		}
 		else if (immediate >= 0 && immediate <= 128)
@@ -678,7 +678,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 			// sub dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
 			mov(eax, get_register_op32(rt));
 			sub(eax, int8(-immediate));
-			jo("intrinsic_ov_ex", T_NEAR);
+			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
 		}
 		else if (immediate < 0 && -immediate <= 128 )
@@ -688,7 +688,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 			// add dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
 			mov(eax, get_register_op32(rt));
 			add(eax, int8(immediate));
-			jo("intrinsic_ov_ex", T_NEAR);
+			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
 		}
 		else
@@ -698,7 +698,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 			// add dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
 			mov(eax, get_register_op32(rt));
 			add(eax, immediate);
-			jo("intrinsic_ov_ex", T_NEAR);
+			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
 		}
 	}
@@ -720,7 +720,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
 		inc(eax);
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
 	}
 	else if (immediate == -1)
@@ -732,7 +732,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
 		dec(eax);
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
 	}
 	else if (immediate >= 0 && immediate <= 128)
@@ -744,7 +744,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
 		sub(eax, int8(-immediate));
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
 	}
 	else if (immediate < 0 && -immediate <= 128)
@@ -756,7 +756,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
 		add(eax, int8(immediate));
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
 	}
 	else
@@ -768,7 +768,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
 		add(eax, immediate);
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
 	}
 }
@@ -867,7 +867,7 @@ void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, u
 		// add [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		add(get_register_op32(rd), eax);
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 	}
 	*/
 	else
@@ -880,7 +880,7 @@ void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, u
 		else {
 			add(eax, get_register_op32(rt));
 		}
-		jo("intrinsic_ov_ex", T_NEAR);
+		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), eax);
 	}
 }
@@ -2069,7 +2069,7 @@ void Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset,
 	}
 	terminate_instruction = true;
 	mov(eax, int32(address));
-	jmp("intrinsic_ri_ex", T_NEAR);
+	jmp(intrinsics_.ri, T_NEAR);
 }
 
 void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)

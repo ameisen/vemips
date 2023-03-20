@@ -137,7 +137,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		jnz(valid_ptr);
 		mov(eax, ecx);
 		mov(ecx, r13d);
-		jmp("intrinsic_ades_ex", T_NEAR);
+		jmp(intrinsics_.ades, T_NEAR);
 		L(valid_ptr);
 	}
 	else {
@@ -157,7 +157,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x100000000ull)
 				{
 					mov(eax, int32(address));
-					jmp("intrinsic_ades_ex", T_NEAR);
+					jmp(intrinsics_.ades, T_NEAR);
 					return false;
 				}
 			}
@@ -166,13 +166,13 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				for (uint64 addr = start_address; addr < end_address; ++addr) {
 					if (addr == 0) {
 						mov(eax, int32(address));
-						jmp("intrinsic_ades_ex", T_NEAR);
+						jmp(intrinsics_.ades, T_NEAR);
 						return false;
 					}
 					if (jit_.processor_.stack_size_) {
 						if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
 							mov(eax, int32(address));
-							jmp("intrinsic_ades_ex", T_NEAR);
+							jmp(intrinsics_.ades, T_NEAR);
 							return false;
 						}
 					}
@@ -192,7 +192,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				// zero test
 				lea(ecx, dword[eax - 1]);
 				add(ecx, store_size);
-				jo("intrinsic_ades_ex", T_NEAR);
+				jo(intrinsics_.ades, T_NEAR);
 
 				// Offset for stack
 				if (jit_.processor_.stack_size_) {
@@ -201,7 +201,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 
 				// check for range
 				cmp(eax, uint32((jit_.processor_.memory_size_ - store_size) - offset));
-				ja("intrinsic_ades_ex", T_NEAR);
+				ja(intrinsics_.ades, T_NEAR);
 			}
 
 			mov(rdx, qword[rbp + memp_offset]);
@@ -426,7 +426,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		test(eax, eax);
 		jz(no_flush);
 		mov(eax, int32(address));
-		jmp("save_return", T_NEAR);
+		jmp(intrinsics_.save_return, T_NEAR);
 		L(no_flush);
 	}
 
@@ -493,7 +493,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			jnz(valid_ptr);
 			mov(eax, ecx);
 			mov(ecx, r13d);
-			jmp("intrinsic_adel_ex", T_NEAR);
+			jmp(intrinsics_.adel, T_NEAR);
 			L(valid_ptr);
 		}
 		else {
@@ -513,7 +513,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 						(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(load_size)) > 0x100000000ull)
 					{
 						mov(eax, int32(address));
-						jmp("intrinsic_adel_ex", T_NEAR);
+						jmp(intrinsics_.adel, T_NEAR);
 						return false;
 					}
 				}
@@ -522,13 +522,13 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					for (uint64 addr = start_address; addr < end_address; ++addr) {
 						if (addr == 0) {
 							mov(eax, int32(address));
-							jmp("intrinsic_adel_ex", T_NEAR);
+							jmp(intrinsics_.adel, T_NEAR);
 							return false;
 						}
 						if (jit_.processor_.stack_size_) {
 							if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
 								mov(eax, int32(address));
-								jmp("intrinsic_adel_ex", T_NEAR);
+								jmp(intrinsics_.adel, T_NEAR);
 								return false;
 							}
 						}
@@ -548,7 +548,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					// zero test
 					lea(ecx, dword[eax - 1]);
 					add(ecx, load_size);
-					jo("intrinsic_adel_ex", T_NEAR);
+					jo(intrinsics_.adel, T_NEAR);
 
 					// Offset for stack
 					if (jit_.processor_.stack_size_) {
@@ -557,7 +557,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 
 					// check for range
 					cmp(eax, uint32((jit_.processor_.memory_size_ - load_size) - offset));
-					ja("intrinsic_adel_ex", T_NEAR);
+					ja(intrinsics_.adel, T_NEAR);
 				}
 
 				mov(rdx, qword[rbp + memp_offset]);

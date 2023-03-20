@@ -28,12 +28,12 @@ void Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __restrict chunk_offset, u
 	// tr ? [rs] == [rt]
 	mov(eax, int32(code));
 	if (rs.get_register() == rt.get_register()) {
-		jmp("intrinsic_tr_ex", T_NEAR);
+		jmp(intrinsics_.tr, T_NEAR);
 	}
 	else {
 		mov(ecx, get_register_op32(rs));
 		cmp(ecx, get_register_op32(rt));
-		je("intrinsic_tr_ex", T_NEAR);
+		je(intrinsics_.tr, T_NEAR);
 	}
 }
 
@@ -51,12 +51,12 @@ void Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __restrict chunk_offset, u
 	// tr ? [rs] >= [rt]
 	mov(eax, int32(code));
 	if (rs.get_register() == rt.get_register()) {
-		jmp("intrinsic_tr_ex", T_NEAR);
+		jmp(intrinsics_.tr, T_NEAR);
 	}
 	else {
 		mov(ecx, get_register_op32(rs));
 		cmp(ecx, get_register_op32(rt));
-		jge("intrinsic_tr_ex", T_NEAR);
+		jge(intrinsics_.tr, T_NEAR);
 	}
 }
 
@@ -74,12 +74,12 @@ void Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __restrict chunk_offset, 
 	// tr ? [rs] >= [rt]
 	mov(eax, int32(code));
 	if (rs.get_register() == rt.get_register()) {
-		jmp("intrinsic_tr_ex", T_NEAR);
+		jmp(intrinsics_.tr, T_NEAR);
 	}
 	else {
 		mov(ecx, get_register_op32(rs));
 		cmp(ecx, get_register_op32(rt));
-		jae("intrinsic_tr_ex", T_NEAR);
+		jae(intrinsics_.tr, T_NEAR);
 	}
 }
 
@@ -102,7 +102,7 @@ void Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __restrict chunk_offset, u
 		 mov(eax, int32(code));
 		 mov(ecx, get_register_op32(rs));
 		 cmp(ecx, get_register_op32(rt));
-		 jl("intrinsic_tr_ex", T_NEAR);
+		 jl(intrinsics_.tr, T_NEAR);
 	}
 }
 
@@ -128,7 +128,7 @@ void Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, 
 		 mov(eax, int32(code));
 		 mov(ecx, get_register_op32(rs));
 		 cmp(ecx, get_register_op32(rt));
-		 jl("intrinsic_tr_ex", T_NEAR);
+		 jl(intrinsics_.tr, T_NEAR);
 	}
 }
 
@@ -151,7 +151,7 @@ void Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __restrict chunk_offset, u
 		 mov(eax, int32(code));
 		 mov(ecx, get_register_op32(rs));
 		 cmp(ecx, get_register_op32(rt));
-		 jne("intrinsic_tr_ex", T_NEAR);
+		 jne(intrinsics_.tr, T_NEAR);
 	}
 }
 
@@ -181,6 +181,6 @@ void Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset & __restrict chunk_offse
 	call(rax);
 	mov(ebx, dword[rbp + flags_offset]);
 	test(eax, eax);
-	jnz("save_return", T_NEAR);
+	jnz(intrinsics_.save_return, T_NEAR);
 }
 

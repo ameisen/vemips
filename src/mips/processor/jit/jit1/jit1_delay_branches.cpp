@@ -659,7 +659,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 
 			mov(rcx, uint64(chunk_offset.data()));
 			mov(eax, dword[rcx + rax]);
-			mov(rcx, "chunk_start");
+			mov(rcx, intrinsics_.chunk_start);
 			add(rax, rcx);
 			jmp(rax);
 			L(not_within);
@@ -722,7 +722,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 
 			mov(rcx, uint64(chunk_offset.data()));
 			mov(eax, dword[rcx + rax]);
-			mov(rcx, "chunk_start");
+			mov(rcx, intrinsics_.chunk_start);
 			add(rax, rcx);
 			jmp(rax);
 			L(not_within);

@@ -10,6 +10,33 @@ namespace mips
 	class Jit1_CodeGen final : public Xbyak::CodeGenerator
 	{
 		std::array<Xbyak::Label, jit1::NumInstructionsChunk> instruction_offset_labels_;
+		struct {
+			struct intrinsic final {
+				Xbyak::Label label;
+				bool used = false;
+
+				operator Xbyak::Label&() {
+					used = true;
+					return label;
+				}
+			};
+			
+			intrinsic ri;
+			intrinsic adel;
+			intrinsic ades;
+			intrinsic ov;
+			intrinsic tr;
+			intrinsic store_flush;
+			intrinsic check_ex;
+			intrinsic save_return_eax_pc;
+			intrinsic save;
+			intrinsic save_return;
+			intrinsic stats;
+
+			intrinsic code_start;
+			intrinsic chunk_start;
+			intrinsic intrinsic_start;
+		} intrinsics_;
 		jit1 & __restrict jit_;
 		uint8* const address_;
 

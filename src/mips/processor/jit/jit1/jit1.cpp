@@ -312,8 +312,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 	if (chunk_start_offset == 0)
 	{
-		L("chunk_start");
-		L("code_start");
+		L(intrinsics_.chunk_start);
+		L(intrinsics_.code_start);
 	}
 
 	static constexpr uint32 num_instructions = jit1::NumInstructionsChunk;
@@ -342,7 +342,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		const instructions::InstructionInfo * __restrict instruction_info_ptr = nullptr;
 
 #if JIT_INSERT_IDENTIFIERS
-		std::string id_label = GetIndexLabel(i) + "_id";
+		const Xbyak__Label id_label;
 		jmp(id_label);
 		nop();nop();nop();nop();
 		mov(eax, int32(current_address));
@@ -358,9 +358,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			add(rcx, -128);
 			call(rax);
 			test(eax, eax);
-			jnz("save_return", T_NEAR);
+			jnz(intrinsics_.save_return, T_NEAR);
 			cmp(rdi, r14);
-			je("save_return", T_NEAR);
+			je(intrinsics_.save_return, T_NEAR);
 		}
 		else if (jit_.processor_.debugging_)
 		{
@@ -370,14 +370,14 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			add(rcx, -128);
 			call(rax);
 			test(eax, eax);
-			jnz("save_return", T_NEAR);
+			jnz(intrinsics_.save_return, T_NEAR);
 		}
 		else if (jit_.processor_.ticked_)
 		{
 			// check if we are already at our tick count.
 			cmp(rdi, r14);
 			mov(eax, int32(current_address));
-			je("save_return_eax_pc", T_NEAR);
+			je(intrinsics_.save_return_eax_pc, T_NEAR);
 		}
 
 		if (current_address >= 4)
@@ -413,7 +413,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					{
 						// dispatch a stat call.
 						mov(rcx, int64(instruction_info_ptr->Name));
-						call("intrinsic_stats");
+						call(intrinsics_.stats);
 					}
 
 					compact_branch = ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::CompactBranch)) != 0);
@@ -429,7 +429,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							test(ebx, processor::flag::no_cti);
 							jz(no_ex);
 							mov(eax, int32(current_address));
-							jmp("intrinsic_ri_ex", T_NEAR);
+							jmp(intrinsics_.ri, T_NEAR);
 							L(no_ex);
 						}
 						else
@@ -696,7 +696,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				{
 					// RI
 					mov(eax, int32(current_address));
-					jmp("intrinsic_ri_ex", T_NEAR);
+					jmp(intrinsics_.ri, T_NEAR);
 				}
 			}
 			else
@@ -704,7 +704,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				// AdEL
 				mov(eax, int32(current_address));
 				mov(ecx, eax);
-				jmp("intrinsic_adel_ex", T_NEAR);
+				jmp(intrinsics_.adel, T_NEAR);
 			}
 
 			const size_t ins_size = getSize() - ins_start_size;
@@ -715,7 +715,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			// AdEL
 			mov(eax, int32(current_address));
 			mov(ecx, eax);
-			jmp("intrinsic_adel_ex", T_NEAR);
+			jmp(intrinsics_.adel, T_NEAR);
 		}
 		// Epilog for store ops, as we need to test afterwards to see if they may have altered JIT memory.
 		//if (!terminate_instruction)
@@ -744,7 +744,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				// ret
 				// no_flush:
 				test(ebx, processor::flag::jit_mem_flush);
-				jnz("intrinsic_store_flush", T_NEAR);
+				jnz(intrinsics_.store_flush, T_NEAR);
 			}
 			// Handle compact branch.
 			if (compact_branch && compact_branch_suffix_required)
@@ -802,7 +802,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 				mov(rcx, uint64(chunk_offset.data()));
 				mov(eax, dword[rcx + rax]);
-				mov(rcx, "chunk_start");
+				mov(rcx, intrinsics_.chunk_start);
 				add(rax, rcx);
 				jmp(rax);
 				L(not_within);
@@ -827,7 +827,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				// ret
 				// no_ex:
 				test(ebx, processor::flag::trapped_exception);
-				jnz("intrinsic_check_ex", T_NEAR);
+				jnz(intrinsics_.check_ex, T_NEAR);
 			}
 			if (possible_after_delaybranch)
 			{
@@ -903,67 +903,99 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	jmp(rax);
 
 	{
-		L("intrinsic_start");
+		const Xbyak::Label intrinsic_ex;
+		const Xbyak::Label save;
 
-		L("intrinsic_ri_ex");
-		mov(rax, uint64(RI_Exception));
-		jmp("intrinsic_ex");
+		L(intrinsics_.intrinsic_start);
 
-		L("intrinsic_adel_ex");
-		mov(rax, uint64(AdEL_Exception));
-		jmp("intrinsic_ex");
+		bool exception_label_used = false;
 
-		L("intrinsic_ades_ex");
-		mov(rax, uint64(AdES_Exception));
-		jmp("intrinsic_ex");
+		if (intrinsics_.ri.used) {
+			L(intrinsics_.ri);
+			mov(rax, uint64(RI_Exception));
+			jmp(intrinsic_ex);
+			exception_label_used = true;
+		}
 
-		L("intrinsic_ov_ex");
-		mov(rax, uint64(OV_Exception));
-		jmp("intrinsic_ex");
+		if (intrinsics_.adel.used) {
+			L(intrinsics_.adel);
+			mov(rax, uint64(AdEL_Exception));
+			jmp(intrinsic_ex);
+			exception_label_used = true;
+		}
 
-		L("intrinsic_tr_ex");
-		mov(rax, uint64(TR_Exception));
-		jmp("intrinsic_ex");
+		if (intrinsics_.ades.used) {
+			L(intrinsics_.ades);
+			mov(rax, uint64(AdES_Exception));
+			jmp(intrinsic_ex);
+			exception_label_used = true;
+		}
 
-		L("intrinsic_ex");
-		call("save");
-		mov(rdx, rbp);
-		add(rdx, -128);
-		add(rsp, 40);
-		jmp(rax);
+		if (intrinsics_.ov.used) {
+			L(intrinsics_.ov);
+			mov(rax, uint64(OV_Exception));
+			jmp(intrinsic_ex);
+			exception_label_used = true;
+		}
 
-		L("intrinsic_store_flush");
-		jmp("save_return");
+		if (intrinsics_.tr.used) {
+			L(intrinsics_.tr);
+			mov(rax, uint64(TR_Exception));
+			jmp(intrinsic_ex);
+			exception_label_used = true;
+		}
 
-		L("intrinsic_check_ex");
-		jmp("save_return");
+		if (exception_label_used) {
+			L(intrinsic_ex);
+			call(save);
+			mov(rdx, rbp);
+			add(rdx, -128);
+			add(rsp, 40);
+			jmp(rax);
+		}
 
-		L("save_return_eax_pc");
-		mov(dword[rbp + pc_offset], eax);
-		jmp("save_return");
+		if (intrinsics_.store_flush.used) {
+			L(intrinsics_.store_flush);
+			jmp(intrinsics_.save_return);
+		}
 
-		L("save");
+		if (intrinsics_.check_ex.used) {
+			L(intrinsics_.check_ex);
+			jmp(intrinsics_.save_return);
+		}
+
+		if (intrinsics_.save_return_eax_pc.used) {
+			L(intrinsics_.save_return_eax_pc);
+			mov(dword[rbp + pc_offset], eax);
+			jmp(intrinsics_.save_return);
+		}
+
+		L(save);
 		mov(qword[rbp + ic_offset], rdi);		// save instruction count
 		mov(dword[rbp + flags_offset], ebx);
 		mov(dword[rbp + dbt_offset], esi);  // set it in the interpreter
 		mov(dword[rbp + (int64(gp_offset) + (mips_fp * 4))], r15d);
 		ret();
 
-		L("save_return");
-		call("save");
-		add(rsp, 40);
-		ret();
+		if (intrinsics_.save_return.used) {
+			L(intrinsics_.save_return);
+			call(save);
+			add(rsp, 40);
+			ret();
+		}
 
 		if (jit_.processor_.collect_stats_) {
 			// dispatch a stat call.
-			L("intrinsic_stats");
-			mov(rax, uint64(collect_stats));
-			mov(rdx, rbp);
-			add(rdx, -128);
-			sub(rsp, 40);
-			call(rax);
-			add(rsp, 40);
-			ret();
+			if (intrinsics_.stats.used) {
+				L(intrinsics_.stats);
+				mov(rax, uint64(collect_stats));
+				mov(rdx, rbp);
+				add(rdx, -128);
+				sub(rsp, 40);
+				call(rax);
+				add(rsp, 40);
+				ret();
+			}
 		}
 }
 

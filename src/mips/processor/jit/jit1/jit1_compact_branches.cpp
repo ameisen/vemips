@@ -190,7 +190,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP06))
@@ -265,7 +265,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZALC)) // branch rt > 0 and link
@@ -309,7 +309,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP07))
@@ -384,7 +384,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP10))
@@ -488,7 +488,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP30))
@@ -592,7 +592,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLEZC)) // branch rt <= 0
@@ -634,7 +634,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP26))
@@ -706,7 +706,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZC)) // branch rt > 0
@@ -748,7 +748,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP27))
@@ -820,7 +820,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BEQZC)) // branch [rs] == 0
@@ -862,7 +862,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BNEZC)) // branch [rs] != 0
@@ -906,7 +906,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		{
 			terminate_instruction = true;
 			mov(eax, int32(address));
-			jmp("intrinsic_ri_ex", T_NEAR);
+			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JIC)) // branch [rt] + offset
@@ -928,7 +928,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		mov(rcx, uint64(chunk_offset.data()));
 		mov(eax, dword[rcx + rax]);
-		mov(rcx, "chunk_start");
+		mov(rcx, intrinsics_.chunk_start);
 		add(rax, rcx);
 		
 		jmp(rax);
@@ -962,7 +962,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		mov(rcx, uint64(chunk_offset.data()));
 		mov(eax, dword[rcx + rax]);
-		mov(rcx, "chunk_start");
+		mov(rcx, intrinsics_.chunk_start);
 		add(rax, rcx);
 		
 		jmp(rax);
