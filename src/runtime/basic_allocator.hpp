@@ -39,7 +39,8 @@ public:
 		free.reserve(free.size() + chunk_count - 1);
 		auto* new_chunk = new chunk_t;
 		allocated.push_back(new_chunk);
-		uint32 chunk_index = allocated.size() - 1;
+		xassert((allocated.size() - 1) <= std::numeric_limits<uint32>::max());
+		uint32 chunk_index = uint32(allocated.size() - 1);
 		for (uint32 i = 1; i < chunk_count; ++i) {
 			free.push_back({ chunk_index, i });
 		}

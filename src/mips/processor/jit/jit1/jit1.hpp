@@ -11,7 +11,7 @@
 #include <list>
 #include <limits>
 #include "runtime/basic_allocator.hpp"
-#include "runtime/leveled_map.hpp"
+#include "runtime/directory_table.hpp"
 #include "runtime/associate_cache.hpp"
 
 namespace mips {
@@ -186,7 +186,7 @@ namespace mips {
 	private:
 
 #if USE_LEVELED_MAP
-		leveled_map<chunk_data, true, 1 << RemainingLog2, 256, 256> jit_map_;
+		directory_table<chunk_data, true, 1 << RemainingLog2, 256, 256> jit_map_;
 #else
 		MapLevel3 jit_map;
 #endif
