@@ -909,31 +909,27 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		L("intrinsic_start");
 
 		L("intrinsic_ri_ex");
-		call("save");
 		mov(rax, uint64(RI_Exception));
 		jmp("intrinsic_ex");
 
 		L("intrinsic_adel_ex");
-		call("save");
 		mov(rax, uint64(AdEL_Exception));
 		jmp("intrinsic_ex");
 
 		L("intrinsic_ades_ex");
-		call("save");
 		mov(rax, uint64(AdES_Exception));
 		jmp("intrinsic_ex");
 
 		L("intrinsic_ov_ex");
-		call("save");
 		mov(rax, uint64(OV_Exception));
 		jmp("intrinsic_ex");
 
 		L("intrinsic_tr_ex");
-		call("save");
 		mov(rax, uint64(TR_Exception));
 		jmp("intrinsic_ex");
 
 		L("intrinsic_ex");
+		call("save");
 		mov(rdx, rbp);
 		add(rdx, -128);
 		add(rsp, 40);
@@ -948,7 +944,6 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		L("save_return_eax_pc");
 		mov(dword[rbp + pc_offset], eax);
 		jmp("save_return");
-
 
 		L("save");
 		mov(qword[rbp + ic_offset], rdi);		// save instruction count
