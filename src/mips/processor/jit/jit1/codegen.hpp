@@ -11,10 +11,20 @@ namespace mips
 	{
 		jit1 & __restrict jit_;
 		uint32 unique_label_index_ = 0;
+		uint8* const address_;
 
 	public:
-		Jit1_CodeGen(jit1 & __restrict jit, uint8 *userptr, size_t usersz) : Xbyak::CodeGenerator(usersz, userptr), jit_(jit) {}
+
+		Jit1_CodeGen(jit1 & __restrict jit, uint8 *userptr, size_t usersz) : Xbyak::CodeGenerator(usersz, userptr), jit_(jit), address_(userptr) {}
 		virtual ~Jit1_CodeGen() = default;
+
+		uint8* get_address() const {
+			return address_;
+		}
+
+		uint8* get_current_address() const {
+			return address_ + getSize();
+		}
 
 		template <size_t N>
 		static constexpr size_t length_const(const char (& __restrict)[N]) {

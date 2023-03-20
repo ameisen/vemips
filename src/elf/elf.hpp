@@ -12,46 +12,46 @@
 namespace elf {
 	class binary final {
 		class data_stream final {
-			const char * __restrict m_Data;
-			size_t m_Size;
+			const char * __restrict data_;
+			size_t size_;
 
 			template <size_t N>
-			_forceinline void check_size(size_t size, const char (& __restrict message)[N]) const __restrict {
-				if _unlikely(m_Size < size) [[unlikely]] {
+			_forceinline void check_size(const size_t size, const char (& __restrict message)[N]) const __restrict {
+				if _unlikely(size_ < size) [[unlikely]] {
 					throw std::runtime_error(message);
 				}
 			}
 
 		public:
-			data_stream(const std::span<char> data) : m_Data(data.data()), m_Size(data.size()) {}
+			data_stream(const std::span<char> data) : data_(data.data()), size_(data.size()) {}
 
 			template <typename T>
 			T pop() __restrict {
 				check_size(sizeof(T), "Out Of Range ELF Binary Seek");
 
-				const auto* __restrict dataPtr = m_Data;
-				m_Data += sizeof(T);
-				m_Size -= sizeof(T);
+				const auto* __restrict data_pointer = data_;
+				data_ += sizeof(T);
+				size_ -= sizeof(T);
 
 				T result;
-				memcpy(&result, dataPtr, sizeof(T));
+				memcpy(&result, data_pointer, sizeof(T));
 				return result;
 			}
 
-			void skip(size_t size) __restrict {
+			void skip(const size_t size) __restrict {
 				check_size(size, "Out Of Range ELF Binary Seek");
 
-				m_Data += size;
-				m_Size -= size;
+				data_ += size;
+				size_ -= size;
 			}
 
 			template <typename T>
 			void extract(T &out) __restrict {
 				check_size(sizeof(T), "Out Of Range ELF Binary Seek");
 
-				memcpy(&out, m_Data, sizeof(T));
-				m_Data += sizeof(T);
-				m_Size -= sizeof(T);
+				memcpy(&out, data_, sizeof(T));
+				data_ += sizeof(T);
+				size_ -= sizeof(T);
 			}
 
 			// TODO : Technically UB
@@ -59,51 +59,61 @@ namespace elf {
 			const T & reference() __restrict {
 				check_size(sizeof(T), "Out Of Range ELF Binary Seek");
 
-				const T & __restrict value = *(const T * __restrict)m_Data;
-				m_Data += sizeof(T);
-				m_Size -= sizeof(T);
+				const T & __restrict value = *(const T * __restrict)data_;
+				data_ += sizeof(T);
+				size_ -= sizeof(T);
 				return value;
 			}
 
 			// TODO : Technically UB
 			template <typename T>
-			const T & offset(size_t offset) const __restrict {
+			[[nodiscard]]
+			const T & offset(const size_t offset) const __restrict {
 				check_size(offset + sizeof(T), "Out Of Range ELF Binary Read");
 
-				return *(const T * __restrict)(m_Data + offset);
+				return *(const T * __restrict)(data_ + offset);
 			}
 
-			const char * address_offset(size_t offset) const __restrict {
+			[[nodiscard]]
+			const char * address_offset(const size_t offset) const __restrict {
 				check_size(offset, "Out Of Range ELF Binary Read");
 
-				return m_Data + offset;
+				return data_ + offset;
 			}
 		};
 
 		template <typename PtrType>
 		void read_binary(data_stream & __restrict stream_data);
 	public:
-		struct Section {
-			std::string	Name;
-			uint32			FileOffset;
-			uint32			FileSize;
-			uint32			MemoryOffset;
-			uint32			MemorySize;
-			bool				Executable;
+		template <typename T>
+		struct extent final {
+			T offset;
+			T size;
 
-			bool operator < (const Section & __restrict section) const {
-				return MemoryOffset < section.MemoryOffset;
+			T end_offset() const {
+				return offset + size;
 			}
 		};
 
-		const data_stream																	m_RawDataStream;
-		std::vector<Section>															m_Sections;
-		std::unordered_map<std::string, const Section *>	m_NamedSections;
+		struct section final {
+			std::string	name;
+			extent<uint32> file_extent;
+			extent<uint32> memory_extent;
+			bool				executable;
 
-		uint32															m_EntryAddress;
-		uint32															m_ProgramHeaders;
-		uint32															m_ProgramHeaderSize;
-		uint32															m_ProgramHeaderCnt;
+			bool operator < (const section & __restrict section) const {
+				return memory_extent.offset < section.memory_extent.offset;
+			}
+		};
+
+		const data_stream																	raw_data_stream_;
+		std::vector<section>															sections_;
+		std::unordered_map<std::string, const section *>	named_sections_;
+
+		uint32															entry_address_;
+		uint32															program_headers_;
+		uint32															program_headers_size_;
+		uint32															program_header_count_;
 
 		binary(std::span<char> binary_data);
 	};

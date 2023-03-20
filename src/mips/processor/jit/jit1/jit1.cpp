@@ -142,6 +142,8 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 		}
 
 		cg.ready();
+
+		_clear_cache(g_global_exec_data, g_global_exec_data + cg.getSize());
 	}
 }
 
@@ -254,11 +256,25 @@ namespace
 	{
 		return proc->get_guest_system()->get_debugger()->should_interrupt_execution();
 	}
+
+	struct cache_flusher final {
+		Jit1_CodeGen& codegen;
+		uint8* const start_address;
+
+		cache_flusher(Jit1_CodeGen & codegen) : codegen(codegen), start_address(codegen.get_current_address()) {
+		}
+
+		~cache_flusher() {
+			_clear_cache(start_address, codegen.get_current_address());
+		}
+	};
 }
 
-void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update)
-{
+void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update) {
 	xassert((start_address % 4) == 0);
+
+	cache_flusher scoped_cache_flusher(*this);
+
 	const uint32 base_address = start_address & ~(jit1::ChunkSize - 1);
 	const uint32 last_address = base_address + (jit1::ChunkSize - 1);
 
@@ -837,17 +853,17 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		auto &patch_pair = chunk.m_patches.back();
 		uint32 &patch_target = patch_pair.target;
 
-			// patch no-op
-			if (address == nullptr) {
-				db(0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00);
-			}
-			else {
-				static constexpr uint16 patch_prefix = 0xB848;
-				static constexpr uint16 patch_suffix = 0xE0FF;
-				dw(patch_prefix);
-				dq(uint64(address));
-				dw(patch_suffix);
-			}
+		// patch no-op
+		if (address == nullptr) {
+			db(0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00);
+		}
+		else {
+			static constexpr uint16 patch_prefix = 0xB848;
+			static constexpr uint16 patch_suffix = 0xE0FF;
+			dw(patch_prefix);
+			dq(uint64(address));
+			dw(patch_suffix);
+		}
 
 		mov(rcx, int64(&patch_target));
 		mov(dword[rcx], edx);
@@ -895,38 +911,29 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		L("intrinsic_ri_ex");
 		call("save");
 		mov(rax, uint64(RI_Exception));
-		mov(rdx, rbp);
-		add(rdx, -128);
-		add(rsp, 40);
-		jmp(rax);
+		jmp("intrinsic_ex");
 
 		L("intrinsic_adel_ex");
 		call("save");
 		mov(rax, uint64(AdEL_Exception));
-		mov(rdx, rbp);
-		add(rdx, -128);
-		add(rsp, 40);
-		jmp(rax);
+		jmp("intrinsic_ex");
 
 		L("intrinsic_ades_ex");
 		call("save");
 		mov(rax, uint64(AdES_Exception));
-		mov(rdx, rbp);
-		add(rdx, -128);
-		add(rsp, 40);
-		jmp(rax);
+		jmp("intrinsic_ex");
 
 		L("intrinsic_ov_ex");
 		call("save");
 		mov(rax, uint64(OV_Exception));
-		mov(rdx, rbp);
-		add(rdx, -128);
-		add(rsp, 40);
-		jmp(rax);
+		jmp("intrinsic_ex");
 
 		L("intrinsic_tr_ex");
 		call("save");
 		mov(rax, uint64(TR_Exception));
+		jmp("intrinsic_ex");
+
+		L("intrinsic_ex");
 		mov(rdx, rbp);
 		add(rdx, -128);
 		add(rsp, 40);
@@ -955,8 +962,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		add(rsp, 40);
 		ret();
 
-		if (jit_.processor_.collect_stats_)
-		{
+		if (jit_.processor_.collect_stats_) {
 			// dispatch a stat call.
 			L("intrinsic_stats");
 			mov(rax, uint64(collect_stats));
@@ -984,8 +990,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	// The current chunk is large enough for our data.
 	//memcpy((char *)chunk.m_data + chunk_start_offset, data, getSize());
 
-	if (!update)
-	{
+	if (!update) {
 		jit_.chunks_.push_back(&chunk);
 		std::sort(jit_.chunks_.begin(), jit_.chunks_.end());
 	}

@@ -81,9 +81,9 @@ public:
 	}
 
 	virtual void set_executable_memory(const elf::binary & __restrict binary) override {
-		for (auto&& section : binary.m_Sections) {
-			if (section.Executable) {
-				m_ExecutableBlocks.emplace_back(section.MemoryOffset, section.MemoryOffset + section.MemorySize);
+		for (auto&& section : binary.sections_) {
+			if (section.executable) {
+				m_ExecutableBlocks.emplace_back(section.memory_extent.offset, section.memory_extent.end_offset());
 			}
 		}
 		std::stable_sort(m_ExecutableBlocks.begin(), m_ExecutableBlocks.end());
@@ -148,8 +148,8 @@ void system::initialize(const elf::binary & __restrict binary) {
 
 	uint32 highest_used_addr = 0;
 	// Validate that there is enough memory to hold the binary.
-	if (!binary.m_Sections.empty()) {
-		const uint32 preadjusted_final_mapped_address = binary.m_Sections.back().MemoryOffset + binary.m_Sections.back().MemorySize;
+	if (!binary.sections_.empty()) {
+		const uint32 preadjusted_final_mapped_address = binary.sections_.back().memory_extent.end_offset();
 		const uint32_t finalMappedAddress = preadjusted_final_mapped_address + stack_offset;
 		highest_used_addr = std::max(highest_used_addr, preadjusted_final_mapped_address);
 		if (finalMappedAddress > mem_size) {
@@ -161,20 +161,20 @@ void system::initialize(const elf::binary & __restrict binary) {
 			}
 		}
 
-		for (auto&& section : binary.m_Sections) { // these are considered to be the 'not free memory' areas.
+		for (auto&& section : binary.sections_) { // these are considered to be the 'not free memory' areas.
 			// Initialize the sections.
-			if (section.FileSize) {
+			if (section.file_extent.size) {
 				memcpy(
-					mem_data + section.MemoryOffset + stack_offset,
-					binary.m_RawDataStream.address_offset(section.FileOffset),
-					section.FileSize
+					mem_data + section.memory_extent.offset + stack_offset,
+					binary.raw_data_stream_.address_offset(section.file_extent.offset),
+					section.file_extent.size
 				);
 			}
-			if (section.MemorySize > section.FileSize) {
+			if (section.memory_extent.size > section.file_extent.size) {
 				memset(
-					mem_data + section.MemoryOffset + section.FileSize  + stack_offset,
+					mem_data + section.memory_extent.offset + section.file_extent.size + stack_offset,
 					0,
-					section.MemorySize - section.FileSize
+					section.memory_extent.size - section.file_extent.size
 				);
 			}
 		}
@@ -182,12 +182,12 @@ void system::initialize(const elf::binary & __restrict binary) {
 	m_system_break = highest_used_addr;
 
 	// validate that the entry address is at least somewhat sensible
-	if ((binary.m_EntryAddress + m_options.stack_memory) > mem_size) {
+	if ((binary.entry_address_ + m_options.stack_memory) > mem_size) {
 		throw std::runtime_error("ELF Entry Address is out of range of the system");
 	}
 
 	// Set program counter.
-	m_processor->set_program_counter(binary.m_EntryAddress);
+	m_processor->set_program_counter(binary.entry_address_);
 
 	// Set up stack.
 
@@ -238,17 +238,17 @@ void system::initialize(const elf::binary & __restrict binary) {
 	stack_vector.push_back(17); // AT_CLKTCK
 	stack_vector.push_back(100);
 	stack_vector.push_back(3); // AT_PHDR
-	stack_vector.push_back(binary.m_ProgramHeaders);
+	stack_vector.push_back(binary.program_headers_);
 	stack_vector.push_back(4); // AT_PHENT
-	stack_vector.push_back(binary.m_ProgramHeaderSize);
+	stack_vector.push_back(binary.program_headers_size_);
 	stack_vector.push_back(5); // AT_PHNUM
-	stack_vector.push_back(binary.m_ProgramHeaderCnt);
+	stack_vector.push_back(binary.program_header_count_);
 	stack_vector.push_back(7);  // AT_BASE
 	stack_vector.push_back(0);  // pair
 	stack_vector.push_back(8);  // AT_FLAGS
 	stack_vector.push_back(0);  // pair
 	stack_vector.push_back(9);  // AT_ENTRY
-	stack_vector.push_back(binary.m_EntryAddress);  // pair
+	stack_vector.push_back(binary.entry_address_);  // pair
 	stack_vector.push_back(11);  // AT_UID
 	stack_vector.push_back(0);
 	stack_vector.push_back(12);  // AT_EUID
