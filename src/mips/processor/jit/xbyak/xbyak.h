@@ -1334,7 +1334,13 @@ class Label {
 public:
 	Label() : mgr(0), id(0) {}
 	Label(const Label& rhs);
+#ifndef VEMIPS_XBYAK_EXTENSION
+	Label(Label&& rhs);
+#endif
 	Label& operator=(const Label& rhs);
+#ifndef VEMIPS_XBYAK_EXTENSION
+	Label& operator=(Label&& rhs);
+#endif
 	~Label();
 	void clear() { mgr = 0; id = 0; }
 	int getId() const { return id; }
@@ -1579,6 +1585,29 @@ inline Label::Label(const Label& rhs)
 	mgr = rhs.mgr;
 	if (mgr) mgr->incRefCount(id, this);
 }
+
+#ifndef VEMIPS_XBYAK_EXTENSION
+inline Label::Label(Label&& rhs) :
+	mgr(rhs.mgr),
+	id(rhs.id)
+{
+	rhs.mgr = {};
+	rhs.id = {};
+}
+
+inline Label& Label::operator=(Label&& rhs)
+{
+	if (id) [[unlikely]] {
+		XBYAK_THROW_RET(ERR_LABEL_IS_ALREADY_SET_BY_L, *this)
+	}
+	mgr = rhs.mgr;
+	id = rhs.id;
+	rhs.mgr = {};
+	rhs.id = {};
+	return *this;
+}
+#endif // VEMIPS_XBYAK_EXTENSION
+
 inline Label& Label::operator=(const Label& rhs)
 {
 	if (id) XBYAK_THROW_RET(ERR_LABEL_IS_ALREADY_SET_BY_L, *this)
@@ -2521,6 +2550,9 @@ private:
 public:
 	void L(const std::string& label) { labelMgr_.defineSlabel(label); }
 	void L(Label& label) { labelMgr_.defineClabel(label); }
+#ifndef VEMIPS_XBYAK_EXTENSION // because we actually want things to be `const` to prevent accidently overwriting, but this actually mutates it
+	void L(const Label& label) { L(const_cast<Label&>(label)); }
+#endif
 	Label L() { Label label; L(label); return label; }
 	void inLocalLabel() { labelMgr_.enterLocal(); }
 	void outLocalLabel() { labelMgr_.leaveLocal(); }

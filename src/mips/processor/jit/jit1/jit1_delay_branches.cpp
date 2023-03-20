@@ -31,7 +31,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 	static const int8 r31 = gp_offset + (31 * 4);
 
-	const auto no_jump = get_unique_label();
+	const Xbyak::Label no_jump;
 
 	if (IS_INSTRUCTION(instruction_info, COP1_BC1EQZ_v))
 	{
@@ -41,7 +41,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
 		const int32 offset = instructions::TinyInt<18>(instruction << 2U).sextend<int32>();
 
-		uint32 target_address = address + 4 + offset;
+		const uint32 target_address = address + 4 + offset;
 
 		test(dword[r12 + ft_offset], 1); // ZF set to 1 if [ft] & 1 == 0
 		jnz(no_jump);
@@ -344,12 +344,11 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 	static const int8 r31 = gp_offset + int8(31 * 4);
 
-	const auto patch_preprolog = [&](auto address) -> std::string
+	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
 		// Start with a set of nops so that we have somewhere to write patch code.
-		std::string patch = get_unique_label();
-		L(patch); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
+		const auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
 		chunk.m_patches.push_back({ uint32(getSize()), 0 });
 		auto & [offset, target] = chunk.m_patches.back();
 		uint32 &patch_target = target;
@@ -380,18 +379,18 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		mov(dword[rcx], edx);
 	};
 
-	const auto patch_epilog = [&](const std::string &patch)
+	const auto patch_epilog = [&](const Xbyak::Label &patch)
 	{
 		static constexpr uint16 patch_prefix = 0xB848;
 		static constexpr uint16 patch_suffix = 0xE0FF;
 
-		mov(rcx, patch.c_str());
+		mov(rcx, patch);
 		mov(word[rcx], int16_t(patch_prefix));
 		mov(qword[rcx + 2], rax);
 		mov(word[rcx + 10], int16_t(patch_suffix));
 	};
 
-	const auto safe_jmp = [&](const std::string &target_label, const uint32 instruction_offset)
+	const auto safe_jmp = [&](const Xbyak::Label &target_label, const uint32 instruction_offset)
 	{
 		const LabelType label_type =
 			((instruction_offset <= this_offset && (chunk_offset[this_offset] - chunk_offset[instruction_offset]) <= 128) || (instruction_offset - this_offset) <= MaxShortJumpLookAhead) ?
@@ -609,20 +608,20 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	{
 		case branch_type::near_branch:						// Branches within this chunk
 		{
-			const auto no_branch = get_unique_label();
+			const Xbyak::Label no_branch;
 			test(ebx, processor::flag::branch_delay);
 			je(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
 			// what is the offset of the target address?
 			const uint32 target_offset = (target_address - chunk_begin) / 4u;
-			const auto target_label = get_index_label(target_offset);
+			const auto& target_label = get_instruction_offset_label(target_offset);
 			xor_(esi, esi);
 			safe_jmp(target_label, target_offset);
 			L(no_branch);
 		} break;
 		case branch_type::far_branch:						 // Branches outside this chunk
 		{
-			const auto no_branch = get_unique_label();
+			const Xbyak::Label no_branch;
 			test(ebx, processor::flag::branch_delay);
 			je(no_branch);
 			xor_(esi, esi);
@@ -643,8 +642,8 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		} break;
 		case branch_type::indeterminate:					 // Branches to an unknown location
 		{
-			const auto no_branch = get_unique_label();
-			const auto not_within = get_unique_label();
+			const Xbyak::Label no_branch;
+			const Xbyak::Label not_within;
 
 			test(ebx, processor::flag::branch_delay);
 			je(no_branch);
@@ -673,7 +672,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		} break;
 		case branch_type::near_branch_unhandled:		  // Branches within this chunk, use pc state	
 		{
-			const auto no_branch = get_unique_label();
+			const Xbyak::Label no_branch;
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
@@ -682,14 +681,14 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 
 			// what is the offset of the target address?
 			const uint32 target_offset = (target_address - chunk_begin) / 4u;
-			const auto target_label = get_index_label(target_offset);
+			const auto& target_label = get_instruction_offset_label(target_offset);
 
 			safe_jmp(target_label, target_offset);
 			L(no_branch);
 		} break;
 		case branch_type::far_branch_unhandled:			// Branches outside this chunk, use pc state
 		{
-			const auto no_branch = get_unique_label();
+			const Xbyak::Label no_branch;
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
@@ -706,8 +705,8 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		} break;
 		case branch_type::indeterminate_unhandled:		// Branches to an unknown location, use pc state
 		{
-			const auto no_branch = get_unique_label();
-			const auto not_within = get_unique_label();
+			const Xbyak::Label no_branch;
+			const Xbyak::Label not_within;
 
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);

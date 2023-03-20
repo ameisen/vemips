@@ -95,7 +95,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		offset = instructions::TinyInt<9>(instruction >> 7).sextend<int32>();
 	}
 
-	const auto valid_ptr = get_unique_label();
+	const Xbyak::Label valid_ptr;
 
 	if (mmu_type == mmu::emulated) {
 		mov(rax, uint64(mem_write_jit));
@@ -420,7 +420,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 	}
 
 	if (mmu_type == mmu::emulated && !jit_.processor_.readonly_exec_) {
-		const auto no_flush = get_unique_label();
+		const Xbyak::Label no_flush;
 		//cmp(eax, 0);
 		//je(no_flush);
 		test(eax, eax);
@@ -455,7 +455,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 	int32 nommu_offset = 0;
 
 	const auto get_address = [&](int32 offset, uint32 load_size) {
-		const auto valid_ptr = get_unique_label();
+		const Xbyak::Label valid_ptr;
 
 		if (mmu_type == mmu::emulated) {
 			mov(rax, uint64(mem_read_jit));

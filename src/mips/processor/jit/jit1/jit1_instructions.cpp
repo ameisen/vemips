@@ -123,7 +123,6 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 	else
 	{
-		const auto no_ov = get_unique_label();
 		mov(eax, get_register_op32(rs));
 		sub(eax, get_register_op32(rt));
 		jo("intrinsic_ov_ex", T_NEAR);
@@ -1412,7 +1411,7 @@ void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, u
 	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
 
-	const auto divzero = get_unique_label();
+	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.get_register() == 0)
@@ -1479,7 +1478,7 @@ void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, 
 	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
 
-	const auto divzero = get_unique_label();
+	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.get_register() == 0)
@@ -1546,7 +1545,7 @@ void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, u
 	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
 
-	const auto divzero = get_unique_label();
+	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.get_register() == 0)
@@ -1613,7 +1612,7 @@ void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, 
 	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
 
-	const auto divzero = get_unique_label();
+	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.get_register() == 0)

@@ -319,7 +319,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	static constexpr uint32 num_instructions = jit1::NumInstructionsChunk;
 	for (uint32 i = start_index; i < num_instructions; ++i)
 	{
-		auto cur_label = get_index_label(i);
+		const auto& cur_label = get_instruction_offset_label(i);
 		L(cur_label);
 		chunk_offset[i] = uint32(this->getSize()) + chunk_start_offset;
 
@@ -374,8 +374,6 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 		else if (jit_.processor_.ticked_)
 		{
-			const auto no_flush = get_unique_label();
-		
 			// check if we are already at our tick count.
 			cmp(rdi, r14);
 			mov(eax, int32(current_address));
@@ -426,7 +424,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 						// CTI instruction prefix.
 						if ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::ControlInstruction)) != 0)
 						{
-							const auto no_ex = get_unique_label();
+							const Xbyak::Label no_ex;
 
 							test(ebx, processor::flag::no_cti);
 							jz(no_ex);
@@ -788,8 +786,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				// xor rcx, rcx								; zero rcx, as our JIT guarantees that it is 0 at the start of instructions.
 				// jmp rax									  ; jump to the remote jump target
 				// no_change:								  ; otherwise, the subroutine (unencoded) compact branch did not trigger a branch.
-				const auto no_change = get_unique_label();
-				const auto not_within = get_unique_label();
+				const Xbyak::Label no_change;
+				const Xbyak::Label not_within;
 
 				test(ebx, processor::flag::pc_changed);
 				jz(no_change);
@@ -843,12 +841,11 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		start_address += 4;
 	}
 
-	const auto patch_preprolog = [&](auto address) -> std::string
+	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
 		// Start with a set of nops so that we have somewhere to write patch code.
-		std::string patch = get_unique_label();
-		L(patch); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
+		auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
 		chunk.m_patches.push_back({ uint32(getSize()), 0 });
 		auto &patch_pair = chunk.m_patches.back();
 		uint32 &patch_target = patch_pair.target;
@@ -879,12 +876,12 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		mov(dword[rcx], edx);
 	};
 
-	const auto patch_epilog = [&](const std::string &patch)
+	const auto patch_epilog = [&](const Xbyak::Label &patch)
 	{
 		static constexpr uint16 patch_prefix = 0xB848;
 		static constexpr uint16 patch_suffix = 0xE0FF;
 
-		mov(rcx, patch.c_str());
+		mov(rcx, patch);
 		mov(word[rcx], int16_t(patch_prefix));
 		mov(qword[rcx + 2], rax);
 		mov(word[rcx + 10], int16_t(patch_suffix));

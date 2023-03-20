@@ -4,15 +4,13 @@
 #include "mips/processor/jit/xbyak/xbyak.h"
 #include "mips/processor/jit/jit1/jit1.hpp"
 
-#include <fmt/format.h>
-
 namespace mips
 {
 	class jit1;
 	class Jit1_CodeGen final : public Xbyak::CodeGenerator
 	{
+		std::array<Xbyak::Label, jit1::NumInstructionsChunk> instruction_offset_labels_;
 		jit1 & __restrict jit_;
-		uint32 unique_label_index_ = 0;
 		uint8* const address_;
 
 	public:
@@ -28,13 +26,10 @@ namespace mips
 			return address_ + getSize();
 		}
 
-		std::string get_unique_label () __restrict {
-			return fmt::format("unique_{}", unique_label_index_++);
-		}
-
-		static std::string get_index_label(uint32 index) {
-			xassert(index < jit1::NumInstructionsChunk);
-			return fmt::format("index_{}", index);
+		[[nodiscard]]
+		Xbyak::Label & get_instruction_offset_label(const uint32 offset) {
+			xassert(offset < jit1::NumInstructionsChunk);
+			return instruction_offset_labels_[offset];
 		}
 
 		static constexpr const uint32 mips_fp = 30;
