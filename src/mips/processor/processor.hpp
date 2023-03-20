@@ -165,6 +165,10 @@ namespace mips {
 		// Get the register as a specific type
 		template <typename T>
 		T get_register(const uint32 idx) const {
+			if constexpr (_constant_p(idx) && idx == 0) {
+				return {};
+			}
+
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
 			union {
@@ -178,6 +182,10 @@ namespace mips {
 		// Set the register from a given type
 		template <typename T>
 		void set_register(const uint32 idx, T value) {
+			if constexpr (_constant_p(idx) && idx == 0) {
+				return;
+			}
+
 			// Strict-aliasing rules apply
 			static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
 			union {

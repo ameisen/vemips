@@ -33,6 +33,7 @@
 # define _used
 # define _no_unique [[no_unique_address, msvc::no_unique_address]]
 #	define _clear_cache(start, end)
+#	define _constant_p(expression) (false)
 
 namespace mips::intrinsics {
 	inline _forceinline _nothrow uint16_t byteswap(const uint16_t value) {
@@ -77,7 +78,8 @@ namespace mips::intrinsics {
 #	else
 #		define _no_unique
 #	endif
-#	define _clear_cache(start, end) __builtin___clear_cache(start, end)
+#	define _clear_cache(start, end) __builtin___clear_cache((char*)(start), (char*)(end))
+#	define _constant_p(expression) __builtin_constant_p(expression)
 
 namespace mips::intrinsics {
 	inline _forceinline _nothrow uint16_t byteswap(const uint16_t value) {
