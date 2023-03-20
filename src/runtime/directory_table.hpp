@@ -21,7 +21,9 @@ namespace mips {
 	public:
 		_forceinline _nothrow directory_table() = default;
 		_forceinline _nothrow directory_table(const directory_table&) = delete;
-		_forceinline _nothrow directory_table(directory_table&& table) noexcept : data_(table.data_) {
+		_forceinline _nothrow directory_table(directory_table&& table) noexcept :
+			data_(table.data_)
+		{
 			table.data_ = {};
 		}
 
@@ -40,12 +42,16 @@ namespace mips {
 
 		[[nodiscard]]
 		_forceinline _nothrow bool contains(const uint32 idx) const {
+			xassert(idx < Size);
+
 			return data_[idx] != nullptr;
 		}
 
 		_forceinline _nothrow sub_map_t& operator [] (uint32 idx) {
+			xassert(idx < Size);
+
 			sub_map_t* __restrict result = data_[idx];
-			if (!result) {
+			if _unlikely(!result) [[unlikely]] {
 				result = data_[idx] = allocator_.allocate();
 			}
 			return *result;
@@ -61,7 +67,9 @@ namespace mips {
 	public:
 		_forceinline _nothrow directory_table() = default;
 		_forceinline _nothrow directory_table(const directory_table&) = delete;
-		_forceinline _nothrow directory_table(directory_table&& table) noexcept : data_(table.data_) {
+		_forceinline _nothrow directory_table(directory_table&& table) noexcept :
+			data_(table.data_)
+		{
 			table.data_ = {};
 		}
 
@@ -82,12 +90,16 @@ namespace mips {
 
 		[[nodiscard]]
 		_forceinline _nothrow bool contains(const uint32 idx) const {
+			xassert(idx < Size);
+
 			return data_[idx].contained();
 		}
 
 		_forceinline _nothrow T& operator [] (uint32 idx) {
+			xassert(idx < Size);
+
 			T& __restrict result = data_[idx];
-			if (!result.contained()) {
+			if _unlikely(!result.contained()) [[unlikely]] {
 				result.initialize();
 			}
 			return result;
