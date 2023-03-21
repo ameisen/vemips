@@ -6,6 +6,35 @@
 
 using namespace mips;
 
+namespace {
+	enum class map_bits : uint32 {
+		shared = 0x01,
+		private_map = 0x02,
+		type = 0x0f,
+		fixed = 0x10,
+		anonymous = 0x20,
+		no_reserve = 0x4000,
+		grows_down = 0x0100,
+		deny_write = 0x0800,
+		executable = 0x1000,
+		locked = 0x2000,
+		populate = 0x8000,
+		non_block = 0x10000,
+		stack = 0x20000,
+		huge_tlb = 0x40000,
+		file = 0
+	};
+
+	enum class protect_bits : uint32 {
+		none = 0,
+		read = 1,
+		write = 2,
+		exec = 4,
+		grows_down = 0x01000000,
+		grows_up = 0x02000000
+	};
+}
+
 system_vemix::system_vemix(const options & __restrict init_options, const elf::binary & __restrict binary) : system(init_options, binary) {}
 
 void system_vemix::clock(const uint64 clocks) __restrict {
@@ -66,35 +95,6 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 				processor_->set_register<uint32>(2, ret_value);
 			} break;
 			case __NR_mmap2: {
-				// ReSharper disable CppDeclaratorNeverUsed
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-variable"
-				static constexpr const uint32 MAP_SHARED	  = 0x01;
-				static constexpr const uint32 MAP_PRIVATE	 = 0x02;
-				static constexpr const uint32 MAP_TYPE		 = 0x0f;
-				static constexpr const uint32 MAP_FIXED		= 0x10;
-				static constexpr const uint32 MAP_ANON		 = 0x20;
-				static constexpr const uint32 MAP_ANONYMOUS  = MAP_ANON;
-				static constexpr const uint32 MAP_NORESERVE  = 0x4000;
-				static constexpr const uint32 MAP_GROWSDOWN  = 0x0100;
-				static constexpr const uint32 MAP_DENYWRITE  = 0x0800;
-				static constexpr const uint32 MAP_EXECUTABLE = 0x1000;
-				static constexpr const uint32 MAP_LOCKED	  = 0x2000;
-				static constexpr const uint32 MAP_POPULATE	= 0x8000;
-				static constexpr const uint32 MAP_NONBLOCK	= 0x10000;
-				static constexpr const uint32 MAP_STACK		= 0x20000;
-				static constexpr const uint32 MAP_HUGETLB	 = 0x40000;
-				static constexpr const uint32 MAP_FILE		 = 0;
-
-				static constexpr const uint32 PROT_NONE		= 0;
-				static constexpr const uint32 PROT_READ		= 1;
-				static constexpr const uint32 PROT_WRITE	  = 2;
-				static constexpr const uint32 PROT_EXEC		= 4;
-				static constexpr const uint32 PROT_GROWSDOWN = 0x01000000;
-				static constexpr const uint32 PROT_GROWSUP	= 0x02000000;
-#pragma clang diagnostic pop
-				// ReSharper restore CppDeclaratorNeverUsed
-
 				// what... what do we do with memory mapping?
 				/*
 				const uint32 addr = processor_->get_register<uint32>(4);

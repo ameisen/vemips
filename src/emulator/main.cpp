@@ -80,13 +80,13 @@ namespace {
 			size(size) {
 		}
 
-		_nothrow _forceinline void resize (const size_t size) {
-			if (this->size == size) {
+		_nothrow _forceinline void resize (const size_t new_size) {
+			if (size == new_size) {
 				return;
 			}
 
-			data = std::make_unique<T[]>(size);
-			this->size = size;
+			data = std::make_unique<T[]>(new_size);
+			size = new_size;
 		}
 
 		_nothrow _forceinline operator std::span<T>() const {

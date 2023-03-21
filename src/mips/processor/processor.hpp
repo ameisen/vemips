@@ -323,15 +323,12 @@ namespace mips {
 						return val_ptr;
 					}
 				}
-				else {
-					if _likely(address < memory_size_) [[likely]] {
-						return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
-					}
-					else {
-						return nullptr;
-					}
+				else if _likely(address < memory_size_) [[likely]] {
+					return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
 				}
 			}
+
+			return nullptr;
 		}
 
 		template <typename T>

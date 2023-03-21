@@ -51,12 +51,25 @@ namespace elf {
 		};
 
 		enum class program_header_access_bits : uint32_t {
+			None = 0,
 			Execute = 1,
 			Write = 2,
 			Read = 4,
 			MaskOS = 0x0FF00000,
 			MaskProc = 0xF0000000,
 		};
+
+		static inline program_header_access_bits operator | (program_header_access_bits a, program_header_access_bits b)
+		{
+			using underlying_t = std::underlying_type_t<program_header_access_bits>;
+			return program_header_access_bits(underlying_t(a) | underlying_t(b));
+		}
+
+		static inline program_header_access_bits operator & (program_header_access_bits a, program_header_access_bits b)
+		{
+			using underlying_t = std::underlying_type_t<program_header_access_bits>;
+			return program_header_access_bits(underlying_t(a) & underlying_t(b));
+		}
 
 		enum class section_type : uint32_t {
 			Null = 0,											// ignore
@@ -267,18 +280,24 @@ namespace elf {
 				}
 
 				// Make sure that the size is valid.
-				// ReSharper disable once CppNoDiscardExpression
-				raw_data_stream_.offset<char>(programHeader.Offset + (programHeader.FileSize - 1));
+				// we don't care about the result, only that it succeeds.
+				const auto _ = raw_data_stream_.offset<char>(programHeader.Offset + (programHeader.FileSize - 1));
+				_unused(_);
 				if _unlikely((programHeader.VirtualAddr + programHeader.MemorySize) >= 0x100000000ull) [[unlikely]] {
 					throw std::runtime_error("ELF Program Header out of virtual address range");
 				}
 
+				xassert(programHeader.Offset <= std::numeric_limits<uint32>::max());  // NOLINT(clang-diagnostic-assume)
+				xassert(programHeader.VirtualAddr <= std::numeric_limits<uint32>::max()); // NOLINT(clang-diagnostic-assume)
+				xassert(programHeader.FileSize <= std::numeric_limits<uint32>::max()); // NOLINT(clang-diagnostic-assume)
+				xassert(programHeader.MemorySize <= std::numeric_limits<uint32>::max()); // NOLINT(clang-diagnostic-assume)
+				 
 				sections_.push_back(
 					{
 						.name = "",
-						.file_extent = { (uint32)programHeader.Offset, (uint32)std::min(programHeader.FileSize, programHeader.MemorySize) },
+						.file_extent = { uint32(programHeader.Offset), uint32(std::min(programHeader.FileSize, programHeader.MemorySize)) },
 						.memory_extent = { uint32_t(programHeader.VirtualAddr), uint32_t(programHeader.MemorySize) },
-						.executable = (uint32(programHeader.Flags) & uint32(program_header_access_bits::Execute)) != 0
+						.executable = (programHeader.Flags & program_header_access_bits::Execute) != program_header_access_bits::None
 					}
 				);
 			}

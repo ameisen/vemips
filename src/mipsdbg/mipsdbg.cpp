@@ -313,7 +313,7 @@ int main(int argc, const char **argv) {
 
 		const auto get_token = [&](const size_t i) -> const std::string & {
 			if (i >= tokens.size()) {
-				static constexpr std::string empty;
+				static const std::string empty;
 				return empty;
 			}
 			return tokens[i];

@@ -28,8 +28,10 @@ namespace vemips::tablegen {
 		static _nothrow const char* get(const std::string& v) { return v.c_str(); }
 	}
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-security"
+#if __clang__
+#	pragma clang diagnostic push
+#	pragma clang diagnostic ignored "-Wformat-security"
+#endif
 	template <size_t Fn, size_t length = max_signature_length, typename... Args>
 	_forceinline
 		static _nothrow std::string format(const char(&__restrict format)[Fn], Args&&... args) {
@@ -42,7 +44,9 @@ namespace vemips::tablegen {
 	static _nothrow int printft(const char(&__restrict format)[Fn], Args&&... args) {
 		return fprintf(out_stream, format, formatize::get(std::forward<Args>(args))...);  // NOLINT(clang-diagnostic-format-nonliteral)
 	}
-#pragma clang diagnostic pop
+#if __clang__
+#	pragma clang diagnostic pop
+#endif
 
 	static _nothrow void newline() {
 		fputc('\n', out_stream);
@@ -167,8 +171,10 @@ namespace vemips::tablegen {
 		template <typename HashType>
 		struct fnv_constants;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-const-variable"
+#if __clang__
+#	pragma clang diagnostic push
+#	pragma clang diagnostic ignored "-Wunused-const-variable"
+#endif
 		// ReSharper disable once CppExplicitSpecializationInNonNamespaceScope
 		template<> struct fnv_constants<uint64>
 		{
@@ -182,7 +188,9 @@ namespace vemips::tablegen {
 			static constexpr const uint32 offset_basis = 0x811c9dc5u;  // NOLINT(clang-diagnostic-unused-const-variable)
 			static constexpr const uint32 prime = 0x01000193u; // NOLINT(clang-diagnostic-unused-const-variable)
 		};
-#pragma clang diagnostic pop
+#if __clang__
+#	pragma clang diagnostic pop
+#endif
 	}
 
 	static constexpr _nothrow size_t fnv_hash(crstring str)
