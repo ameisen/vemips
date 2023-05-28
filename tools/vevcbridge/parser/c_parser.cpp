@@ -49,13 +49,13 @@ namespace {
 
 		[[nodiscard]]
 		std::vector<char> read() const {
-			assert(file_pointer_ != nullptr);
+			check(file_pointer_ != nullptr);
 
 			_fseeki64(file_pointer_, 0, SEEK_END);
 			const size_t file_size = _ftelli64(file_pointer_);
 			rewind(file_pointer_);
 			std::vector<char> result(file_size); // TODO : skip initialization
-			fread(result.data(), 1, file_size, file_pointer_);// Now we parse the given array.
+			check(fread(result.data(), 1, file_size, file_pointer_) == file_size);// Now we parse the given array.
 
 			return result;
 		}

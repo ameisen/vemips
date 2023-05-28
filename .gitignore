@@ -8,3 +8,4 @@ vemips_sdk/MipsTest/obj/
 src/mips/processor/jit/xbyak.old/
 tools/vevcbridge/.vs/
 vemips_sdk/MipsTest/x64/
+docs/

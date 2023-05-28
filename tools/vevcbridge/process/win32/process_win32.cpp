@@ -61,8 +61,7 @@ process::process::process(const std::wstring & __restrict executable, const std:
 process::process::process_output process::process::get_output() const __restrict {
 	if (!terminated_) {
 		// wait for process to terminate.
-		DWORD code;
-		while ((code = WaitForSingleObject(HANDLE(process_), INFINITE)) == WAIT_TIMEOUT) {
+		while (WaitForSingleObject(HANDLE(process_), INFINITE) == WAIT_TIMEOUT) {
 		}
 
 		terminated_ = true;
@@ -88,7 +87,7 @@ process::process::process_output process::process::get_output() const __restrict
 	size_t start_offset = 0;
 	size_t current_offset = 0;
 
-	const auto push_line = [&] (bool carriage) {
+	const auto push_line = [&] (const bool carriage) {
 		if (carriage && last_carriage_return) {
 			last_carriage_return = false;
 			start_offset += 2;

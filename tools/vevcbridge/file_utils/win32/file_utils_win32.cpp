@@ -7,7 +7,6 @@
 #define PLATFORM_HEADER_WITH_IO 1
 #include "platform/platform_headers.hpp"
 #undef PLATFORM_HEADER_WITH_IO
-#include "platform/win32/win32_system_handle.hpp"
 
 using namespace buildcarbide;
 
@@ -34,8 +33,8 @@ no_throw std::optional<file_utils::modtime_t> file_utils::get_file_time(const fi
 	FILETIME time;
 	if (
 		const BOOL result = GetFileTime(
-			handle, 
-			time_type == filetime::created ? &time : nullptr, 
+			handle,
+			time_type == filetime::created ? &time : nullptr,
 			time_type == filetime::accessed ? &time : nullptr,
 			time_type == filetime::modified ? &time : nullptr
 		);
@@ -44,12 +43,12 @@ no_throw std::optional<file_utils::modtime_t> file_utils::get_file_time(const fi
 			return 0;
 	}
 
-		// TODO should we close 'handle' or something?
+	// TODO should we close 'handle' or something?
 
-		return ULARGE_INTEGER{ {
-			.LowPart = time.dwLowDateTime,
-			.HighPart = time.dwHighDateTime
-		} }.QuadPart;
+	return ULARGE_INTEGER{ {
+		.LowPart = time.dwLowDateTime,
+		.HighPart = time.dwHighDateTime
+	} }.QuadPart;
 }
 
 no_throw std::optional<file_utils::modtime_t> file_utils::get_file_time(const filetime time_type, const std::wstring &__restrict filename) noexcept {

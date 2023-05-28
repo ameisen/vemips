@@ -96,11 +96,11 @@ namespace buildcarbide {
 					arg = arg.substr(2);
 				}
 
-				auto sub_arg = pop_argument_value(arg);
+				const auto sub_arg = pop_argument_value(arg);
 				auto lower_arg = to_lower(arg);
 				//auto lower_sub_arg = to_lower(sub_arg);
 
-				if (auto mapping = map_option(lower_arg); mapping != nullptr) [[likely]] {
+				if (const auto mapping = map_option(lower_arg); mapping != nullptr) [[likely]] {
 					*mapping = sub_arg;
 				}
 				else {

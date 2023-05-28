@@ -160,14 +160,13 @@ vc_project::vc_project(const std::wstring& __restrict filename) : project() {
 	path_ = file_utils::get_base_path(filename);
 
 	tinyxml2::XMLDocument doc;
-	doc.LoadFile(to_string(filename).c_str());
-	if (doc.Error()) {
-		throw 0;
+	if (auto error = doc.LoadFile(to_string(filename).c_str()); error != tinyxml2::XML_SUCCESS) {
+		throw std::exception("Error loading project file");
 	}
 
 	const auto project = doc.FirstChildElement("Project");
 	if (!project) {
-		throw 0;
+		throw std::exception("Error finding 'Project' element");
 	}
 
 	// Find the possible configurations.
@@ -310,7 +309,7 @@ vc_project::vc_project(const std::wstring& __restrict filename) : project() {
 	// Find files.
 	auto item_group = project->FirstChildElement("ItemGroup");
 	if (!item_group) {
-		throw 0;
+		throw std::exception("Error finding 'ItemGroup' element");
 	}
 
 	for (; item_group; item_group = item_group->NextSiblingElement("ItemGroup")) {

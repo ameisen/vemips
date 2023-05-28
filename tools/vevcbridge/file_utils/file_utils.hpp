@@ -6,8 +6,6 @@
 #  error "Unknown Platform"
 #endif
 
-#include <string_view>
-
 using std::wstring;
 using std::wstring_view;
 

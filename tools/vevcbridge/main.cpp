@@ -122,20 +122,27 @@ int wmain(int argc, const wchar_t **argv) {
 
 		// this is not a stable solution at all.
 		const auto extract_substring = [](const char*& __restrict str) {
-			const bool quote_start = *str == '\'' || *str == '\"';
-			if (quote_start) {
+			const char ref_char = *str;
+			const bool is_quote = ref_char == '\'' || ref_char == '\"';
+			if (is_quote) {
 				++str;
 			}
 
 			std::string result;
 
-			if (quote_start) {
-				while (*str != '\'' && *str != '\"') {
+			if (is_quote) {
+				while (*str != ref_char) {
+					if (*str == '\0') [[unlikely]] {
+						throw std::exception("Malformed Condition");
+					}
 					result += *str++;
 				}
 			}
 			else {
 				while (!isspace(*str)) {
+					if (*str == '\0') [[unlikely]] {
+						throw std::exception("Malformed Condition");
+					}
 					result += *str++;
 				}
 			}
@@ -145,7 +152,7 @@ int wmain(int argc, const wchar_t **argv) {
 		std::wstring format = to_wstring(extract_substring(condition_text).c_str());
 
 		++condition_text;
-		if (condition_text[0] != '=' || condition_text[1] != '=') {
+		if (condition_text[0] == '\0' || (condition_text[0] != '=' || condition_text[1] != '=')) [[unlikely]] {
 			fail<-1>("Syntax error in Condition string '{}'", condition_text_base);
 		}
 		condition_text += 2;
@@ -333,6 +340,9 @@ int wmain(int argc, const wchar_t **argv) {
 		) {
 			fail<3>(L"Error linking");
 		}
+	}
+	catch (const std::exception& ex) {
+		fail<4>(L"Failed to parser project file \'{}\' :: {}", build_options.project_file, ex.what());
 	}
 	catch (...) {
 		fail<4>(L"Failed to parser project file \'{}\'", build_options.project_file);
