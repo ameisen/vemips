@@ -24,21 +24,21 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>MultiByte</CharacterSet>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -75,7 +75,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeTypeInfo>
       </RuntimeTypeInfo>
       <CppLanguageStandard>gnu++1y</CppLanguageStandard>
@@ -89,6 +89,10 @@
       <FloatingPointModel>Strict</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <FloatingPointExceptions>false</FloatingPointExceptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <LargeAddressAware>true</LargeAddressAware>
@@ -102,7 +106,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>
       </SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;NDEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING=1;NDEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeTypeInfo>
       </RuntimeTypeInfo>
       <CppLanguageStandard>gnu++1y</CppLanguageStandard>
@@ -124,6 +128,10 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -140,7 +148,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>
       </SDLCheck>
-      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;NDEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;_SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING=1;NDEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeTypeInfo>
       </RuntimeTypeInfo>
       <CppLanguageStandard>gnu++1y</CppLanguageStandard>
@@ -162,6 +170,9 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include</AdditionalIncludeDirectories>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -172,27 +183,39 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="async\task.cpp" />
+    <ClCompile Include="buildcarbide.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="build\build.cpp" />
-    <ClCompile Include="fileutils\win32\fileutils_win32.cpp" />
+    <ClCompile Include="file_utils\win32\file_utils_win32.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="options.cpp" />
     <ClCompile Include="parser\c_parser.cpp" />
+    <ClCompile Include="platform\win32\win32_system_handle.cpp" />
     <ClCompile Include="process\win32\process_win32.cpp" />
     <ClCompile Include="project\project.cpp" />
     <ClCompile Include="project\vc_project.cpp" />
     <ClCompile Include="tinyxml2\tinyxml2.cpp" />
     <ClCompile Include="toolchain\clang.cpp" />
+    <ClCompile Include="toolchain\toolchain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="async\task.hpp" />
     <ClInclude Include="buildcarbide.hpp" />
     <ClInclude Include="build\build.hpp" />
     <ClInclude Include="configuration.hpp" />
-    <ClInclude Include="fileutils\fileutils.hpp" />
-    <ClInclude Include="fileutils\win32\fileutils_win32.hpp" />
+    <ClInclude Include="file_utils\file_utils.hpp" />
+    <ClInclude Include="file_utils\win32\file_utils_win32.hpp" />
     <ClInclude Include="options.hpp" />
     <ClInclude Include="parser\c_parser.hpp" />
     <ClInclude Include="platform.hpp" />
+    <ClInclude Include="platform\platform.hpp" />
+    <ClInclude Include="platform\platform_headers.hpp" />
+    <ClInclude Include="platform\win32\win32_platform.hpp" />
+    <ClInclude Include="platform\win32\win32_platform_headers.hpp" />
+    <ClInclude Include="platform\win32\win32_system_handle.hpp" />
     <ClInclude Include="process\process.hpp" />
     <ClInclude Include="process\win32\process_win32.hpp" />
     <ClInclude Include="project\project.hpp" />

@@ -1,20 +1,20 @@
 #pragma once
 
-#include <string>
 #include <span>
+#include <string>
 
-using std::string;
+using std::wstring;
 
 namespace buildcarbide {
 	struct options final {
-		const string project_file;
-		const string configuration;
-		const string platform;
-		const string command;
-		const string out_file;
-		const string sdk_path;
+		wstring project_file;
+		wstring configuration;
+		wstring platform;
+		wstring command;
+		wstring out_file;
+		wstring sdk_path;
 
-		options(string &&project_file, string &&configuration, string &&platform, string &&command, string &&out_file, string &&sdk_path) : 
+		options(wstring &&project_file, wstring &&configuration, wstring &&platform, wstring &&command, wstring &&out_file, wstring &&sdk_path) : 
 			project_file(std::move(project_file)),
 			configuration(std::move(configuration)),
 			platform(std::move(platform)),
@@ -24,6 +24,6 @@ namespace buildcarbide {
 		{
 		}
 
-		static options build(std::span<const char*> args);
+		static options build(std::span<const wchar_t*> args);
 	};
 }

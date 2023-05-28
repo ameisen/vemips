@@ -1,3 +1,5 @@
+#include "buildcarbide.hpp"
+
 #include "project.hpp"
 
 #include <array>
@@ -7,7 +9,7 @@
 using namespace buildcarbide;
 
 namespace {
-	using project_fp = project * (*)(const std::string & __restrict filename);
+	using project_fp = project * (*)(const std::wstring & __restrict filename);
 
 	template <typename... Ts>
 	struct project_switcher final {
@@ -19,7 +21,7 @@ namespace {
 	};
 }
 
-project * buildcarbide::get_project(const std::string & __restrict filename)
+project * buildcarbide::get_project(const std::wstring & __restrict filename)
 {
 	for (const project_fp fp : project_switcher<vc_project>::get_project_types()) {
 		if (project * __restrict result = fp(filename)) {

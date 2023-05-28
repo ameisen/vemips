@@ -1,3 +1,5 @@
+#include "buildcarbide.hpp"
+
 #include "c_parser.hpp"
 #include <cstdio>
 #include <vector>
@@ -60,19 +62,19 @@ namespace {
 	};
 }
 
-std::unordered_map<std::string, fileutils::modtime_t> buildcarbide::get_c_includes(
+std::unordered_map<std::wstring, file_utils::modtime_t> buildcarbide::get_c_includes(
 	const configuration & __restrict configuration,
 	const project & __restrict project,
-	const std::string & __restrict filename
+	const std::wstring & __restrict filename
 ) {
-	std::unordered_map<std::string, fileutils::modtime_t> out;
+	std::unordered_map<std::wstring, file_utils::modtime_t> out;
 
-	const std::string fixed_filename = fileutils::fix_up(filename);
+	const std::wstring fixed_filename = file_utils::fix_up(filename);
 	std::unordered_set running_parse = { fixed_filename };
 	std::unordered_set already_parsed = { fixed_filename };
 
-	const auto insert_parse = [&](const std::string & __restrict insert_filename) {
-		const std::string fixed_insert_filename = fileutils::fix_up(insert_filename);
+	const auto insert_parse = [&](const std::wstring & __restrict insert_filename) {
+		const std::wstring fixed_insert_filename = file_utils::fix_up(insert_filename);
 		if (already_parsed.contains(fixed_insert_filename)) {
 			return;
 		}
@@ -91,23 +93,23 @@ std::unordered_map<std::string, fileutils::modtime_t> buildcarbide::get_c_includ
 
 	while (!running_parse.empty()) {
 		auto to_parse_iterator = running_parse.begin();
-		string to_parse = *to_parse_iterator;  // NOLINT(performance-unnecessary-copy-initialization)
+		wstring to_parse = *to_parse_iterator;  // NOLINT(performance-unnecessary-copy-initialization)
 		running_parse.erase(to_parse_iterator);
 
-		const std::string base_path = fileutils::get_base_path(to_parse);
+		const std::wstring base_path = file_utils::get_base_path(to_parse);
 
 		// todo use memory mapping
 		// parse this file.
 		std::vector<char> file_contents;
 		{
-			const file_wrapper fp = fopen(to_parse.c_str(), "rb");
+			const file_wrapper fp = _wfopen(to_parse.c_str(), L"rb");
 			if (!fp) {
 				first = false;
 				continue;
 			}
 
 			if (!first) {
-				out[to_parse] = fileutils::get_file_modtime(fp);
+				out[to_parse] = file_utils::get_file_time(file_utils::filetime::modified, fp).value_or(0);
 			}
 			else {
 				first = false;
@@ -134,14 +136,14 @@ std::unordered_map<std::string, fileutils::modtime_t> buildcarbide::get_c_includ
 					}
 
 					if (!angle_include) {
-						insert_parse(fileutils::build_path(base_path, token));
+						insert_parse(file_utils::build_path(base_path, token));
 					}
 					if (include_paths) {
 						for (const auto &include_path : *include_paths) {
-							insert_parse(fileutils::build_path(include_path, token));
+							insert_parse(file_utils::build_path(include_path, token));
 							// don't insert if there's a colon in the path. That makes Windows a little cranky.
 							if (include_path.find(':') == std::string::npos) {
-								insert_parse(fileutils::build_path(project.get_path(), include_path, token));
+								insert_parse(file_utils::build_path(project.get_path(), include_path, token));
 							}
 						}
 					}

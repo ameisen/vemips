@@ -5,49 +5,63 @@
       <Configuration>Debug</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release|Win32">
       <Configuration>Release</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ApplicationType>LinuxDebugger</ApplicationType>
     <SecureShellExecutable>ssh</SecureShellExecutable>
     <RemoteDebuggerExecutable>gdb</RemoteDebuggerExecutable>
     <LocalDebuggerExecutable>gdb</LocalDebuggerExecutable>
     <OCDDebuggerServerAddress>localhost:3333</OCDDebuggerServerAddress>
     <Keyword>IoT</Keyword>
     <ProjectGuid>{DA676745-74F2-4030-B96B-76790E6B325B}</ProjectGuid>
-		
-		<VeMipsToolsDir>$(VEMIPS_SDK)</VeMipsToolsDir>
-		<VeMipsSDKDir>$(VEMIPS_SDK)</VeMipsSDKDir>
-		
-		<VeMipsToolsDir Condition="!Exists($(VeMipsToolsDir))">$(SolutionDir)..\MIPS_SDK</VeMipsToolsDir>
-		<VeMipsSDKDir Condition="!Exists($(VeMipsSDKDir))">$(SolutionDir)..\MIPS_SDK</VeMipsSDKDir>
-		
-		<VeMipsToolsDir>$(VeMipsToolsDir)\</VeMipsToolsDir>
-		<VeMipsSDKDir>$(VeMipsSDKDir)\</VeMipsSDKDir>
+    <VeMipsToolsDir>$(VEMIPS_SDK)</VeMipsToolsDir>
+    <VeMipsSDKDir>$(VEMIPS_SDK)</VeMipsSDKDir>
+    <VeMipsToolsDir Condition="!Exists($(VeMipsToolsDir))">$(SolutionDir)..\MIPS_SDK</VeMipsToolsDir>
+    <VeMipsSDKDir Condition="!Exists($(VeMipsSDKDir))">$(SolutionDir)..\MIPS_SDK</VeMipsSDKDir>
+    <VeMipsToolsDir>$(VeMipsToolsDir)\</VeMipsToolsDir>
+    <VeMipsSDKDir>$(VeMipsSDKDir)\</VeMipsSDKDir>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='Win32'" Label="Globals">
+    <ApplicationType>LinuxDebugger</ApplicationType>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Makefile</ConfigurationType>
-    <UseDebugLibraries>true</UseDebugLibraries>
+  <PropertyGroup Label="Configuration">
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+  <PropertyGroup Condition="'$(Platform)'=='Win32'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration" />
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings">
-  </ImportGroup>
-  <ImportGroup Label="Shared">
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
@@ -66,7 +80,7 @@
   </ItemGroup>
   <!--Import Project="$(MSBuildThisFileDirectory)\Microsoft.cpp.Linux.targets" /-->
   <!-- To Enable linux debugger -->
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='Win32'">
     <UseDefaultDebuggersPropertyPageSchemas>false</UseDefaultDebuggersPropertyPageSchemas>
     <UseDefaultPropertyPageSchemas>false</UseDefaultPropertyPageSchemas>
     <_ApplicableDebuggers>Desktop</_ApplicableDebuggers>
@@ -107,25 +121,90 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Header.h" />
+    <ClInclude Include="interpreter.hpp" />
   </ItemGroup>
   <!-- To Enable linux debugger End -->
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <NMakeBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
-    <NMakeReBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
-    <NMakeCleanCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
+    <NMakeBuildCommandLine>$(VeMipsToolsDir)vevcbridge --sdk=$(SolutionDir)..\MIPS_SDK $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>$(VeMipsToolsDir)vevcbridge --sdk=$(SolutionDir)..\MIPS_SDK $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>$(VeMipsToolsDir)vevcbridge --sdk=$(SolutionDir)..\MIPS_SDK $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectPath)$(ProjectName).bin</NMakeOutput>
     <IncludePath>$(VeMipsSDKDir)incxx;$(VeMipsSDKDir)inc</IncludePath>
     <NMakePreprocessorDefinitions>_WIN32=0</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <NMakeBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
-    <NMakeReBuildCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
-    <NMakeCleanCommandLine>$(VeMipsToolsDir)vevcbridge $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
+    <NMakeBuildCommandLine>$(VeMipsToolsDir)vevcbridge --sdk=$(SolutionDir)..\MIPS_SDK $(ProjectPath) $(Configuration) $(Platform) build $(ProjectName).bin</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>$(VeMipsToolsDir)vevcbridge --sdk=$(SolutionDir)..\MIPS_SDK $(ProjectPath) $(Configuration) $(Platform) rebuild $(ProjectName).bin</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>$(VeMipsToolsDir)vevcbridge --sdk=$(SolutionDir)..\MIPS_SDK $(ProjectPath) $(Configuration) $(Platform) clean $(ProjectName).bin</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectPath)$(ProjectName).bin</NMakeOutput>
     <IncludePath>$(VeMipsSDKDir)incxx;$(VeMipsSDKDir)inc</IncludePath>
     <NMakePreprocessorDefinitions>_WIN32=0</NMakePreprocessorDefinitions>
   </PropertyGroup>
-  <ImportGroup Label="ExtensionTargets">
-  </ImportGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnabled>false</VcpkgEnabled>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <ControlFlowGuard>
+      </ControlFlowGuard>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <ConformanceMode>true</ConformanceMode>
+      <BuildStlModules>false</BuildStlModules>
+      <PreprocessorDefinitions>DEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <LargeAddressAware>true</LargeAddressAware>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SDLCheck>false</SDLCheck>
+      <InlineFunctionExpansion />
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <OmitFramePointers>true</OmitFramePointers>
+      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <ControlFlowGuard>false</ControlFlowGuard>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <ConformanceMode>true</ConformanceMode>
+      <BuildStlModules>false</BuildStlModules>
+      <PreprocessorDefinitions>NDEBUG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/Ob3 %(AdditionalOptions)</AdditionalOptions>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+    </Link>
+    <Link>
+      <LargeAddressAware>true</LargeAddressAware>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+    </Link>
+  </ItemDefinitionGroup>
+  <ImportGroup Label="ExtensionTargets" />
 </Project>

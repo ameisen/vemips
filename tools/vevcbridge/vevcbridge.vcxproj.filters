@@ -17,8 +17,8 @@
     <ClCompile Include="build\build.cpp">
       <Filter>build</Filter>
     </ClCompile>
-    <ClCompile Include="fileutils\win32\fileutils_win32.cpp">
-      <Filter>fileutils\win32</Filter>
+    <ClCompile Include="file_utils\win32\file_utils_win32.cpp">
+      <Filter>file_utils\win32</Filter>
     </ClCompile>
     <ClCompile Include="async\task.cpp">
       <Filter>async</Filter>
@@ -30,6 +30,13 @@
       <Filter>toolchain</Filter>
     </ClCompile>
     <ClCompile Include="options.cpp" />
+    <ClCompile Include="buildcarbide.cpp" />
+    <ClCompile Include="toolchain\toolchain.cpp">
+      <Filter>toolchain</Filter>
+    </ClCompile>
+    <ClCompile Include="platform\win32\win32_system_handle.cpp">
+      <Filter>platform\win32</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="tinyxml2">
@@ -44,12 +51,6 @@
     <Filter Include="build">
       <UniqueIdentifier>{3f169fe0-b9e9-4d33-806b-0e07d27b4705}</UniqueIdentifier>
     </Filter>
-    <Filter Include="fileutils">
-      <UniqueIdentifier>{2940e4f2-dfc7-4454-ab44-b81bd5fa26aa}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="fileutils\win32">
-      <UniqueIdentifier>{c22b5e8d-a34e-4d23-8e34-6c2b4aeca61b}</UniqueIdentifier>
-    </Filter>
     <Filter Include="async">
       <UniqueIdentifier>{b722ec01-ec43-4333-921a-c2d42c909b63}</UniqueIdentifier>
     </Filter>
@@ -61,6 +62,18 @@
     </Filter>
     <Filter Include="toolchain">
       <UniqueIdentifier>{925e2f0c-ecc6-47c8-a6c5-a3d2ff8bd77e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="file_utils">
+      <UniqueIdentifier>{2940e4f2-dfc7-4454-ab44-b81bd5fa26aa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="file_utils\win32">
+      <UniqueIdentifier>{c22b5e8d-a34e-4d23-8e34-6c2b4aeca61b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform">
+      <UniqueIdentifier>{1f221bc4-f5f2-4238-b14b-4e2133b67f8d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform\win32">
+      <UniqueIdentifier>{04ef0100-9b4c-4b0f-874f-776cc2d915a6}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -80,11 +93,11 @@
     <ClInclude Include="build\build.hpp">
       <Filter>build</Filter>
     </ClInclude>
-    <ClInclude Include="fileutils\fileutils.hpp">
-      <Filter>fileutils</Filter>
+    <ClInclude Include="file_utils\file_utils.hpp">
+      <Filter>file_utils</Filter>
     </ClInclude>
-    <ClInclude Include="fileutils\win32\fileutils_win32.hpp">
-      <Filter>fileutils\win32</Filter>
+    <ClInclude Include="file_utils\win32\file_utils_win32.hpp">
+      <Filter>file_utils\win32</Filter>
     </ClInclude>
     <ClInclude Include="async\task.hpp">
       <Filter>async</Filter>
@@ -104,5 +117,20 @@
     </ClInclude>
     <ClInclude Include="options.hpp" />
     <ClInclude Include="buildcarbide.hpp" />
+    <ClInclude Include="platform\win32\win32_platform.hpp">
+      <Filter>platform\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\win32\win32_system_handle.hpp">
+      <Filter>platform\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\platform.hpp">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\platform_headers.hpp">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="platform\win32\win32_platform_headers.hpp">
+      <Filter>platform\win32</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

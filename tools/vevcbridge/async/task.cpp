@@ -1,3 +1,5 @@
+#include "buildcarbide.hpp"
+
 #include "task.hpp"
 
 using namespace buildcarbide;

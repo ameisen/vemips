@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../project/project.hpp"
-#include "../fileutils/fileutils.hpp"
-#include "../configuration.hpp"
+#include "project/project.hpp"
+#include "file_utils/file_utils.hpp"
+#include "configuration.hpp"
 
 #include <unordered_set>
 #include <string>
@@ -12,8 +12,8 @@ namespace buildcarbide {
 	class build {
 		struct build_element final {
 			project::element proj_element;
-			std::unordered_set<std::string> includes;
-			fileutils::modtime_t mod_time;
+			std::unordered_set<std::wstring> includes;
+			file_utils::modtime_t mod_time;
 		};
 
 		std::vector<build_element> build_elements;

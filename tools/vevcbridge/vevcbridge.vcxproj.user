@@ -11,8 +11,8 @@
     <LocalDebuggerWorkingDirectory>D:\Projects\MipsTest2\MipsTest\</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>/sdk=D:\Projects\vemips\vemips_sdk\MipsTest\..\MIPS_SDK D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.vcxproj Release Win32 build MipsTest.bin</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerWorkingDirectory>D:\Projects\MipsTest2\MipsTest\</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerWorkingDirectory>D:\Projects\vemips\vemips_sdk\MIPS_SDK</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
 </Project>

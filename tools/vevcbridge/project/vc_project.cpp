@@ -1,8 +1,10 @@
+#include "buildcarbide.hpp"
+
 #include "vc_project.hpp"
 
-#include "../tinyxml2/tinyxml2.h"
+#include "tinyxml2/tinyxml2.h"
 
-#include "../fileutils/fileutils.hpp"
+#include "file_utils/file_utils.hpp"
 
 using namespace buildcarbide;
 
@@ -146,19 +148,19 @@ namespace {
 	}
 }
 
-project * vc_project::create_or_null(const std::string & __restrict filename)
+project * vc_project::create_or_null(const std::wstring & __restrict filename)
 {
-	if (filename.find(".vcxproj") != std::string::npos) {
+	if (filename.find(L".vcxproj") != std::string::npos) {
 		return new vc_project(filename);
 	}
 	return nullptr;
 }
 
-vc_project::vc_project(const std::string& __restrict filename) : project() {
-	path_ = fileutils::get_base_path(filename);
+vc_project::vc_project(const std::wstring& __restrict filename) : project() {
+	path_ = file_utils::get_base_path(filename);
 
 	tinyxml2::XMLDocument doc;
-	doc.LoadFile(filename.c_str());
+	doc.LoadFile(to_string(filename).c_str());
 	if (doc.Error()) {
 		throw 0;
 	}
@@ -233,8 +235,8 @@ vc_project::vc_project(const std::string& __restrict filename) : project() {
 					continue;
 				}
 				const target_pair config_pair = {
-					conditions["Platform"].reference,
-					conditions["Configuration"].reference
+					to_wstring(conditions["Platform"].reference),
+					to_wstring(conditions["Configuration"].reference)
 				};
 
 				// now extract the include paths.
@@ -253,12 +255,12 @@ vc_project::vc_project(const std::string& __restrict filename) : project() {
 					continue;
 				}
 
-				std::unordered_set<std::string> include_paths;
+				std::unordered_set<std::wstring> include_paths;
 				std::string cur_token;
 				// Now extract all the include paths.
 				while (*text_cstring != '\0') {
 					if (*text_cstring == ';') {
-						include_paths.insert(cur_token);
+						include_paths.insert(to_wstring(cur_token));
 						cur_token.clear();
 					}
 					else {
@@ -268,7 +270,7 @@ vc_project::vc_project(const std::string& __restrict filename) : project() {
 					++text_cstring;
 				}
 				if (!cur_token.empty()) {
-					include_paths.insert(cur_token);
+					include_paths.insert(to_wstring(cur_token));
 				}
 
 				include_paths_[config_pair] = include_paths;

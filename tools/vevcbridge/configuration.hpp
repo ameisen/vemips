@@ -4,9 +4,9 @@
 
 namespace buildcarbide {
 	struct configuration final {
-		std::string target;
-		std::string config;
-		std::string base_path;
-		std::string intermediate_dir;
+		std::wstring target;
+		std::wstring config;
+		std::wstring base_path;
+		std::wstring intermediate_dir;
 	};
 }

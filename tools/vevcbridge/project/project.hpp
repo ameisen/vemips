@@ -15,8 +15,8 @@ namespace buildcarbide {
 		};
 
 		struct target_pair final{
-			std::string target;
-			std::string configuration;
+			std::wstring target;
+			std::wstring configuration;
 
 			bool operator == (const target_pair & pair) const {
 				return target == pair.target && configuration == pair.configuration;
@@ -24,8 +24,8 @@ namespace buildcarbide {
 
 			struct hash final {
 				uint64_t operator () (const target_pair & pair) const {
-					const auto hash0 = std::hash<std::string>{}(pair.target);
-					const auto hash1 = std::hash<std::string>{}(pair.configuration);
+					const auto hash0 = std::hash<std::wstring>{}(pair.target);
+					const auto hash1 = std::hash<std::wstring>{}(pair.configuration);
 
 					// Boost's hash_combine algorithm
 					return hash0 ^ (hash1 + 0x9e3779b9u + (hash0 << 6) + (hash0 >> 2));
@@ -64,12 +64,12 @@ namespace buildcarbide {
 
 		std::unordered_set<std::string>	targets_;
 		std::unordered_set<std::string>	configurations_;
-		std::unordered_map<target_pair, std::unordered_set<std::string>, target_pair::hash>	include_paths_;
+		std::unordered_map<target_pair, std::unordered_set<std::wstring>, target_pair::hash>	include_paths_;
 		// A list of all files the project file describes
 		std::vector<element>	all_files_;
 		// A list of all sources files in the project
 		std::vector<element>	raw_source_files_;
-		std::string						path_;
+		std::wstring			path_;
 	
 		// The type of output this project emits
 		output_type					 output_type_ = output_type::none;
@@ -84,7 +84,7 @@ namespace buildcarbide {
 		[[nodiscard]]
 		const std::vector<element> & get_raw_source_files() const { return raw_source_files_; }
 		[[nodiscard]]
-		const std::unordered_set<std::string> * get_include_paths(const target_pair & __restrict pair) const {
+		const std::unordered_set<std::wstring> * get_include_paths(const target_pair & __restrict pair) const {
 			const auto find_iterator = include_paths_.find(pair);
 			if (find_iterator == include_paths_.end()) {
 				return nullptr;
@@ -92,9 +92,9 @@ namespace buildcarbide {
 			return &find_iterator->second;
 		}
 		[[nodiscard]]
-		const std::string & get_path() const { return path_; }
+		const std::wstring & get_path() const { return path_; }
 	};
 
 	[[nodiscard]]
-	extern project * get_project(const std::string & __restrict filename);
+	extern project * get_project(const std::wstring & __restrict filename);
 }
