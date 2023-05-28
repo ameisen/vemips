@@ -34,7 +34,7 @@
     <ClCompile Include="platform\win32\win32_system_handle.cpp">
       <Filter>platform\win32</Filter>
     </ClCompile>
-    <ClCompile Include="tinyxml2\tinyxml2.cpp">
+    <ClCompile Include="..\..\ext\tinyxml2\tinyxml2.cpp">
       <Filter>tinyxml2</Filter>
     </ClCompile>
   </ItemGroup>
@@ -129,8 +129,9 @@
     <ClInclude Include="platform\win32\win32_platform_headers.hpp">
       <Filter>platform\win32</Filter>
     </ClInclude>
-    <ClInclude Include="tinyxml2\tinyxml2.h">
+    <ClInclude Include="..\..\ext\tinyxml2\tinyxml2.h">
       <Filter>tinyxml2</Filter>
     </ClInclude>
+    <ClInclude Include="libfmt.hpp" />
   </ItemGroup>
 </Project>

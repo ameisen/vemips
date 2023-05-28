@@ -10,17 +10,16 @@
 #include <cstdio>
 #include <cstdlib>
 
-#define FMT_HEADER_ONLY 1
-#include <fmt/core.h>
-#include <fmt/xchar.h>
-
-#if defined(_MSC_VER)
-#	define no_throw __declspec(nothrow)
-#elif defined(__GNUC__)
-#	define no_throw __attribute__((nothrow))
+#if _DEBUG
+	// ReSharper disable once CppInconsistentNaming
+#	define check(condition) ([&]() noexcept { const bool result_condition = bool(condition); assert(result_condition && #condition); return result_condition; }())
 #else
-#	define no_throw
+	// ReSharper disable once CppInconsistentNaming
+#	define check(condition) ([&]() noexcept { const bool result_condition = bool(condition); __assume(result_condition); return result_condition; }()) // NOLINT(clang-diagnostic-assume)
 #endif
+
+#include "platform/platform.hpp"
+#include "libfmt.hpp"
 
 namespace buildcarbide {
 	using uint8 = std::uint8_t;
@@ -36,68 +35,6 @@ namespace buildcarbide {
 	using std::wstring_view;
 	using std::wstring;
 	using std::forward;
-
-#if _DEBUG
-	// ReSharper disable once CppInconsistentNaming
-#	define check(condition) ([&]() noexcept { const bool result_condition = bool(condition); assert(result_condition && #condition); return result_condition; }()) // NOLINT(clang-diagnostic-assume)
-#else
-	// ReSharper disable once CppInconsistentNaming
-#	define check(condition) ([&]() noexcept { __assume(condition); return bool(condition); }()) // NOLINT(clang-diagnostic-assume)
-#endif
-
-	template <typename... Args>
-	static no_throw void errorf(wstring_view format, Args&&... args) noexcept {
-		//fmt::vprint(stderr, L"{}\n", fmt::vformat(format, fmt::make_wformat_args(forward<Args>(args)...)));
-		fmt::vprint(format, fmt::make_wformat_args(forward<Args>(args)...));
-		fputs("", stderr);
-	}
-
-	template <size_t Nf, typename... Args>
-	static no_throw void errorf(const wchar_t (& __restrict format)[Nf], Args&&... args) noexcept {
-		errorf({format, Nf - 1}, forward<Args>(args)...);
-	}
-
-	template <typename... Args>
-	static no_throw void errorf(std::string_view format, Args&&... args) noexcept {
-		//fmt::println(stderr, format, forward<Args>(args)...);
-		fmt::vprint(format, fmt::make_format_args(forward<Args>(args)...));
-		fputs("", stderr);
-	}
-
-	template <size_t Nf, typename... Args>
-	static no_throw void errorf(const char (& __restrict format)[Nf], Args&&... args) noexcept {
-		errorf({format, Nf - 1}, forward<Args>(args)...);
-	}
-
-	template <int ExitCode, typename... Args>
-	[[noreturn]]
-	static no_throw void fail(const std::wstring& format, Args&&... args) noexcept {
-		static_assert(ExitCode != 0, "fail ExitCode should not be 0");
-		errorf(format, forward<Args>(args)...);
-		__debugbreak();
-		std::exit(ExitCode);  // NOLINT(concurrency-mt-unsafe)
-	}
-
-	template <int ExitCode, size_t Nf, typename... Args>
-	[[noreturn]]
-	static no_throw void fail(const wchar_t (& __restrict format)[Nf], Args&&... args) noexcept {
-		fail<ExitCode>({format, Nf - 1}, forward<Args>(args)...);
-	}
-
-	template <int ExitCode, typename... Args>
-	[[noreturn]]
-	static no_throw void fail(const std::string& format, Args&&... args) noexcept {
-		static_assert(ExitCode != 0, "fail ExitCode should not be 0");
-		errorf(format, forward<Args>(args)...);
-		__debugbreak();
-		std::exit(ExitCode);  // NOLINT(concurrency-mt-unsafe)
-	}
-
-	template <int ExitCode, size_t Nf, typename... Args>
-	[[noreturn]]
-	static no_throw void fail(const char (& __restrict format)[Nf], Args&&... args) noexcept {
-		fail<ExitCode>({format, Nf - 1}, forward<Args>(args)...);
-	}
 
 	static inline std::string to_string(const std::wstring & __restrict str) {
 		std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;

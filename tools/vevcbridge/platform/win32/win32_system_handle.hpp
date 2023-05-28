@@ -1,5 +1,7 @@
 #pragma once
 
+#include "platform/platform.hpp"
+
 namespace buildcarbide {
 	namespace detail {
 		using handle_t = void*;

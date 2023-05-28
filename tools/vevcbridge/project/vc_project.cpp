@@ -2,7 +2,7 @@
 
 #include "vc_project.hpp"
 
-#include "tinyxml2/tinyxml2.h"
+#include "tinyxml2.h"
 
 #include "file_utils/file_utils.hpp"
 

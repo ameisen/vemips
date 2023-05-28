@@ -89,7 +89,7 @@
       <FloatingPointModel>Strict</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
       <BuildStlModules>false</BuildStlModules>
@@ -128,7 +128,7 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
       <BuildStlModules>false</BuildStlModules>
@@ -170,7 +170,7 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
     </ClCompile>
@@ -182,6 +182,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\ext\tinyxml2\tinyxml2.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="async\task.cpp" />
     <ClCompile Include="buildcarbide.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -197,21 +202,18 @@
     <ClCompile Include="process\win32\process_win32.cpp" />
     <ClCompile Include="project\project.cpp" />
     <ClCompile Include="project\vc_project.cpp" />
-    <ClCompile Include="tinyxml2\tinyxml2.cpp">
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">NotUsing</PrecompiledHeader>
-      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
-    </ClCompile>
     <ClCompile Include="toolchain\clang.cpp" />
     <ClCompile Include="toolchain\toolchain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\ext\tinyxml2\tinyxml2.h" />
     <ClInclude Include="async\task.hpp" />
     <ClInclude Include="buildcarbide.hpp" />
     <ClInclude Include="build\build.hpp" />
     <ClInclude Include="configuration.hpp" />
     <ClInclude Include="file_utils\file_utils.hpp" />
     <ClInclude Include="file_utils\win32\file_utils_win32.hpp" />
+    <ClInclude Include="libfmt.hpp" />
     <ClInclude Include="options.hpp" />
     <ClInclude Include="parser\c_parser.hpp" />
     <ClInclude Include="platform.hpp" />
@@ -224,7 +226,6 @@
     <ClInclude Include="process\win32\process_win32.hpp" />
     <ClInclude Include="project\project.hpp" />
     <ClInclude Include="project\vc_project.hpp" />
-    <ClInclude Include="tinyxml2\tinyxml2.h" />
     <ClInclude Include="toolchain\clang.hpp" />
     <ClInclude Include="toolchain\toolchain.hpp" />
   </ItemGroup>

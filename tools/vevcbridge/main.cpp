@@ -17,7 +17,7 @@
 #undef PLATFORM_HEADER_WITH_SHLOBJ
 #undef PLATFORM_HEADER_WITH_SHELL
 
-#include "tinyxml2/tinyxml2.h"
+#include "tinyxml2.h"
 
 using std::wstring;
 using std::wstring_view;
@@ -342,7 +342,7 @@ int wmain(int argc, const wchar_t **argv) {
 		}
 	}
 	catch (const std::exception& ex) {
-		fail<4>(L"Failed to parser project file \'{}\' :: {}", build_options.project_file, ex.what());
+		fail<4>(L"Failed to parser project file \'{}\' :: {}", build_options.project_file, to_wstring(ex.what()));
 	}
 	catch (...) {
 		fail<4>(L"Failed to parser project file \'{}\'", build_options.project_file);
