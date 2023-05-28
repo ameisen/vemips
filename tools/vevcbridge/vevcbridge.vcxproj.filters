@@ -2,9 +2,6 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="tinyxml2\tinyxml2.cpp">
-      <Filter>tinyxml2</Filter>
-    </ClCompile>
     <ClCompile Include="project\vc_project.cpp">
       <Filter>project</Filter>
     </ClCompile>
@@ -36,6 +33,9 @@
     </ClCompile>
     <ClCompile Include="platform\win32\win32_system_handle.cpp">
       <Filter>platform\win32</Filter>
+    </ClCompile>
+    <ClCompile Include="tinyxml2\tinyxml2.cpp">
+      <Filter>tinyxml2</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -77,9 +77,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="tinyxml2\tinyxml2.h">
-      <Filter>tinyxml2</Filter>
-    </ClInclude>
     <ClInclude Include="project\vc_project.hpp">
       <Filter>project</Filter>
     </ClInclude>
@@ -131,6 +128,9 @@
     </ClInclude>
     <ClInclude Include="platform\win32\win32_platform_headers.hpp">
       <Filter>platform\win32</Filter>
+    </ClInclude>
+    <ClInclude Include="tinyxml2\tinyxml2.h">
+      <Filter>tinyxml2</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

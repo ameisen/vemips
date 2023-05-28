@@ -197,7 +197,11 @@
     <ClCompile Include="process\win32\process_win32.cpp" />
     <ClCompile Include="project\project.cpp" />
     <ClCompile Include="project\vc_project.cpp" />
-    <ClCompile Include="tinyxml2\tinyxml2.cpp" />
+    <ClCompile Include="tinyxml2\tinyxml2.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="toolchain\clang.cpp" />
     <ClCompile Include="toolchain\toolchain.cpp" />
   </ItemGroup>
