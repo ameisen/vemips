@@ -221,7 +221,7 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 
 			}  break;
 			default:
-				printf("** Unknown System Call Code: %u @ 0x%08X\n", code, ex.m_InstructionAddress);
+				fmt::println("** Unknown System Call Code: {} @ 0x{:08X}", code, ex.m_InstructionAddress);
 				execution_success_ = false;
 				execution_complete_ = true;
 				if (processor_->get_jit_type() != JitType::None) {
@@ -232,66 +232,68 @@ uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
 	}
 	else
 	{
-		const char * __restrict exName = "";
+		const char * __restrict ex_name = "";
 		switch (ex.m_ExceptionType) {
 			case CPU_Exception::Type::Interrupt:
-				exName = "Interrupt"; break;
+				ex_name = "Interrupt"; break;
 			case CPU_Exception::Type::Mod:
-				exName = "Mod"; break;
+				ex_name = "Mod"; break;
 			case CPU_Exception::Type::TLBL:
-				exName = "TLBL"; break;
+				ex_name = "TLBL"; break;
 			case CPU_Exception::Type::TLBS:
-				exName = "TLBS"; break;
+				ex_name = "TLBS"; break;
 			case CPU_Exception::Type::AdEL:
-				printf("** Unhandled Address Load CPU Exception: 0x%08X @ 0x%08X\n", ex.m_Code, ex.m_InstructionAddress); throw ExecutionFailException();
+				fmt::println("** Unhandled Address Load CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
+				throw ExecutionFailException();
 			case CPU_Exception::Type::AdES:
-				printf("** Unhandled Address Store CPU Exception: 0x%08X @ 0x%08X\n", ex.m_Code, ex.m_InstructionAddress); throw ExecutionFailException();
+				fmt::println("** Unhandled Address Store CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
+				throw ExecutionFailException();
 			case CPU_Exception::Type::IBE:
-				exName = "IBE"; break;
+				ex_name = "IBE"; break;
 			case CPU_Exception::Type::DBE:
-				exName = "DBE"; break;
+				ex_name = "DBE"; break;
 			case CPU_Exception::Type::Sys:
-				exName = "Sys"; break;
+				ex_name = "Sys"; break;
 			case CPU_Exception::Type::Bp:
-				exName = "Bp"; break;
+				ex_name = "Bp"; break;
 			case CPU_Exception::Type::RI:
-				exName = "RI"; break;
+				ex_name = "RI"; break;
 			case CPU_Exception::Type::CpU:
-				exName = "CpU"; break;
+				ex_name = "CpU"; break;
 			case CPU_Exception::Type::Ov:
-				exName = "Ov"; break;
+				ex_name = "Ov"; break;
 			case CPU_Exception::Type::Tr:
-				exName = "TR"; break;
+				ex_name = "TR"; break;
 			case CPU_Exception::Type::FPE:
-				exName = "FPE"; break;
+				ex_name = "FPE"; break;
 			case CPU_Exception::Type::Impl1:
-				exName = "Impl1"; break;
+				ex_name = "Impl1"; break;
 			case CPU_Exception::Type::Impl2:
-				exName = "Impl2"; break;
+				ex_name = "Impl2"; break;
 			case CPU_Exception::Type::C2E:
-				exName = "C2E"; break;
+				ex_name = "C2E"; break;
 			case CPU_Exception::Type::TLBRI:
-				exName = "TLBRI"; break;
+				ex_name = "TLBRI"; break;
 			case CPU_Exception::Type::TLBXI:
-				exName = "TLBXI"; break;
+				ex_name = "TLBXI"; break;
 			case CPU_Exception::Type::MDMX:
-				exName = "MDMX"; break;
+				ex_name = "MDMX"; break;
 			case CPU_Exception::Type::WATCH:
-				exName = "WATCH"; break;
+				ex_name = "WATCH"; break;
 			case CPU_Exception::Type::MCheck:
-				exName = "MCheck"; break;
+				ex_name = "MCheck"; break;
 			case CPU_Exception::Type::Thread:
-				exName = "Thread"; break;
+				ex_name = "Thread"; break;
 			case CPU_Exception::Type::DPSPDis:
-				exName = "DPSPDis"; break;
+				ex_name = "DPSPDis"; break;
 			case CPU_Exception::Type::GE:
-				exName = "GE"; break;
+				ex_name = "GE"; break;
 			case CPU_Exception::Type::Prot:
-				exName = "Prot"; break;
+				ex_name = "Prot"; break;
 			case CPU_Exception::Type::CacheErr:
-				exName = "CacheErr"; break;
+				ex_name = "CacheErr"; break;
 		}
-		printf("** Unhandled %s CPU Exception: %X @ 0x%08X\n", exName, ex.m_Code, ex.m_InstructionAddress);
+		fmt::println("** Unhandled {} CPU Exception: {:X} @ 0x{:08X}", ex_name, ex.m_Code, ex.m_InstructionAddress);
 		execution_success_ = false;
 		execution_complete_ = true;
 		if (processor_->get_jit_type() != JitType::None) {

@@ -84,14 +84,12 @@ namespace mips {
 		const mips::mmu											mmu_type_;
 		system												* const guest_system_ = nullptr;
 
-		struct {
-			const bool readonly_exec_ : 1;
-			const bool ticked_ : 1;
-			const bool collect_stats_ : 1;
-			const bool disable_cti_ : 1;
-			const bool debugging_ : 1 = false;
-			bool from_exception_ : 1 = false;
-		};
+		const bool readonly_exec_ : 1;
+		const bool ticked_ : 1;
+		const bool collect_stats_ : 1;
+		const bool disable_cti_ : 1;
+		const bool debugging_ : 1 = false;
+		bool from_exception_ : 1 = false;
 
 		void ExecuteInstruction(bool branch_delay);
 		void ExecuteInstructionExplicit(const instructions::InstructionInfo* instruction_info, instruction_t instruction, bool branch_delay);
@@ -105,6 +103,11 @@ namespace mips {
 
 		[[nodiscard]]
 		const std::unordered_map<const char *, size_t> & get_stats_map() const {
+			return (*instruction_stats_);
+		}
+
+		[[nodiscard]]
+		std::unordered_map<const char *, size_t> & get_stats_map() {
 			return (*instruction_stats_);
 		}
 

@@ -12,6 +12,20 @@
 #include <cstdint>
 #include <cstddef>
 
+#include "uni_algo.h"
+
+#ifdef _MSC_VER
+#	pragma warning(push, 0)
+#endif
+#define FMT_HEADER_ONLY 1
+#include <fmt/format.h>
+#ifdef UNICODE
+#	include <fmt/xchar.h>
+#endif
+#ifdef _MSC_VER
+#	pragma warning(pop)
+#endif
+
 // ReSharper disable IdentifierTypo CppInconsistentNaming
 #if defined(_MSC_VER) && !defined(__clang__)
 #	define _unpredictable(expr) (expr)
@@ -34,26 +48,6 @@
 # define _no_unique [[no_unique_address, msvc::no_unique_address]]
 #	define _clear_cache(start, end)
 #	define _constant_p(expression) (false)
-
-namespace mips::intrinsics {
-	inline _forceinline _nothrow uint16_t byteswap(const uint16_t value) {
-		return _byteswap_ushort(value);
-	}
-	inline _forceinline _nothrow uint32_t byteswap(const uint32_t value) {
-		return _byteswap_ulong(value);
-	}
-	inline _forceinline _nothrow uint64_t byteswap(const uint64_t value) {
-		return _byteswap_uint64(value);
-	}
-
-	inline _forceinline _nothrow uint32_t rotate_left(const uint32_t value, const int shift) {
-		return _lrotl(value, shift);
-	}
-
-	inline _forceinline _nothrow uint32_t rotate_right(const uint32_t value, const int shift) {
-		return _lrotr(value, shift);
-	}
-}
 
 #elif defined(__clang__)
 #	define _unpredictable(expr) (__builtin_unpredictable(expr))
@@ -81,47 +75,8 @@ namespace mips::intrinsics {
 #	define _clear_cache(start, end) __builtin___clear_cache((char*)(start), (char*)(end))
 #	define _constant_p(expression) __builtin_constant_p(expression)
 
-namespace mips::intrinsics {
-	inline _forceinline _nothrow uint16_t byteswap(const uint16_t value) {
-		return _byteswap_ushort(value);
-	}
-	inline _forceinline _nothrow uint32_t byteswap(const uint32_t value) {
-		return _byteswap_ulong(value);
-	}
-	inline _forceinline _nothrow uint64_t byteswap(const uint64_t value) {
-		return _byteswap_uint64(value);
-	}
-
-	inline _forceinline _nothrow uint32_t rotate_left(const uint32_t value, const int shift) {
-		return _lrotl(value, shift);
-	}
-
-	inline _forceinline _nothrow uint32_t rotate_right(const uint32_t value, const int shift) {
-		return _lrotr(value, shift);
-	}
-}
 #elif defined(__GNUC__)
 # error GCC unimplemented
-
-namespace mips::intrinsics {
-	inline _forceinline _nothrow uint16_t byteswap(const uint16_t value) {
-		return __builtin_bswap16(value);
-	}
-	inline _forceinline _nothrow uint32_t byteswap(const uint32_t value) {
-		return __builtin_bswap32(value);
-	}
-	inline _forceinline _nothrow uint64_t byteswap(const uint64_t value) {
-		return __builtin_bswap32(value);
-	}
-
-	inline _forceinline _nothrow uint32_t rotate_left(const uint32_t value, const int shift) {
-		return (value << shift) | (value >> (32 - shift));
-	}
-
-	inline _forceinline _nothrow uint32_t rotate_right(const uint32_t value, const int shift) {
-		return (value >> shift) | (value << (32 - shift));
-	}
-}
 
 #else
 #	error unknown toolchain
@@ -144,23 +99,39 @@ using intptr = int64;
 using usize = uint64;
 // ReSharper restore IdentifierTypo
 
+#ifdef UNICODE
+using tchar = wchar_t;
+using tstring_view = std::wstring_view;
+using tstring = std::wstring;
+
+#define TCHAR_FORMAT "%ls"
+#define TSTR(expr) L ## expr
+#else
+using tchar = char;
+using tstring_view = std::string_view;
+using tstring = std::string;
+
+#define TCHAR_FORMAT "%s"
+#define TSTR(expr) expr
+#endif
+
 template <uint32 Bit> constexpr uint64 bit = (uint64(1) << Bit);
 
 // ReSharper disable once IdentifierTypo CppInconsistentNaming
 #if _DEBUG
-#	define xassert(expr) do { assert(expr); if (!(expr)) { __debugbreak(); } _assume(expr); } while (false)
+#	define xassert(expr) do { const bool assert_result = bool(expr); assert(assert_result && #expr); if (!assert_result) { __debugbreak(); } _assume(assert_result); } while (false)
 #else
-#	define xassert(expr) do { assert(expr); _assume(expr); } while (false)
+#	define xassert(expr) do { const bool assert_result = bool(expr); assert(assert_result && #expr); _assume(assert_result); } while (false)
 #endif
 
 #define xwarn(expr, msg) xwarn_impl((expr), #expr, msg)
 
 namespace mips {
 	template <size_t En, size_t Mn>
-	static inline void xwarn_impl(bool expr, const char (&__restrict expr_string)[En], const char (& __restrict message)[Mn]) {
+	static inline void xwarn_impl(const bool expr, const char (&__restrict expr_string)[En], const char (& __restrict message)[Mn]) {
 #if _DEBUG
 		if _unlikely(!expr) {
-			fprintf(stderr, "xwarn [%s]: %s", expr_string, message);
+			fmt::println(stderr, "xwarn [{}]: {}", expr_string, message);
 		}
 #endif
 	}
@@ -258,4 +229,9 @@ namespace mips {
 
 	template <typename T>
 	concept EnumC = std::is_enum_v<T>;
+
+	template <typename T, size_t N>
+	static constexpr _nothrow _forceinline size_t count_of(T (& __restrict)[N]) {
+		return N;
+	}
 }

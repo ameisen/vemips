@@ -7,14 +7,11 @@
 
 #include <algorithm>
 #include <functional>
-#include <string>
-#include <utility>
 
 #include <cstdio>
 #include <queue>
 #include <span>
 #include <optional>
-
 
 namespace mips::instructions {
 	extern void finish_map_build();
@@ -71,7 +68,7 @@ namespace {
 		using type = const info_t* __restrict;
 
 		_nothrow bool operator() (const type lhs, const type rhs) const __restrict {
-			return strcmp(lhs->Name, rhs->Name) < 0;
+			return std::strcmp(lhs->Name, rhs->Name) < 0;
 		}
 	};
 
@@ -104,19 +101,17 @@ namespace {
 		{
 			auto&& arg = extract_option(args[i]);
 
-			bool has_operand = false;
-
 			switch (fnv_hash(arg.tag)) {
 			case fnv_hash("--header"):
 				if (arg.value) {
-					fprintf(stderr, "Argument does not take value: '%s' with '%s'", arg.tag, arg.value);
+					fmt::print(stderr, "Argument does not take value: '{}' with '{}'", arg.tag, arg.value);
 					return {};
 				}
 				write_header = true;
 				break;
 			case fnv_hash("--source"):
 				if (arg.value) {
-					fprintf(stderr, "Argument does not take value: '%s' with '%s'", arg.tag, arg.value);
+					fmt::println(stderr, "Argument does not take value: '{}' with '{}'", arg.tag, arg.value);
 					return {};
 				}
 				write_source = true;
@@ -126,7 +121,7 @@ namespace {
 					// then the next arg
 					if (args.size() <= i + 1)
 					{
-						fprintf(stderr, "'%s' provided but no argument passed", arg.tag);
+						fmt::println(stderr, "'{}' provided but no argument passed", arg.tag);
 						return {};
 					}
 
@@ -136,7 +131,7 @@ namespace {
 				file_out = arg.value;
 				break;
 			default:
-				fprintf(stderr, "Unknown Argument: '%s'", arg.tag);
+				fmt::println(stderr, "Unknown Argument: '{}'", arg.tag);
 				return {};
 			}
 		}

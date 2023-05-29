@@ -89,7 +89,7 @@
       <FloatingPointModel>Strict</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2;$(SolutionDir)..\..\ext\uni-algo-single-include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
       <BuildStlModules>false</BuildStlModules>
@@ -128,7 +128,7 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2;$(SolutionDir)..\..\ext\uni-algo-single-include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
       <BuildStlModules>false</BuildStlModules>
@@ -170,9 +170,10 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
-      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\tinyxml2;$(SolutionDir)..\..\ext\uni-algo-single-include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>buildcarbide.hpp</PrecompiledHeaderFile>
+      <BuildStlModules>false</BuildStlModules>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>

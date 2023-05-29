@@ -705,7 +705,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				return true;
 			}
 		}
-		catch (bool) {
+		catch (...) {
 			return false;
 		}
 	}
@@ -845,7 +845,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				return true;
 			}
 		}
-		catch (bool) {
+		catch (...) {
 			return false;
 		}
 	}

@@ -8,8 +8,9 @@
 #include "mips/coprocessor/coprocessor1/coprocessor1.hpp"
 
 #include <cassert>
+#include <bit>
 
-#define WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN  // NOLINT(clang-diagnostic-unused-macros)
 #include <Windows.h>
 #include <WinSock2.h>
 #include <WS2tcpip.h>
@@ -17,15 +18,27 @@
 using namespace mips;
 
 namespace {
-	static std::array<char, 2> checksum_to_chars(uint32 sum) {
-		char chars[3];
-		sprintf(chars, "%02x", sum);
-		return { chars[0], chars[1] };
+	static std::array<char, 2> checksum_to_chars(const uint32 sum) {
+		xassert(sum <= std::numeric_limits<uint8>::max());
+
+		const auto nibble_to_char = [](const uint8_t nibble) {
+			if (nibble < 10) {
+				return char('0' + nibble);
+			}
+			else {
+				return char('a' + uint8_t(nibble - 10));
+			}
+		};
+
+		const uint8_t low_nibble = sum & 0xF;
+		const uint8_t hi_nibble = (sum >> 4) & 0xF;
+
+		return { nibble_to_char(hi_nibble), nibble_to_char(low_nibble) };
 	}
 
 	static WSADATA g_wsa_data;
 
-	static std::vector<char> assemble_packet(const std::vector<char> & __restrict payload) {
+	static std::vector<char> assemble_packet(const std::span<const char> payload) {
 		std::vector<char> packet;
 		packet.resize(payload.size() + 4);
 		packet[0] = '$';
@@ -39,7 +52,7 @@ namespace {
 
 		const auto checksum_chars = checksum_to_chars(sum);
 
-		memcpy(packet.data() + 1, payload.data(), payload.size());
+		memcpy(&packet[1], payload.data(), payload.size());
 
 		packet[packet.size() - 3] = '#';
 		packet[packet.size() - 2] = checksum_chars[0];
@@ -47,30 +60,33 @@ namespace {
 
 		return packet;
 	}
-}
 
-static bool begins(const std::string & __restrict str, const std::string & __restrict ref) {
-	if (str.length() < ref.length()) {
-		return false;
-	}
-
-	for (size_t i = 0; i < ref.length(); ++i) {
-		if (str[i] != ref[i]) {
+	static bool begins(const std::string_view str, const std::string_view ref) {
+		if (str.length() < ref.length()) {
 			return false;
 		}
+
+		for (size_t i = 0; i < ref.length(); ++i) {
+			if (str[i] != ref[i]) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 
-	return true;
+	struct debugger_init final {
+		debugger_init() {
+			if (WSAStartup(MAKEWORD(2, 2), &g_wsa_data) != 0) [[unlikely]] {
+				throw std::exception("Failed to initialize WinSock");
+			}
+		}
+	};
 }
 
 debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
-	static bool once = true;
-	if (once) {
-		if (WSAStartup(MAKEWORD(2, 2), &g_wsa_data) != 0) {
-			throw std::string("Failed to initialize WinSock");
-		}
-		once = false;
-	}
+	// ReSharper disable once CppDeclaratorNeverUsed
+	static debugger_init init_singleton = {};
 
 	constexpr addrinfo hints = {
 		.ai_flags = AI_PASSIVE,
@@ -79,39 +95,45 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 		.ai_protocol = IPPROTO_TCP
 	};
 
-	struct addrinfo *result = nullptr;
+	addrinfo *result = nullptr;
 	char port_str[std::numeric_limits<uint16>::digits10 + 2];
-	sprintf(port_str, "%u", port);
+	*fmt::format_to(port_str, "{}", port) = '\0';
 	int res = getaddrinfo(nullptr, port_str, &hints, &result);
 	if (res != 0 || result == nullptr) {
-		throw std::string("failed to configure socket");
+		throw std::exception("failed to configure socket");
 	}
 
 	m_ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-	if (m_ListenSocket == INVALID_SOCKET) {
+	try {
+		if (m_ListenSocket == INVALID_SOCKET) {
+			freeaddrinfo(result);
+			throw std::exception("Could not create listener socket");
+		}
+
+		res = bind(m_ListenSocket, result->ai_addr, int(result->ai_addrlen));
+		if (res == SOCKET_ERROR) {
+			closesocket(m_ListenSocket);
+			m_ListenSocket = INVALID_SOCKET;
+			throw std::exception("socket bind failed");
+		}
+
 		freeaddrinfo(result);
-		throw std::string("Could not create listener socket");
-	}
 
-	res = bind(m_ListenSocket, result->ai_addr, int(result->ai_addrlen));
-	if (res == SOCKET_ERROR) {
+		DWORD value = 1;
+		setsockopt(m_ListenSocket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&value), sizeof(value));
+		value = 0;
+		setsockopt(m_ListenSocket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&value), sizeof(value));
+	}
+	catch (...) {
 		closesocket(m_ListenSocket);
-		m_ListenSocket = INVALID_SOCKET;
-		throw std::string("socket bind failed");
+		throw;
 	}
-
-	freeaddrinfo(result);
-
-	DWORD value = 1;
-	setsockopt(m_ListenSocket, IPPROTO_TCP, TCP_NODELAY, (char *)&value, sizeof(value));
-	value = 0;
-	setsockopt(m_ListenSocket, SOL_SOCKET, SO_SNDBUF, (char *)&value, sizeof(value));
 
 	res = listen(m_ListenSocket, SOMAXCONN);
 	if (res == SOCKET_ERROR) {
 		closesocket(m_ListenSocket);
 		m_ListenSocket = INVALID_SOCKET;
-		throw std::string("socket listen failed");
+		throw std::exception("socket listen failed");
 	}
 
 	m_ServerThread = std::thread([this]() {
@@ -120,13 +142,17 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 		for (;;) {
 			m_ClientSocket = accept(m_ListenSocket, nullptr, nullptr);
 
+			if (m_ClientSocket == INVALID_SOCKET) {
+				continue;
+			}
+
 			m_ack_mode = true;
 			m_non_stop = false;
 
 			DWORD value = 1;
-			setsockopt(m_ClientSocket, IPPROTO_TCP, TCP_NODELAY, (char *)&value, sizeof(value));
+			setsockopt(m_ClientSocket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&value), sizeof(value));
 			value = 0;
-			setsockopt(m_ClientSocket, SOL_SOCKET, SO_SNDBUF, (char *)&value, sizeof(value));
+			setsockopt(m_ClientSocket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&value), sizeof(value));
 
 			bool in_packet = false;
 			unsigned remaining_checksum = 0;
@@ -155,16 +181,16 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 
 				if (!in_packet && tbuffer[0] == '\x3') {
 					// stop execution of all threads
-					printf("Packet: Ctrl-C\n");
+					fmt::println("Packet: Ctrl-C");
 					handle_stop();
-					static const std::vector<char> OK = { 'S', ' ', '1', '1' };
-					auto out_packet = assemble_packet(OK);
+					static const constexpr std::array ok = { 'S', ' ', '1', '1' };
+					auto out_packet = assemble_packet(ok);
 					xassert(out_packet.size() <= std::numeric_limits<int>::max());
 					send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
 					std::string out;
 					out.resize(out_packet.size());
 					memcpy(out.data(), out_packet.data(), out_packet.size());
-					printf("Sent: %s\n", out.data());
+					fmt::println("Sent: {}", out);
 					++tbuffer;
 					--res;
 				}
@@ -211,7 +237,7 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 									std::string out;
 									out.resize(out_packet.size());
 									memcpy(out.data(), out_packet.data(), out_packet.size());
-									printf("Sent: %s\n", out.data());
+									fmt::println("Sent: {}", out);
 								}
 								else {
 									constexpr char minus = '-';
@@ -229,7 +255,7 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 								std::string out;
 								out.resize(out_packet.size());
 								memcpy(out.data(), out_packet.data(), out_packet.size());
-								printf("Sent: %s\n", out.data());
+								fmt::println("Sent: {}", out);
 							}
 							buffer.clear();
 						}
@@ -241,63 +267,50 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 }
 
 debugger::~debugger() {
-	m_ServerThread.join();
-}
-
-static bool test_checksum(const std::vector<char> & __restrict packet) {
-	const char checksum[2] = { packet[packet.size() - 2], packet[packet.size() - 1] };
-
-	const size_t packet_len = packet.size() - 3;
-
-	uint32 sum = 0;
-	for (size_t i = 1; i < packet_len; ++i) {
-		sum += packet[i];
+	if (m_ServerThread.joinable()) {
+		m_ServerThread.join();
 	}
-	sum %= 256;
 
-	const auto checksum_chars = checksum_to_chars(sum);
-
-	return checksum[0] == checksum_chars[0] && checksum[1] == checksum_chars[1];
+	if (m_ListenSocket != INVALID_SOCKET) {
+		closesocket(m_ListenSocket);
+	}
 }
 
 namespace {
-	template <typename T>
-	T endian_swap(const T & __restrict val) {
-		T out = val;
+	static bool test_checksum(const std::vector<char> & __restrict packet) {
+		const std::array checksum = { packet[packet.size() - 2], packet[packet.size() - 1] };
 
-		uint8 *ptr = (uint8 *)&out;
-		for (size_t i = 0; i < sizeof(T) / 2; ++i) {
-			std::swap(ptr[i], ptr[(sizeof(T) - 1) - i]);
+		const size_t packet_len = packet.size() - 3;
+
+		uint32 sum = 0;
+		for (size_t i = 1; i < packet_len; ++i) {
+			sum += packet[i];
 		}
+		sum %= 256;
 
-		return out;
+		const auto checksum_chars = checksum_to_chars(sum);
+
+		return checksum == checksum_chars;
 	}
 }
 
 bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::vector<char> & __restrict response) {
-	std::vector<char> buffer = packet;
-	buffer.push_back(0);
-	printf("Packet: %s\n", buffer.data());
+	fmt::println("Packet: {}", std::string_view{packet.data(), packet.size()});
 
 	if (!test_checksum(packet)) {
 		return false;
 	}
 
-	const auto send_response = [&](std::string_view str) {
+	const auto send_response = [&](const std::string_view str) {
 		response.insert(response.end(), str.begin(), str.end());
 	};
 
-	std::string in;
-	for (int i = 1; i < packet.size(); ++i) {
-		if (packet[i] == '#') {
-			break;
-		}
-		in.push_back(packet[i]);
-	}
+	const auto hash_iterator = std::find(packet.begin() + 1, packet.end(), '#');
+	auto in = std::string{ std::string_view{&packet[1], size_t((hash_iterator - packet.begin()) - 1)} };
 
 	std::vector<std::string> tokens;
 
-	const auto get_token = [&](size_t i) -> std::string {
+	const auto get_token = [&](const size_t i) -> std::string_view {
 		if (i >= tokens.size()) {
 			return "";
 		}
@@ -305,7 +318,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	};
 
 	{
-		const auto is_delim = [](char c) -> bool {
+		const auto is_delim = [](const char c) -> bool {
 			return isspace(c) || c == ';' || c == ':';
 		};
 
@@ -333,7 +346,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 							case '?': c = '?'; break;
 							case '\'': c = '\''; break;
 							case '\"': c = '\"'; break;
-							case '\0': c = '\0'; break;
+							case '0': c = '\0'; break;
 							default: {
 								in.erase(0, 1);
 								continue;
@@ -373,7 +386,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 
 		send_response("QC ");
 		char buffer[std::numeric_limits<decltype(m_active_thread)>::digits10 + 2];
-		sprintf(buffer, "%x", m_active_thread);
+		*fmt::format_to(buffer, "{:x}", m_active_thread) = '\0';
 		send_response(buffer);
 	}
 	else if (get_token(0) == "qHostInfo") {
@@ -425,7 +438,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		// TODO all threads should be reported here. We only have one thread presently.
 
 		char buffer[std::numeric_limits<decltype(m_threads[0])>::digits10 + 2];
-		sprintf(buffer, "%x", m_threads[0]);
+		*fmt::format_to(buffer, "{:x}", m_threads[0]) = '\0';
 		send_response(buffer);
 	}
 	else if (get_token(0) == "qsThreadInfo") {
@@ -447,15 +460,15 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 
 		// register info query.
 		uint32 register_number;
-		sscanf(get_token(0).c_str(), "qRegisterInfo%x", &register_number);
+		std::sscanf(get_token(0).data(), "qRegisterInfo%x", &register_number);
 		char buffer[1024];
 		switch (register_number) {
 			case 0:
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:zero;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:zero;",
+					"name:r{};alt-name:zero;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:zero;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 1:
 			case 2:
@@ -480,67 +493,67 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 			case 25:
 			case 26:
 			case 27:
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;",
+					"name:r{};bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 4: // a0
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:arg1;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg1;",
+					"name:r{};alt-name:arg1;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:arg1;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 5: // a1
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:arg2;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg2;",
+					"name:r{};alt-name:arg2;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:arg2;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 6: // a2
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:arg3;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg3;",
+					"name:r{};alt-name:arg3;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:arg3;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 7: // a3
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:arg4;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:arg4;",
+					"name:r{};alt-name:arg4;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:arg4;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 28: // gp
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:gp;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:gp;",
+					"name:r{};alt-name:gp;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:gp;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 29:
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:sp;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:sp;",
+					"name:r{};alt-name:sp;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:sp;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 30:
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:fp;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:fp;",
+					"name:r{};alt-name:fp;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:fp;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 31: // ra
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:r%u;alt-name:ra;bitsize:32;offset:%u;encoding:uint;format:hex;set:General Purpose Registers;gcc:%u;dwarf:%u;generic:ra;",
+					"name:r{};alt-name:ra;bitsize:32;offset:{};encoding:uint;format:hex;set:General Purpose Registers;gcc:{};dwarf:{};generic:ra;",
 					register_number, register_number * 4, register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 32:
 			case 33:
@@ -574,17 +587,17 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 			case 61:
 			case 62:
 			case 63:
-				sprintf(
+				*fmt::format_to(
 					buffer,
-					"name:f%u;bitsize:64;offset:%u;encoding:ieee754;format:float;set:Floating Point Registers;gcc:%u;dwarf:%u;",
+					"name:f{};bitsize:64;offset:{};encoding:ieee754;format:float;set:Floating Point Registers;gcc:{};dwarf:{};",
 					register_number - 32, (32 * 4) + (register_number * 8), register_number, register_number
-				);
+				) = '\0';
 				send_response(buffer); break;
 			case 64: // IP
-				sprintf(
+				*fmt::format_to(
 					buffer,
 					"name:pc;alt-name:pc;bitsize:32;encoding:uint;format:hex;set:General Purpose Registers;generic:pc;"
-				);
+				) = '\0';
 				send_response(buffer); break;
 			default:
 				send_response("E45");
@@ -593,29 +606,29 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	else if (begins(get_token(0), "Hg")) {
 		// register info query.
 		uint32 thread_id;
-		sscanf(get_token(0).c_str(), "Hg%x", &thread_id);
+		std::sscanf(get_token(0).data(), "Hg%x", &thread_id);
 		m_active_thread = thread_id;
 		send_response("OK");
 	}
 	else if (begins(get_token(0), "p")) {
 		// register info query.
 		uint32 register_id;
-		sscanf(get_token(0).c_str(), "p%x", &register_id);
+		std::sscanf(get_token(0).data(), "p%x", &register_id);
 
 		char buffer[64];
 		if (register_id < 32) {
 			// gpr
 			const uint32 value = m_system.get_processor()->get_register<uint32>(register_id);
-			sprintf(buffer, "%08x", endian_swap(value));
+			*fmt::format_to(buffer, "{:08x}", std::byteswap(value)) = '\0';
 		}
 		else if (register_id < 64) {
 			// fpu
-			const uint64 value = ((coprocessor1 * __restrict)m_system.get_processor()->get_coprocessor(1))->get_register<uint64>(register_id - 32);
-			sprintf(buffer, "%016llx", endian_swap(value));
+			const uint64 value = static_cast<coprocessor1* __restrict>(m_system.get_processor()->get_coprocessor(1))->get_register<uint64>(register_id - 32);
+			*fmt::format_to(buffer, "{:016x}", std::byteswap(value)) = '\0';
 		}
 		else if (register_id == 64) {
 			const uint32 value = m_system.get_processor()->get_program_counter();
-			sprintf(buffer, "%08x", endian_swap(value));
+			*fmt::format_to(buffer, "{:08x}", std::byteswap(value)) = '\0';
 		}
 		else {
 			// error, send nothing.
@@ -630,7 +643,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		uint32 address = m_system.get_processor()->get_program_counter();
 		if (!get_token(1).empty())
 		{
-			sscanf(get_token(1).c_str(), "%x", &address);
+			std::sscanf(get_token(1).data(), "%x", &address);
 			m_system.get_processor()->set_program_counter(address);
 		}
 		this->m_paused = false;
@@ -661,14 +674,14 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		// we're reading memory.
 		uint32 addr = 0;
 		uint32 length = 0;
-		sscanf(&get_token(0)[1], "%x,%x", &addr, &length);
+		std::sscanf(&get_token(0)[1], "%x,%x", &addr, &length);
 		
 		bool has_response = false;
 
 		for (uint32 i = 0; i < length; ++i) {
 			if (auto *ptr = m_system.get_processor()->mem_fetch_debugger<uint8>(addr)) {
 				char buffer[3];
-				sprintf(buffer, "%02x", *ptr);
+				*fmt::format_to(buffer, "{:02x}", *ptr) = '\0';
 				send_response(buffer);
 				has_response = true;
 			}
@@ -688,7 +701,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		uint32 type;
 		uint32 address;
 		uint32 kind;
-		sscanf(get_token(0).c_str(), "Z%x,%x,%x", &type, &address, &kind);
+		std::sscanf(get_token(0).data(), "Z%x,%x,%x", &type, &address, &kind);
 
 		{
 			std::unique_lock _bplock(m_breakpoint_lock);
@@ -701,7 +714,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		uint32 type;
 		uint32 address;
 		uint32 kind;
-		sscanf(get_token(0).c_str(), "z%x,%x,%x", &type, &address, &kind);
+		std::sscanf(get_token(0).data(), "z%x,%x,%x", &type, &address, &kind);
 
 		{
 			std::unique_lock _bplock(m_breakpoint_lock);
@@ -724,7 +737,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		}
 		else if (get_token(1) == "s") {
 			uint32 thread;
-			sscanf(get_token(2).c_str(), "%x", &thread);
+			std::sscanf(get_token(2).data(), "%x", &thread);
 			std::unique_lock _bplock(m_breakpoint_lock);
 			m_step[thread] = 2;
 			m_paused = false;
@@ -736,7 +749,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		// register info query.
 		char type = 'g';
 		uint32 thread = -1;
-		sscanf(get_token(0).c_str(), "H%c%d", &type, &thread);
+		std::sscanf(get_token(0).data(), "H%c%d", &type, &thread);
 		if (type == 'c') {
 			m_thread_next_sc = thread;
 		}
@@ -769,7 +782,7 @@ void debugger::wait() {
 	};
 
 	--m_threads_to_pause;
-	printf("Thread Interrupted (remaining threads %u\n", m_threads_to_pause.load());
+	fmt::println("Thread Interrupted (remaining threads {})", m_threads_to_pause.load());
 	
 	std::unique_lock _lock(m_wait_lock);
 	
@@ -784,13 +797,13 @@ void debugger::wait() {
 		else {
 			send_response("T 05 "); // TARGET_SIGNAL_TRAP
 			char buffer[32];
-			sprintf(buffer, "thread:%x;", thread_id);
+			*fmt::format_to(buffer, "thread:{:x}", thread_id) = '\0';
 			send_response(buffer);
-			sprintf(buffer, "%02x:%08x;", 64, endian_swap(m_system.get_processor()->get_program_counter()));
+			*fmt::format_to(buffer, "{:02x}:{:08x};", 64, std::byteswap(m_system.get_processor()->get_program_counter())) = '\0';
 			send_response(buffer);
-			sprintf(buffer, "%02x:%08x;", 0x1d, endian_swap(m_system.get_processor()->get_register<uint32>(0x1d)));
+			*fmt::format_to(buffer, "{:02x}:{:08x};", 0x1d, std::byteswap(m_system.get_processor()->get_register<uint32>(0x1d))) = '\0';
 			send_response(buffer);
-			sprintf(buffer, "%02x:%08x;", 0x1f, endian_swap(m_system.get_processor()->get_register<uint32>(0x1f)));
+			*fmt::format_to(buffer, "{:02x}:{:08x};", 0x1f, std::byteswap(m_system.get_processor()->get_register<uint32>(0x1f))) = '\0';
 			send_response(buffer);
 			if (std::get<0>(breakpoint) == 0) {
 				send_response("swbreak:;");
@@ -808,7 +821,7 @@ void debugger::wait() {
 		if (out_packet.back() != '\0') {
 			out_packet.push_back('\0');
 		}
-		printf("Sent: %s\n", out_packet.data());
+		fmt::println("Sent: {}", std::string_view{out_packet.data(), out_packet.size()});
 	}
 	
 	while (m_paused) {
@@ -860,8 +873,8 @@ bool debugger::should_interrupt_execution() {
 	if (const uint32 step_point = m_step[thread]; step_point > 0) {
 		--m_step[thread];
 		if (step_point == 1) {
-			const breakpoint_t steppoint{ uint32(-1), pc, 0 };
-			m_pending_breakpoints.emplace_back(thread, steppoint); // TODO thread
+			const breakpoint_t break_point{ uint32(-1), pc, 0 };
+			m_pending_breakpoints.emplace_back(thread, break_point); // TODO thread
 			m_paused = true;
 			return true;
 		}

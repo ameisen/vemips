@@ -2601,8 +2601,8 @@ namespace mips::instructions
 		std::swap(reg.bytes[0], reg.bytes[1]);
 		std::swap(reg.bytes[2], reg.bytes[3]);
 #else // Neither GCC nor MSVC appear to be able to optimize the std::swaps into this, but LLVM does it fine.
-		reg.reg = intrinsics::byteswap(reg.reg);
-		reg.reg = intrinsics::rotate_right(reg.reg, 16);
+		reg.reg = std::byteswap(reg.reg);
+		reg.reg = std::rotr(reg.reg, 16);
 #endif
 
 		return write_result(rd, reg.reg);

@@ -17,10 +17,11 @@
 #include <cstdio>
 #include <span>
 
-#define PAIR_TEST 0
 
 namespace {
-	static uint64 GetHostFrequency() {
+	using namespace mips;
+
+	static uint64 get_host_frequency() {
 		struct PROCESSOR_POWER_INFORMATION final {
 			ULONG Number;
 			ULONG MaxMhz;
@@ -33,17 +34,17 @@ namespace {
 		SYSTEM_INFO sysInfo;
 		GetSystemInfo(&sysInfo);
 
-		auto power_info = std::make_unique<PROCESSOR_POWER_INFORMATION[]>(sysInfo.dwNumberOfProcessors);
+		const auto power_info = std::make_unique<PROCESSOR_POWER_INFORMATION[]>(sysInfo.dwNumberOfProcessors);
 
-		const size_t OutBufferLength = sysInfo.dwNumberOfProcessors * sizeof(PROCESSOR_POWER_INFORMATION);
-		xassert(OutBufferLength <= std::numeric_limits<ULONG>::max());
+		const size_t out_buffer_length = sysInfo.dwNumberOfProcessors * sizeof(PROCESSOR_POWER_INFORMATION);
+		xassert(out_buffer_length <= std::numeric_limits<ULONG>::max());
 
 		if (const NTSTATUS status = CallNtPowerInformation(
 			ProcessorInformation,
 			nullptr,
 			0,
 			power_info.get(),
-			ULONG(OutBufferLength)
+			ULONG(out_buffer_length)
 		); status != 0) {
 			return 1;
 		}
@@ -53,20 +54,20 @@ namespace {
 		return power_info[0].MaxMhz;
 	}
 
-#if EMSCRIPTEN
+#ifdef EMSCRIPTEN
 #	include "base64.hpp"
 #endif
 
-	struct Version final {
-		uint32 Major;
-		uint32 Minor;
-		uint32 Build;
+	struct version final {
+		uint32 major;
+		uint32 minor;
+		uint32 build;
 	}
-	static constexpr const Version = { 1, 0, 0 };
+	static constexpr const version = { 1, 0, 0 };
 
-	static void version();
-	static void help();
-	static void changes();
+	static void print_version();
+	static void print_help();
+	static void print_changes();
 
 	template <typename T>
 	struct unique_span final {
@@ -97,7 +98,7 @@ namespace {
 	struct argument_data final {
 		unique_span<char> binary_data;
 		uint64 ticks = 0;
-		uint32 available_memory = 1048576 * 2;
+		uint32 available_memory = 0x100000 * 2;
 		uint32 stack_memory = uint32(-1);
 		mips::JitType jit = mips::JitType::Jit;
 		mips::mmu mmu_type = mips::mmu::none;
@@ -111,194 +112,200 @@ namespace {
 		bool use_rox = false;
 	};
 
-#if !EMSCRIPTEN
-	struct Option final {
-		std::vector<std::string> option_str;
+#ifndef EMSCRIPTEN
+	struct option final {
+		std::vector<tstring_view> option_str;
 		std::string description;
-		std::function<void(argument_data & __restrict argument_data, const std::span<const char*> args, uint32& __restrict i)> procedure;
+		std::function<void(argument_data & __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i)> procedure;
 	};
 #endif
 
-#if !EMSCRIPTEN
-	static const std::vector<Option> Options{
+#if UNICODE
+#	define tstrcmp(a, b) wcscmp(a, L ## b)
+#else
+#	define tstrcmp(a, b) std::strcmp(a, b)
+#endif
+
+#ifndef EMSCRIPTEN
+	static const std::vector<option> options = {
 		{
-			{"-m", "--memory"},
+			{TSTR("-m"), TSTR("--memory")},
 			"Specify how much memory to which the CPU shall have access [default: 1048576]",
-			[](argument_data& __restrict argument_data, const std::span<const char*> args, uint32& __restrict i) {
-				if (i == args.size() - 1) {
-					fprintf(stderr, "Error: No quantity following -m option\n");
-					_exit(1);
+			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+				if (i == args.size() - 1) [[unlikely]] {
+					fmt::println(stderr, "Error: No quantity following -m option");
+					std::exit(1);
 				}
 				++i;
 				const auto memory = std::stoll(args[i], nullptr, 0);
-				if (memory < 4096) {
-					fprintf(stderr, "You cannot specify < 4096 bytes of memory to the emulator\n");
-					_exit(1);
+				if (memory < 4096) [[unlikely]] {
+					fmt::println(stderr, "Error: You cannot specify < 4096 bytes of memory to the emulator");
+					std::exit(1);
 				}
-				if (memory > uint32(-1)) {
-					fprintf(stderr, "You cannot specify greater than or equal to 2^32 bytes of memory to the emulator\n");
-					_exit(1);
+				if (memory > uint32(-1)) [[unlikely]] {
+					fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of memory to the emulator");
+					std::exit(1);
 				}
 				argument_data.available_memory = uint32(memory);
 			}
 		},
 		{
-			{"-s", "--stack"},
+			{TSTR("-s"), TSTR("--stack")},
 			"Specify how much memory will be reserved for the stack [default: memory / 2]",
-			[](argument_data& __restrict argument_data, const std::span<const char*> args, uint32& __restrict i) {
-				if (i == args.size() - 1) {
-					fprintf(stderr, "Error: No quantity following -s option\n");
-					_exit(1);
+			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+				if (i == args.size() - 1) [[unlikely]] {
+					fmt::println(stderr, "Error: No quantity following -s option");
+					std::exit(1);
 				}
 				++i;
 				const auto memory = std::stoll(args[i], nullptr, 0);
-				if (memory < 0) {
-					fprintf(stderr, "You cannot specify < 0 bytes of stack to the emulator\n");
-					_exit(1);
+				if (memory < 0) [[unlikely]] {
+					fmt::println(stderr, "Error: You cannot specify < 0 bytes of stack to the emulator");
+					std::exit(1);
 				}
-				if (memory > uint32(-1)) {
-					fprintf(stderr, "You cannot specify greater than or equal to 2^32 bytes of stack memory\n");
-					_exit(1);
+				if (memory > uint32(-1)) [[unlikely]] {
+					fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of stack memory");
+					std::exit(1);
 				}
 				argument_data.stack_memory = uint32(memory);
 			}
 		},
 		{
-			{"--debug"},
+			{TSTR("--debug")},
 			"Enable the debugger. GDB Port must follow.",
-			[](argument_data& __restrict argument_data, const std::span<const char*> args, uint32& __restrict i) {
-				if (i == args.size() - 1) {
-					fprintf(stderr, "Error: No port following ---debug option\n");
-					_exit(1);
+			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+				if (i == args.size() - 1) [[unlikely]] {
+					fmt::println(stderr, "Error: No port following ---debug option");
+					std::exit(1);
 				}
 				++i;
 				const auto port = std::stoll(args[i], nullptr, 0);
-				if (!mips::within(port, std::numeric_limits<uint16>{})) {
-					fprintf(stderr, "Provided debuggerport number is out of range.\n");
-					_exit(1);
+				if (!mips::within(port, std::numeric_limits<uint16>{})) [[unlikely]] {
+					fmt::println(stderr, "Error: Provided debugger port number is out of range.");
+					std::exit(1);
 				}
 				argument_data.debug = { uint16(port), true };
 			}
 		},
 		{
-			{"-h", "--help"},
+			{TSTR("-h"), TSTR("--help")},
 			"Displays tool help information [you are viewing this]",
-			[](argument_data& __restrict, const std::span<const char*>, uint32& __restrict) {
-				help();
-				_exit(0);
+			[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
+				print_help();
+				std::exit(0);
 			}
 		},
 		{
-			{"-v", "--version"},
+			{TSTR("-v"), TSTR("--version")},
 			"Displays tool version information",
-			[](argument_data& __restrict, const std::span<const char*>, uint32& __restrict) {
-				version();
-				_exit(0);
+			[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
+				print_version();
+				std::exit(0);
 			}
 		},
 		{
-			{"--changes"},
+			{TSTR("--changes")},
 			"Displays most recent changes to build",
-			[](argument_data& __restrict, const std::span<const char*>, uint32& __restrict) {
-				changes();
-				_exit(0);
+			[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
+				print_changes();
+				std::exit(0);
 			}
 		},
 		{
-			{"--rox"},
+			{TSTR("--rox")},
 			"Makes executable memory read-only. [cannot be combined with --nommu]",
-			[](argument_data& __restrict argument_data, const std::span<const char*>, uint32& __restrict) {
+			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
 				argument_data.use_rox = true;
 			}
 		},
 		{
-			{ "--no-cti" },
+			{TSTR("--no-cti")},
 			"Disable CTI flag checking",
-			[](argument_data& __restrict argument_data, const std::span<const char*>, uint32& __restrict) {
+			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
 				argument_data.disable_cti = true;
 			}
 		},
 		{
-			{"--mmu"},
+			{TSTR("--mmu")},
 			"Specifies which MMU to use [emulated, none, host] [default: emulated].",
-			[](argument_data& __restrict argument_data, const std::span<const char*> args, uint32& __restrict i) {
-				if (i == args.size() - 1) {
-					printf("Error: No MMU following --mmu option\n");
-					_exit(1);
+			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+				if (i == args.size() - 1) [[unlikely]] {
+					fmt::println(stderr, "Error: No MMU following --mmu option");
+					std::exit(1);
 				}
 				++i;
 				const auto mmu_v = args[i];
-				if (strcmp(mmu_v, "emulated") == 0) {
+				if (tstrcmp(mmu_v, "emulated") == 0) {
 					argument_data.mmu_type = mips::mmu::emulated;
 				}
-				else if (strcmp(mmu_v, "none") == 0) {
+				else if (tstrcmp(mmu_v, "none") == 0) {
 					argument_data.mmu_type = mips::mmu::none;
 				}
-				else if (strcmp(mmu_v, "host") == 0) {
+				else if (tstrcmp(mmu_v, "host") == 0) {
 					argument_data.mmu_type = mips::mmu::host;
 				}
-				else {
-					fprintf(stderr, "The provided MMU (\'%s\') is not a valid MMU type\n", mmu_v);
-					_exit(1);
+				else [[unlikely]] {
+					fmt::println(stderr, TSTR("Error: The provided MMU (\'{}\') is not a valid MMU type"), mmu_v);
+					std::exit(1);
 				}
 			}
 		},
 		{
-			{"--icache"},
+			{TSTR("--icache")},
 			"Enables instruction cache.",
-			[](argument_data& __restrict argument_data, const std::span<const char*>, uint32& __restrict) {
+			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
 				argument_data.instruction_cache = true;
 			}
 		},
 		{
-			{"--jit0"},
+			{TSTR("--jit0")},
 			"Disable JIT usage in emulator",
-			[](argument_data& __restrict argument_data, const std::span<const char*>, uint32& __restrict) {
+			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
 				argument_data.jit = mips::JitType::None;
 			}
 		},
 		{
-			{"--jit1"},
+			{TSTR("--jit1")},
 			"Enable JIT in emulator (ticked mode not yet implemented) [default]",
-			[](argument_data& __restrict argument_data, const std::span<const char*>, uint32& __restrict) {
+			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
 				argument_data.jit = mips::JitType::Jit;
 			}
 		},
 		{
-			{"--jit2"},
+			{TSTR("--jit2")},
 			"Enable function table in emulator (ticked mode not yet implemented)",
-			[](argument_data& __restrict argument_data, const std::span<const char*>, uint32& __restrict) {
+			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
 				argument_data.jit = mips::JitType::FunctionTable;
 			}
 		},
 		{
-			{"--stats"},
+			{TSTR("--stats")},
 			"Enable capturing of instruction stats",
-			[](argument_data& __restrict argument_data, const std::span<const char*>, uint32& __restrict) {
+			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
 				argument_data.instruction_stats = true;
 			}
 		},
 		{
-			{"-t", "--ticks"},
+			{TSTR("-t"), TSTR("--ticks")},
 			"Enables ticked execution of emulator and increments by provided ticks",
-			[](argument_data& __restrict argument_data, const std::span<const char*> args, uint32& __restrict i) {
-				if (i == args.size() - 1) {
-					fprintf(stderr, "Error: No quantity following --ticks option\n");
-					_exit(1);
+			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+				if (i == args.size() - 1) [[unlikely]] {
+					fmt::println(stderr, "Error: No quantity following --ticks option");
+					std::exit(1);
 				}
 				++i;
 				argument_data.ticks = std::stoull(args[i], nullptr, 0);
-				if (argument_data.ticks == 0) {
-					fprintf(stderr, "You cannot specify 0 ticks\n");
-					_exit(1);
+				if (argument_data.ticks == 0) [[unlikely]] {
+					fmt::println(stderr, "Error: You cannot specify 0 ticks");
+					std::exit(1);
 				}
 			}
 		},
 	};
 #endif
 
-	static void changes() {
-		puts(
+	static void print_changes() {
+		fmt::println(
 			"Changelist:\n"
 			"\t1.0.0\n"
 			"Code cleanup, mostly migrated to VS2019.\n"
@@ -353,53 +360,57 @@ namespace {
 		);
 	}
 
-	static void version() {
-		printf("Digital Carbide DCMIPSr6E Emulator %u.%u.%u (%s %s)\n", Version.Major, Version.Minor, Version.Build, __DATE__, __TIME__);
+	static void print_version() {
+		fmt::println("Digital Carbide DCMIPSr6E Emulator {}.{}.{} (" __DATE__ " " __TIME__ ")", version.major, version.minor, version.build);
 	}
 
-#if !EMSCRIPTEN
-	static void help() {
-		version();
-		printf("OVERVIEW: Emulator for MIPSr6 binaries\n\n");
-		printf("USAGE: emulator.exe [options] <binary>\n\n");
-		printf("OPTIONS:\n");
-		for (const auto& option : Options) {
+#ifndef EMSCRIPTEN
+	static void print_help() {
+		print_version();
+		fmt::println(
+			"OVERVIEW: Emulator for MIPSr6 binaries\n\n"
+			"USAGE: emulator.exe [options] <binary>\n\n"
+			"OPTIONS:"
+		);
+		for (const auto& option : options) {
 			bool first = true;
-			for (const std::string& opt : option.option_str) {
+			for (const auto opt : option.option_str) {
 				if (first) {
-					printf("  %s", opt.c_str());
+					fmt::println(TSTR("  {}"), opt.data()); // TODO : string_view not guaranteed null-terminated
 				}
 				else {
-					printf(" %s", opt.c_str());
+					fmt::println(TSTR(" {}"), opt.data()); // TODO : string_view not guaranteed null-terminated
 				}
 				first = false;
 			}
-			printf("\n		%s\n", option.description.c_str());
+			fmt::println("\n		{}", option.description.c_str());
 		}
 	}
 #endif
 
-	static int initialize(const std::span<const char*> args, argument_data & __restrict arguments) {
+	static int initialize(const std::span<const tchar*> args, argument_data & __restrict arguments) {
 		{
 			SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
 			SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
-			ULONG_PTR processAffinity, systemAffinity;
-			GetProcessAffinityMask(GetCurrentProcess(), &processAffinity, &systemAffinity);
-			if (processAffinity != 1) {
-				processAffinity &= ~1ull;
-				SetProcessAffinityMask(GetCurrentProcess(), processAffinity);
+			ULONG_PTR process_affinity, system_affinity;
+			if (
+				const BOOL result = GetProcessAffinityMask(GetCurrentProcess(), &process_affinity, &system_affinity);
+				result != FALSE && process_affinity != 1
+			) {
+				process_affinity &= ~1ull;
+				SetProcessAffinityMask(GetCurrentProcess(), process_affinity);
 				Yield();
 			}
 		}
 
 		argument_data argument_data;
 
-		const char * __restrict binary_file = nullptr;
+		const tchar * __restrict binary_file = nullptr;
 
-#if !EMSCRIPTEN
-		for (uint32 i = 1; i < args.size(); ++i) {
-			bool optionFound = false;
-			for (const auto& option : Options) {
+#ifndef EMSCRIPTEN
+		for (std::size_t i = 1; i < args.size(); ++i) {
+			bool option_found = false;
+			for (const auto& option : options) {
 				bool matches_any = false;
 				for (const auto& str : option.option_str) {
 					if (str == args[i]) {
@@ -409,18 +420,18 @@ namespace {
 				}
 				if (matches_any) {
 					option.procedure(argument_data, args, i);
-					optionFound = true;
+					option_found = true;
 				}
 			}
 
-			if (!optionFound) {
+			if (!option_found) {
 
-				if (args[i][0] == '-') {
-					fprintf(stderr, "Unknown option: %s\n", args[i]);
+				if (args[i][0] == '-') [[unlikely]] {
+					fmt::println(stderr, TSTR("Unknown option: {}"), args[i]);
 					return 1;
 				}
-				if (binary_file && binary_file[0] != '\0') {
-					fprintf(stderr, "Cannot open multiple binary files\n");
+				if (binary_file && binary_file[0] != '\0') [[unlikely]] {
+					fmt::println(stderr, "Cannot open multiple binary files");
 					return 1;
 				}
 
@@ -435,77 +446,81 @@ namespace {
 			argument_data.stack_memory = argument_data.available_memory / 2;
 		}
 
-		if ((argument_data.available_memory - argument_data.stack_memory) < 0x1000) {
-			fprintf(stderr, "There must be at least 4KiB of memory available to the system after removing stack reservation.\n");
+		if ((argument_data.available_memory - argument_data.stack_memory) < 0x1000) [[unlikely]] {
+			fmt::println(stderr, "There must be at least 4KiB of memory available to the system after removing stack reservation.");
 			return 1;
 		}
 
-		if (argument_data.use_rox && argument_data.mmu_type != mips::mmu::emulated) {
-			fprintf(stderr, "--rox requires --mmu emulated\n");
+		if (argument_data.use_rox && argument_data.mmu_type != mips::mmu::emulated) [[unlikely]] {
+			fmt::println(stderr, "--rox requires --mmu emulated");
 			return 1;
 		}
 
-		if (argument_data.mmu_type != mips::mmu::emulated && !argument_data.instruction_cache && argument_data.jit != mips::JitType::None) {
-			fprintf(stderr, "--no-mmu requires --icache when being used with a JIT.\n");
+		if (argument_data.mmu_type != mips::mmu::emulated && !argument_data.instruction_cache && argument_data.jit != mips::JitType::None) [[unlikely]] {
+			fmt::println(stderr, "--no-mmu requires --icache when being used with a JIT.");
 			return 1;
 		}
 
-		if (argument_data.mmu_type != mips::mmu::emulated && !argument_data.instruction_cache && argument_data.jit == mips::JitType::None) {
-			fprintf(stdout, "warning: --no-mmu requires --icache to achieve behavioural parity with JIT.\n");
+		if (argument_data.mmu_type != mips::mmu::emulated && !argument_data.instruction_cache && argument_data.jit == mips::JitType::None) [[unlikely]] {
+			fmt::println(stderr, "warning: --no-mmu requires --icache to achieve behavioral parity with JIT.");
 		}
 
-		version();
+		print_version();
 
 		// print options
-		fprintf(stdout, "Options:\n");
-		fprintf(stdout, "\t%u bytes memory\n", argument_data.available_memory);
-		fprintf(stdout, "\t%u bytes reserved for stack\n", argument_data.stack_memory);
+		fmt::println("Options:");
+		fmt::println("\t{} bytes memory", argument_data.available_memory);
+		fmt::println("\t{} bytes reserved for stack", argument_data.stack_memory);
 		switch (argument_data.jit) {
-		case mips::JitType::None:
-			fprintf(stdout, "\tInterpreted Mode\n"); break;
-		case mips::JitType::Jit:
-			fprintf(stdout, "\tJIT1 Mode\n"); break;
+			case mips::JitType::None:
+			fmt::println("\tInterpreted Mode"); break;
+			case mips::JitType::Jit:
+			fmt::println("\tJIT1 Mode"); break;
 		case mips::JitType::FunctionTable:
-			fprintf(stdout, "\tFunction Table Mode\n"); break;
+			fmt::println("\tFunction Table Mode"); break;
 		}
-		fprintf(stdout, "\tROX (Read-only Executable) mode %s\n", argument_data.use_rox ? "enabled" : "disabled");
+		fmt::println("\tROX (Read-only Executable) mode {}", argument_data.use_rox ? "enabled" : "disabled");
 		switch (argument_data.mmu_type) {
 		case mips::mmu::emulated:
-			fprintf(stdout, "\tMemory Management Unit: emulated\n"); break;
+			fmt::println("\tMemory Management Unit: emulated"); break;
 		case mips::mmu::none:
-			fprintf(stdout, "\tMemory Management Unit: none\n"); break;
+			fmt::println("\tMemory Management Unit: none"); break;
 		case mips::mmu::host:
-			fprintf(stdout, "\tMemory Management Unit: host\n"); break;
+			fmt::println("\tMemory Management Unit: host"); break;
 		}
-		fprintf(stdout, "\tInstruction statistics %s\n", argument_data.instruction_stats ? "enabled" : "disabled");
-		fprintf(stdout, "\tInstruction cache %s\n", argument_data.instruction_cache ? "enabled" : "disabled");
+		fmt::println("\tInstruction statistics {}", argument_data.instruction_stats ? "enabled" : "disabled");
+		fmt::println("\tInstruction cache {}", argument_data.instruction_cache ? "enabled" : "disabled");
 		if (argument_data.ticks == 0) {
-			fprintf(stdout, "\tRealtime-mode enabled\n");
+			fmt::println("\tRealtime-mode enabled");
 		}
 		else {
-			fprintf(stdout, "\tLockstep-mode enabled, %zu cycles\n", argument_data.ticks);
+			fmt::println("\tLockstep-mode enabled, %{} cycles", argument_data.ticks);
 		}
 
 		{
-#if !EMSCRIPTEN
-			FILE* fp = fopen(binary_file, "rb");
+#ifndef EMSCRIPTEN
+#	if UNICODE
+			FILE* fp = _wfopen(binary_file, L"rb");
+#	else
+			FILE* fp = std::fopen(binary_file, "rb");
+#	endif
 			if (!fp) {
-				fprintf(stderr, "Could not open binary \"%s\"\n", binary_file);
+				fmt::println(stderr, TSTR("Could not open binary \"{}\""), binary_file);
 				return 1;
 			}
 			_fseeki64(fp, 0, SEEK_END);
 			const size_t data_size = _ftelli64(fp);
-			rewind(fp);
+			std::rewind(fp);
 			argument_data.binary_data.resize(data_size);
-			if (data_size != fread(argument_data.binary_data.data.get(), 1, argument_data.binary_data.size, fp)) {
-				fprintf(stderr, "Could not read binary \"%s\"\n", binary_file);
-				fclose(fp);
+			if (data_size != std::fread(argument_data.binary_data.data.get(), 1, argument_data.binary_data.size, fp)) {
+				fmt::println(TSTR("Could not read binary \"{}\""), binary_file);
+				std::fclose(fp);
 				return 1;
 			}
-			fclose(fp);
+			std::fclose(fp);
 #else
 			for (;;) {
-				char byte = fgetc(stdin);
+				char byte = std::fgetc(stdin);
 				if (byte == EOF) {
 					break;
 				}
@@ -518,126 +533,136 @@ namespace {
 			return 0;
 		}
 	}
-}
 
-int main(const int argc, const char **argv) {
-	argument_data argument_data;
+	template <typename TChar> requires (std::same_as<TChar, char> || std::same_as<TChar, wchar_t>)
+	int main_impl(const std::span<const TChar*> args) {
+		argument_data argument_data;
 
-	if (const int result = initialize({ argv, argv + argc }, argument_data); _unlikely(result != 0)) [[unlikely]] {
-		return result;
-	}
-
-	auto start_time = std::chrono::high_resolution_clock::now();
-	uint64 instructions = 0;
-
-	using statistic = std::pair<const char *, size_t>;
-
-	std::vector<statistic> statistics;
-	size_t largest_jit_instruction = 0;
-
-	std::unique_ptr<mips::system> system;
-
-	try {
-		printf("Processing ELF Binary\n");
-		elf::binary elf_binary{ argument_data.binary_data };
-		printf("Configuring VCPU and Configurating VENV\n");
-		
-		mips::system::options sys_options = {
-			.total_memory = argument_data.available_memory,
-			.stack_memory = argument_data.stack_memory,
-			.jit_type = argument_data.jit,
-			.mmu_type = argument_data.mmu_type,
-			.debug_port = argument_data.debug.port,
-			.read_only_exec = argument_data.use_rox,
-			.record_instruction_stats = argument_data.instruction_stats,
-			.disable_cti = argument_data.disable_cti,
-			.ticked = argument_data.ticks != 0,
-			.instruction_cache = argument_data.instruction_cache,
-			.debug = argument_data.debug.enabled,
-			.debug_owned = argument_data.debug.enabled
-		};
-		try {
-			sys_options.validate();
-		}
-		catch (const std::string& ex) {
-			fprintf(stderr, "Failed to validate system options:\n\t%s\n", ex.c_str());
-			return 1;
+		if (const int result = initialize(args, argument_data); _unlikely(result != 0)) [[unlikely]] {
+			return result;
 		}
 
-		system = std::make_unique<mips::system_vemix>(sys_options, elf_binary);
+		auto start_time = std::chrono::high_resolution_clock::now();
+		uint64 instructions = 0;
 
-		printf("Beginning Execution ---\n\n");
-		fflush(stdout);
-		start_time = std::chrono::high_resolution_clock::now();
+		using statistic = std::pair<const char *, size_t>;
+
+		std::vector<statistic> statistics;
+		size_t largest_jit_instruction = 0;
+
 		try {
-			for (;;) {
-				system->clock(argument_data.ticks);
-				//printf("Instructions: %llu\n", processor.get_instruction_count());
+			std::unique_ptr<mips::system> system;
+
+			fmt::println("Processing ELF Binary");
+			elf::binary elf_binary{ argument_data.binary_data };
+			fmt::println("Configuring VCPU and Configuring VENV");
+			
+			mips::system::options sys_options = {
+				.total_memory = argument_data.available_memory,
+				.stack_memory = argument_data.stack_memory,
+				.jit_type = argument_data.jit,
+				.mmu_type = argument_data.mmu_type,
+				.debug_port = argument_data.debug.port,
+				.read_only_exec = argument_data.use_rox,
+				.record_instruction_stats = argument_data.instruction_stats,
+				.disable_cti = argument_data.disable_cti,
+				.ticked = argument_data.ticks != 0,
+				.instruction_cache = argument_data.instruction_cache,
+				.debug = argument_data.debug.enabled,
+				.debug_owned = argument_data.debug.enabled
+			};
+			try {
+				sys_options.validate();
 			}
+			catch (const std::exception& ex) {
+				[[unlikely]]
+				fmt::println(stderr, "Failed to validate system options:\n\t{}", ex.what());
+				return 1;
+			}
+
+			system = std::make_unique<mips::system_vemix>(sys_options, elf_binary);
+
+			fmt::println("Beginning Execution ---");
+			std::fflush(stdout);
+			start_time = std::chrono::high_resolution_clock::now();
+			try {
+				for (;;) {
+					system->clock(argument_data.ticks);
+					//fmt::println("Instructions: {}", processor.get_instruction_count());
+				}
+			}
+			catch (...) {
+				instructions = system->get_instruction_count();
+				if (argument_data.instruction_stats) {
+					statistics.append_range(system->get_stats_map());
+					largest_jit_instruction = system->get_jit_max_instruction_size();
+				}
+				throw;
+			}
+		}
+		catch (const std::runtime_error& exception) {
+			fmt::println(stderr, "\n** Error: {}", exception.what());
+		}
+		catch (mips::ExecutionCompleteException) {
+			fmt::println("\n** 'main' return detected - execution terminated");
+		}
+		catch (mips::ExecutionFailException) {
+			fmt::println(stderr, "\n** Unhandled CPU exception - execution terminated");
 		}
 		catch (...) {
-			instructions = system->get_instruction_count();
-			if (argument_data.instruction_stats) {
-				statistics.reserve(system->get_stats_map().size());
-				for (const auto &statistic : system->get_stats_map()) {
-					statistics.emplace_back(statistic);
-				}
-				largest_jit_instruction = system->get_jit_max_instruction_size();
+			fmt::println(stderr, "\n** Error");
+		}
+
+		const auto end_time = std::chrono::high_resolution_clock::now();
+		const auto duration = end_time - start_time;
+		const uint64 ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+
+		const double seconds = double(ns) / 1'000'000'000.0;
+		const double ips = double(instructions) / seconds;
+		const uint64 ips_rounded = size_t(round(ips));
+
+		if (const uint64 cpu_frequency = get_host_frequency(); cpu_frequency == 1) {
+			fmt::println("** Execution Duration: {} ms ({} ips)", ns / 1'000'000, ips_rounded);
+		}
+		else {
+			const double frequency_ratio = double(cpu_frequency * 1'000'000) / ips;
+
+			fmt::println("** Execution Duration: {} ms ({} ips - 1:{:.2f} guest/host)", ns / 1'000'000, ips_rounded, frequency_ratio);
+		}
+		fmt::println("** Instructions Executed: {}", instructions);
+
+		if (argument_data.instruction_stats) {
+			fmt::println("** Collected Instruction Stats:");
+
+			if (largest_jit_instruction) {
+				fmt::println("\tLargest JIT Instruction: {} bytes\n", largest_jit_instruction);
 			}
-			throw;
-		}
-	}
-	catch (const std::runtime_error& exception) {
-		fprintf(stderr, "\n** Error: %s\n", exception.what());
-	}
-	catch (mips::ExecutionCompleteException) {
-		printf("\n** 'main' return detected - execution terminated\n");
-	}
-	catch (mips::ExecutionFailException) {
-		fprintf(stderr, "\n** Unhandled CPU exception - execution terminated\n");
-	}
-	catch (...) {
-		fprintf(stderr, "\n** Error\n");
-	}
 
-	const auto end_time = std::chrono::high_resolution_clock::now();
-	const auto duration = end_time - start_time;
-	const uint64 ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+			struct final {
+				bool operator()(const statistic & __restrict a, const statistic & __restrict b) const __restrict {
+					return a.second > b.second;
+				}	
+			} constexpr custom_comparator;
 
-	const double seconds = double(ns) / 1'000'000'000.0;
-	const double ips = double(instructions) / seconds;
-	const uint64 ips_rounded = size_t(round(ips));
-
-	if (const uint64 cpu_frequency = GetHostFrequency(); cpu_frequency == 1) {
-		printf("** Execution Duration: %llu ms (%llu ips)\n", ns / 1'000'000, ips_rounded);
-	}
-	else {
-		const double frequency_ratio = double(cpu_frequency * 1'000'000) / ips;
-
-		printf("** Execution Duration: %llu ms (%llu ips - 1:%.2f guest/host)\n", ns / 1'000'000, ips_rounded, frequency_ratio);
-	}
-	printf("** Instructions Executed: %llu\n", instructions);
-
-	if (argument_data.instruction_stats) {
-		printf("** Collected Instruction Stats:\n\n");
-
-		if (largest_jit_instruction) {
-			printf("\tLargest JIT Instruction: %zu bytes\n\n", largest_jit_instruction);
+			std::stable_sort(statistics.begin(), statistics.end(), custom_comparator);
+			for (const statistic &stat_pair : statistics) {
+				fmt::println("\t{} - {}", stat_pair.first, stat_pair.second);
+			}
 		}
 
-		struct final {
-			bool operator()(const statistic & __restrict a, const statistic & __restrict b) const __restrict {
-				return a.second > b.second;
-			}	
-		} constexpr custom_comparator;
+		std::getchar();
 
-		std::sort(statistics.begin(), statistics.end(), custom_comparator);
-		for (const statistic &stat_pair : statistics) {
-			printf("\t%s - %zu\n", stat_pair.first, stat_pair.second);
-		}
+		return 0;
 	}
-
-	getchar();
-
-	return 0;
 }
+
+#ifdef UNICODE
+// ReSharper disable once IdentifierTypo
+int wmain(const int argc, const wchar_t **argv) {
+	return main_impl(std::span{ argv, argv + argc });
+}
+#else
+int main(const int argc, const char **argv) {
+	return main_impl(std::span{ argv, argv + argc });
+}
+#endif

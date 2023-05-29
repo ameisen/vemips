@@ -199,7 +199,7 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 			}
 		}
 	}
-	catch (const CPU_Exception & __restrict ex) {
+	catch (const CPU_Exception& __restrict ex) {
 		from_exception_ = true;
 		guest_system_->handle_exception(ex);
 	}

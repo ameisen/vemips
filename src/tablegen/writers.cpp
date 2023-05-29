@@ -40,8 +40,8 @@ namespace vemips::tablegen::writers {
 
 			auto&& signature = GetTypeSignature(info);
 
-			return format(
-				R"(( "%s", %d, &%s_NS::Execute%s, 0x%08Xu, { .control = %s }, %s))",
+			return fmt::format(
+				R"(( "{}", {}, &{}_NS::Execute{}, 0x{:08X}, {{ .control = {} }}, {}))",
 				info.Name,
 				info.CoprocessorIdx,
 				info.Name,
@@ -74,7 +74,7 @@ namespace vemips::tablegen::writers {
 		for (auto&& header : {
 			"mips/mips_common.hpp"
 			}) {
-			indented_print(indent, "#include \"%s\"", header);
+			indented_print(indent, "#include \"{}\"", header);
 		}
 
 		newline();
@@ -83,19 +83,19 @@ namespace vemips::tablegen::writers {
 
 		newline();
 
-		indented_print(indent, "namespace mips {");
+		indented_print(indent, "namespace mips {{");
 		_INDENTED{
 			indented_print(indent, "class processor;");
 
-			indented_print(indent, "namespace instructions {");
+			indented_print(indent, "namespace instructions {{");
 
 			_INDENTED {
 				indented_print(indent, "struct InstructionInfo;");
 			}
 
-			indented_print(indent, "}");
+			indented_print(indent, "}}");
 		}
-		indented_print(indent, "}");
+		indented_print(indent, "}}");
 
 		newline();
 
@@ -108,7 +108,7 @@ namespace vemips::tablegen::writers {
 		newline();
 
 		{
-			indented_print(indent, "namespace mips::instructions {");
+			indented_print(indent, "namespace mips::instructions {{");
 
 			std::unordered_set<proc_info_data, proc_info_data::hash> exported_procs;
 			for (auto* proc_info : proc_infos) {
@@ -123,26 +123,26 @@ namespace vemips::tablegen::writers {
 					}
 
 					indented_print(indent,
-						"namespace %s_NS { %s uint64 Execute(instruction_t, mips::processor & __restrict); }",
+						"namespace {}_NS {{ {} uint64 Execute(instruction_t, mips::processor & __restrict); }}",
 						proc_info->Name,
 						signature
 					);
 				}
 			}
-			indented_print(indent, "}");
+			indented_print(indent, "}}");
 		}
 		newline();
-		indented_print(indent, "namespace mips::instructions {");
+		indented_print(indent, "namespace mips::instructions {{");
 		for (auto* proc_info : proc_infos) {
 			_INDENTED{
-				indented_print(indent, "_segment(" TABLE_SEGMENT ") VEMIPS_ITABLE_IMPORT const InstructionInfo % s; ", GetTypeSignature(*proc_info).procedure_name);
+				indented_print(indent, "_segment(" TABLE_SEGMENT ") VEMIPS_ITABLE_IMPORT const InstructionInfo {}; ", GetTypeSignature(*proc_info).procedure_name);
 			}
 		}
-		indented_print(indent, "}");
+		indented_print(indent, "}}");
 
 		newline();
 
-		indented_print(indent, "namespace mips::instructions {");
+		indented_print(indent, "namespace mips::instructions {{");
 		_INDENTED{
 
 			indented_print(indent, "const InstructionInfo * get_instruction (instruction_t i);");
@@ -152,7 +152,7 @@ namespace vemips::tablegen::writers {
 			indented_print(indent, "bool execute_instruction (instruction_t i, mips::processor & __restrict p);");
 
 		}
-		indented_print(indent, "}");
+		indented_print(indent, "}}");
 
 		newline();
 
@@ -181,7 +181,7 @@ namespace vemips::tablegen::writers {
 			size_t indent
 		) {
 			if (!map->IsMap) {
-				indented_print(indent, "%s", procedure(map->Info));
+				indented_print(indent, "{}", procedure(map->Info));
 				return;
 			}
 
@@ -189,35 +189,35 @@ namespace vemips::tablegen::writers {
 				auto&& element = map->Map.begin();
 
 				if (is_ones(map->Mask)) {
-					indented_print(indent, "if (i == 0x%08Xu)", element->first);
+					indented_print(indent, "if (i == 0x{:08X})", element->first);
 				}
 				else {
-					indented_print(indent, "if ((i & 0x%08Xu) == 0x%08Xu)", reduce(parent, map->Mask), reduce(parent, element->first));
+					indented_print(indent, "if ((i & 0x{:08X}) == 0x{:08X})", reduce(parent, map->Mask), reduce(parent, element->first));
 				}
-				_INDENTED indented_print(indent, "%s", procedure(element->second->Info));
+				_INDENTED indented_print(indent, "{}", procedure(element->second->Info));
 				return;
 			}
 
 			const uint32 mask = reduce(parent, map->Mask);
 
 			if (is_ones(mask)) {
-				indented_print(indent, "switch(i) {");
+				indented_print(indent, "switch(i) {{");
 			}
 			else {
-				indented_print(indent, "switch(i & 0x%08Xu) {", mask);
+				indented_print(indent, "switch(i & 0x{:08X}) {{", mask);
 			}
 			_INDENTED{
 				for (auto&& sub_map : map->Map) {
-					indented_print(indent, "case 0x%08Xu:", reduce(parent, sub_map.first));
+					indented_print(indent, "case 0x{:08X}:", reduce(parent, sub_map.first));
 					traverse_map(default_value, map, sub_map.second, procedure, indent + 1);
 				}
 				indented_print(indent, "default:");
 				if (map->Default) {
 					traverse_map(default_value, nullptr, map->Default, procedure, indent + 1);
 				}
-				_INDENTED indented_print(indent, "return %s;", default_value);
+				_INDENTED indented_print(indent, "return {};", default_value);
 			}
-			indented_print(indent, "}");
+			indented_print(indent, "}}");
 		}
 	}
 
@@ -253,35 +253,35 @@ namespace vemips::tablegen::writers {
 			"mips/processor/processor.hpp",
 			//"mips/coprocessor/coprocessor.hpp"
 			}) {
-			indented_print(indent, "#include \"%s\"", header);
+			indented_print(indent, "#include \"{}\"", header);
 		}
 
 		newline();
 
-		indented_print(indent, "namespace mips::instructions {");
+		indented_print(indent, "namespace mips::instructions {{");
 		for (auto* proc_info : proc_infos) {
 			_INDENTED{
-				indented_print(indent, "_segment(" TABLE_SEGMENT ") VEMIPS_ITABLE_EXPORT const InstructionInfo %s %s;", GetTypeSignature(*proc_info).procedure_name, BuildProcedureLink(*proc_info));
+				indented_print(indent, "_segment(" TABLE_SEGMENT ") VEMIPS_ITABLE_EXPORT const InstructionInfo {} {};", GetTypeSignature(*proc_info).procedure_name, BuildProcedureLink(*proc_info));
 			}
 		}
-		indented_print(indent, "}");
+		indented_print(indent, "}}");
 
 		newline();
 
-		indented_print(indent, "namespace mips::instructions {");
+		indented_print(indent, "namespace mips::instructions {{");
 		_INDENTED{
-			indented_print(indent, "const InstructionInfo * get_instruction (instruction_t i) {");
+			indented_print(indent, "const InstructionInfo * get_instruction (instruction_t i) {{");
 			traverse_map("nullptr", nullptr, &mips::instructions::StaticInitVarsPtr->g_LookupMap, static_proc, indent + 1);
 			_INDENTED indented_print(indent, "return nullptr;");
-			indented_print(indent, "}");
+			indented_print(indent, "}}");
 
 			newline();
 
-			indented_print(indent, "bool execute_instruction (instruction_t i, mips::processor & __restrict p) {");
+			indented_print(indent, "bool execute_instruction (instruction_t i, mips::processor & __restrict p) {{");
 			traverse_map("false", nullptr, &mips::instructions::StaticInitVarsPtr->g_LookupMap, proc_call, indent + 1);
 			_INDENTED indented_print(indent, "return false;");
-			indented_print(indent, "}");
+			indented_print(indent, "}}");
 		}
-		indented_print(indent, "}");
+		indented_print(indent, "}}");
 	}
 }

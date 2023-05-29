@@ -2,40 +2,44 @@
 
 #include "common.hpp"
 
-#include <cstdio>
-#include <string>
-#include <iostream>
-#include <vector>
-#include <thread>
-#include <format>
-#include <mutex>
 #include <cassert>
+#include <cstdio>
+#include <iostream>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
 
-#ifdef NOMINMAX
-#	undef NOMINMAX
+//#define WITH_FILE_OUTPUT 1
+#define FILE_OUT "D:\\dbgout.txt"
+
+#ifndef NOMINMAX
+#	define NOMINMAX 1
 #endif
-#define NOMINMAX 1
 #include <Windows.h>
 
 namespace {
 	static std::mutex out_lock;
 	static std::mutex start_lock;
 
-	template <size_t Fn, typename... Args>
-	static void print_out(const char(& __restrict format)[Fn], Args&&... args) {
-		std::unique_lock print_lock(out_lock);
-		fprintf(stdout, format, std::forward<Args>(args)...);
-		fflush(stdout);
-	}
+#define print_line(format, ...) ( \
+		[&] { \
+			std::unique_lock print_lock(out_lock); \
+			fmt::println(format, __VA_ARGS__); \
+			std::fflush(stdout); \
+		}() \
+	)
 
 	template <typename... Args>
 	static void print_raw(Args&&... args) {
 		std::unique_lock print_lock(out_lock);
-		fwrite(std::forward<Args>(args)..., stdout);
-		fflush(stdout);
+		std::fwrite(std::forward<Args>(args)..., stdout);
+		std::fflush(stdout);
 	}
 
+#ifdef WITH_FILE_OUTPUT
 	FILE* fp = nullptr;
+#endif
 	std::string target_address;
 	std::vector<std::string> pending_commands;
 	std::mutex pending_lock;
@@ -96,8 +100,8 @@ namespace {
 				!SetHandleInformation(stdout_.read, HANDLE_FLAG_INHERIT, 0) ||
 				!CreatePipe(&stdin_.read, &stdin_.write, &security_attributes, 0) ||
 				!SetHandleInformation(stdin_.write, HANDLE_FLAG_INHERIT, 0)
-			) {
-				throw std::string("Could not create debugger process");
+			) [[unlikely]] {
+				throw std::exception("Could not create debugger process");
 			}
 
 			PROCESS_INFORMATION process_info = {};
@@ -111,7 +115,11 @@ namespace {
 
 			{
 				const std::string command_line = process_name + " " + arguments;
-				fprintf(fp, " ++ Starting Debugger: %s\n", command_line.c_str());
+#ifdef WITH_FILE_OUTPUT
+				if (fp) {
+					fmt::println(fp, " ++ Starting Debugger: {}", command_line);
+				}
+#endif
 				if (
 					const BOOL result = CreateProcessA(
 						nullptr,
@@ -126,8 +134,8 @@ namespace {
 						&process_info
 					);
 				!result
-					) {
-					throw std::string("Could not create debugger process");
+					) [[unlikely]] {
+					throw std::exception("Could not create debugger process");
 				}
 			}
 
@@ -138,12 +146,20 @@ namespace {
 					xassert(cmd.length() <= std::numeric_limits<DWORD>::max());
 					DWORD to_write = DWORD(cmd.length());
 					DWORD total_written = 0;
-					fprintf(fp, " >> ");
+#ifdef WITH_FILE_OUTPUT
+					if (fp) {
+						fmt::print(fp, " >> ");
+					}
+#endif
 					while (to_write) {
 						DWORD written_bytes = 0;
 						WriteFile(stdin_.write, cmd.data() + total_written, to_write, &written_bytes, nullptr);
 						FlushFileBuffers(stdin_.write);
-						fwrite(cmd.data() + total_written, 1, written_bytes, fp);
+#ifdef WITH_FILE_OUTPUT
+						if (fp) {
+							std::fwrite(cmd.data() + total_written, 1, written_bytes, fp);
+						}
+#endif
 						to_write -= written_bytes;
 						total_written += written_bytes;
 					}
@@ -154,9 +170,10 @@ namespace {
 				std::string out_buffer;
 				for (;;) {
 					DWORD read_bytes = 0;
-					char buffer[512];
-					if (ReadFile(stdout_.read, buffer, sizeof(buffer), &read_bytes, nullptr) == 0) {
-						exit(1);
+					char buffer[513];
+					buffer[sizeof(buffer) - 1] = '\0';
+					if (ReadFile(stdout_.read, buffer, sizeof(buffer) - 1, &read_bytes, nullptr) == 0) [[unlikely]] {
+						std::exit(1);
 					}
 
 					for (size_t i = 0; i < read_bytes; ++i) {
@@ -185,9 +202,13 @@ namespace {
 								}
 
 								// push buffer.
-								fprintf(fp, " ** ");
-								fwrite(out_buffer.data(), 1, out_buffer.size(), fp);
-								fflush(fp);
+#ifdef WITH_FILE_OUTPUT
+								if (fp) {
+									fmt::print(fp, " ** ");
+									std::fwrite(out_buffer.data(), 1, out_buffer.size(), fp);
+									std::fflush(fp);
+								}
+#endif
 
 								print_raw(out_buffer.data(), 1, out_buffer.size());
 
@@ -199,20 +220,26 @@ namespace {
 				});
 		}
 
-		~debugger_process() = default;
-
-		void write_to(std::string str) {
+		void write_to(std::string str) const {
 			str += '\n';
 
 			xassert(str.length() <= std::numeric_limits<DWORD>::max());
 			DWORD to_write = DWORD(str.length());
 			DWORD total_written = 0;
-			fprintf(fp, " >> ");
+#ifdef WITH_FILE_OUTPUT
+			if (fp) {
+				fmt::print(fp, " >> ");
+			}
+#endif
 			while (to_write) {
 				DWORD written_bytes = 0;
 				WriteFile(stdin_.write, str.data() + total_written, to_write, &written_bytes, nullptr);
 				FlushFileBuffers(stdin_.write);
-				fwrite(str.data() + total_written, 1, written_bytes, fp);
+#ifdef WITH_FILE_OUTPUT
+				if (fp) {
+					std::fwrite(str.data() + total_written, 1, written_bytes, fp);
+				}
+#endif
 				to_write -= written_bytes;
 				total_written += written_bytes;
 			}
@@ -229,7 +256,11 @@ namespace {
 			};
 
 			const std::string command_line = process_name + " " + arguments;
-			fprintf(fp, " ++ Starting Debug App: %s\n", command_line.c_str());
+#ifdef WITH_FILE_OUTPUT
+			if (fp) {
+				fmt::println(fp, " ++ Starting Debug App: {}", command_line);
+			}
+#endif
 			if (
 				const BOOL result = CreateProcessA(
 					nullptr,
@@ -244,11 +275,10 @@ namespace {
 					&process_info
 				);
 				!result
-			) {
-				throw std::string("Could not create debugged process");
+			) [[unlikely]] {
+				throw std::exception("Could not create debugged process");
 			}
 		}
-		~debugged_process() = default;
 	};
 }
 
@@ -258,21 +288,30 @@ int main(int argc, const char **argv) {
 
 	std::string mips_bin;
 	std::string executable;
-	debugger_process *debugger = nullptr;
-	debugged_process *debugged = nullptr;
+	std::unique_ptr<debugger_process> debugger = nullptr;
+	std::unique_ptr<debugged_process> debugged = nullptr;
 
 	bool handle_one_break = true;
 
-	fp = fopen("D:\\dbgout.txt", "w");
-
-	fprintf(fp, "argv\n");
-	for (int i = 0; i < argc; ++i) {
-		fprintf(fp, "%s\n", argv[i]);
+#ifdef WITH_FILE_OUTPUT
+	fp = std::fopen(FILE_OUT, "w");
+	if (!fp) { [[unlikely]]
+		fmt::println(stderr, "Could not open file '" FILE_OUT "' for logging");
 	}
-	fputs("\n", fp);
-	fflush(fp);
+#endif
 
-	print_out("(gdb)\n");
+#ifdef WITH_FILE_OUTPUT
+	if (fp) {
+		fmt::println(fp, "argv");
+		for (int i = 0; i < argc; ++i) {
+			fmt::println(fp, "{}", argv[i]);
+		}
+		fmt::println(fp, "\n");
+		std::fflush(fp);
+	}
+#endif
+
+	print_line("(gdb)");
 
 	std::vector<std::string> pass_args;
 
@@ -289,15 +328,19 @@ int main(int argc, const char **argv) {
 			continue;
 		}
 
-		if (!first) {
-			print_out("(gdb)\n");
+		if (!first) [[unlikely]] {
+			print_line("(gdb)");
 		}
 		first = false;
 
 		const std::string orig_in = in;
 
-		fprintf(fp, "%s\n", in.c_str());
-		fflush(fp);
+#ifdef WITH_FILE_OUTPUT
+		if (fp) {
+			fmt::println(fp, "{}", in);
+			std::fflush(fp);
+		}
+#endif
 
 		// extract ID if present.
 		std::string token_id;
@@ -344,7 +387,7 @@ int main(int argc, const char **argv) {
 								case '?': c = '?'; break;
 								case '\'': c = '\''; break;
 								case '\"': c = '\"'; break;
-								case '\0': c = '\0'; break;
+								case '0': c = '\0'; break;
 								default: {
 									in.erase(0, 1);
 									continue;
@@ -377,47 +420,48 @@ int main(int argc, const char **argv) {
 		if (get_token(0) == "-gdb-set" && !debugger) {
 			if (get_token(1) == "target-async") {
 				if (get_token(2) == "on") {
-					print_out("%s^done\n", token_id.c_str());
+					print_line("{}^done", token_id);
 				}
 				else if (get_token(2) == "off") {
-					print_out("%s^done\n", token_id.c_str());
+					print_line("{}^done", token_id);
 				}
-				else {
-					print_out("%s^error,msg=\"The request \'\'target-async\' expects \"on\" or \"off\"\' failed.\"\n", token_id.c_str());
+				else [[unlikely]] {
+					print_line("{}^error,msg=\"The request \'\'target-async\' expects \"on\" or \"off\"\' failed.\"", token_id);
 				}
 			}
 			else if (get_token(1) == "solib-search-path") {
 				//auto&& path = get_token(2);
-				print_out("%s^done\n", token_id.c_str());
+				print_line("{}^done", token_id);
 				pass_args.push_back(orig_in);
 			}
 			else if (get_token(1) == "stop-on-solib-events") {
 				//auto&& path = get_token(2);
-				print_out("%s^done\n", token_id.c_str());
+				print_line("{}^done", token_id);
 				pass_args.push_back(orig_in);
 			}
 		}
 		else if (get_token(0) == "-exec-arguments") {
 			auto&& arg = get_token(1);
-			print_out("%s^done\n", token_id.c_str());
+			print_line("{}^done", token_id);
 			mips_bin = arg;
 		}
 		else if (get_token(0) == "-interpreter-exec") {
 			if (get_token(1) == "console") {
 				auto&& cmd = get_token(2);
 				if (cmd == "show configuration") {
-					print_out("%s^done,msg=\"mipsdbg\"\n", token_id.c_str()); }
+					print_line("{}^done,msg=\"mipsdbg\"", token_id);
+				}
 				else if (cmd == "show architecture") {
-					print_out("%s^done,msg=\"mipsel\"\n", token_id.c_str());
+					print_line("{}^done,msg=\"mipsel\"", token_id);
 				}
 				else {
-					print_out("%s^done\n", token_id.c_str());
+					print_line("{}^done", token_id);
 				}
 			}
 		}
 		else if (get_token(0) == "-file-exec-and-symbols") {
 			auto&& exec = get_token(1);
-			print_out("%s^done\n", token_id.c_str());
+			print_line("{}^done", token_id);
 			executable = exec;
 			while (executable.front() == '\\') {
 				executable = executable.substr(1);
@@ -429,53 +473,55 @@ int main(int argc, const char **argv) {
 
 				// extract port from target_address, if it's there. Which is must be.
 				size_t port_offset = target_address.find(':');
-				if (port_offset == std::string::npos) {
-					exit(1);
+				if (port_offset == std::string::npos) [[unlikely]] {
+					std::exit(1);
 				}
-				std::string port = target_address.substr(port_offset + 1);
-				std::string args = std::format("--jit1 --mmu none --icache --debug {} {}", port, mips_bin);
-				debugged = new debugged_process(executable, args);
+				std::string_view port = std::string_view{target_address}.substr(port_offset + 1);
+				// TODO : Properly escape `mips_bin`
+				std::string args = fmt::format("--jit1 --mmu none --icache --debug {} {}", port, mips_bin);
+				debugged = std::make_unique<debugged_process>(executable, args);
 
-				print_out("%s^done\n", token_id.c_str());
+				print_line("{}^done", token_id);
 			}
-			else {
-				print_out("%s^error\n", token_id.c_str());
-				exit(1);
+			else [[unlikely]] {
+				print_line("{}^error\n", token_id);
+				std::exit(1);
 			}
 		}
 		else if (get_token(0) == "-break-insert" && handle_one_break) {
-			print_out("%s^done\n", token_id.c_str());
+			print_line("{}^done", token_id);
 			handle_one_break = false;
 		}
 		else if (get_token(0) == "-exec-run") {
 			if (!debugger) {
-				debugger = new debugger_process("lldb-mi", mips_bin);
+				debugger = std::make_unique<debugger_process>("lldb-mi", mips_bin);
 			}
 
 			start_lock.unlock();
 
-			std::string cmd0 = std::format("gdb-remote {}\n", target_address);
+			// TODO : use variadics and avoid an allocation and copy
+			std::string cmd0 = fmt::format("gdb-remote {}\n", target_address);
 			debugger->write_to(cmd0);
 
-			print_out("%s^running\n", token_id.c_str());
+			print_line("{}^running", token_id);
 		}
 		else if (get_token(0) == "kill") {
-			print_out("%s^done\n", token_id.c_str());
+			print_line("{}^done", token_id);
 		}
 		else if (get_token(0) == "exit") {
-			print_out("%s^done\n", token_id.c_str());
+			print_line("{}^done", token_id);
 			return 0;
 		}
 		else if (get_token(0) == "-gdb-exit") {
-			print_out("%s^exit\n", token_id.c_str());
+			print_line("{}^exit", token_id);
 			return 0;
 		}
 		else if (get_token(0) == "quit") {
-			print_out("%s^done\n", token_id.c_str());
+			print_line("{}^done", token_id);
 			return 0;
 		}
 		else if (get_token(0) == "logout") {
-			print_out("%s^done\n", token_id.c_str());
+			print_line("{}^done", token_id);
 			return 0;
 		}
 		else if (get_token(0) == "-break-insert" && !debugger) {
@@ -484,17 +530,17 @@ int main(int argc, const char **argv) {
 					std::unique_lock pending_lock_lock(pending_lock);
 					pending_commands.push_back(orig_in);
 				}
-				debugger = new debugger_process("lldb-mi", mips_bin);
+				debugger = std::make_unique<debugger_process>("lldb-mi", mips_bin);
 			}
 		}
 		else {
 			if (debugger) {
 				debugger->write_to(orig_in);
 			}
-			else {
-				print_out("error: \'%s\' is not a valid command.\n", get_token(0).c_str());
-				print_out("error: Unrecognized command \'%s\'.\n", get_token(0).c_str());
-				print_out("%s^error\n", token_id.c_str());
+			else [[unlikely]] {
+				print_line("error: \'{}\' is not a valid command.", get_token(0));
+				print_line("error: Unrecognized command \'{}\'.\n", get_token(0));
+				print_line("{}^error\n", token_id);
 				return 0;
 			}
 		}

@@ -59,6 +59,9 @@ namespace mips {
 		const std::unordered_map<const char *, size_t> & get_stats_map() const __restrict;
 
 		[[nodiscard]]
+		std::unordered_map<const char *, size_t> & get_stats_map() __restrict;
+
+		[[nodiscard]]
 		size_t get_jit_max_instruction_size() const __restrict;
 
 		virtual uint32 handle_exception(const CPU_Exception & __restrict ex) __restrict = 0;

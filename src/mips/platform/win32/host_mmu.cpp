@@ -12,7 +12,7 @@ host_mmu::host_mmu(uint32 total_memory, uint32 stack_memory) {
 
 	m_pointer = VirtualAlloc(nullptr, 1ull << 32, MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	if (!m_pointer) {
-		throw std::string("Failed to allocate virtual address space for VM");
+		throw std::exception("Failed to allocate virtual address space for VM");
 	}
 
 	// Do _not_ commit the first page, since we want nullptr to fail.
@@ -20,7 +20,7 @@ host_mmu::host_mmu(uint32 total_memory, uint32 stack_memory) {
 	if (!res) {
 		VirtualFree(m_pointer, 0, MEM_RELEASE);
 		m_pointer = nullptr;
-		throw std::string("Failed to allocate virtual address space for VM");
+		throw std::exception("Failed to allocate virtual address space for VM");
 	}
 
 	if (high_memory) {
@@ -29,7 +29,7 @@ host_mmu::host_mmu(uint32 total_memory, uint32 stack_memory) {
 		if (!res) {
 			VirtualFree(m_pointer, 0, MEM_RELEASE);
 			m_pointer = nullptr;
-			throw std::string("Failed to allocate virtual address space for VM");
+			throw std::exception("Failed to allocate virtual address space for VM");
 		}
 	}
 }

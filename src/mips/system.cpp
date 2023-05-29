@@ -344,9 +344,9 @@ system::system(const options & __restrict init_options, const elf::binary & __re
 
 	if (init_options.debug) {
 		debugger_ = new debugger(init_options.debug_port, *this);
-		printf("** Waiting for debugger connection on port %u\n", init_options.debug_port);
+		fmt::println("** Waiting for debugger connection on port {}", init_options.debug_port);
 		debugger_->wait();
-		printf("** Debugger attached.\n");
+		fmt::println("** Debugger attached.");
 	}
 }
 
@@ -378,6 +378,10 @@ uint64 system::get_instruction_count() const __restrict {
 }
 
 const std::unordered_map<const char *, size_t> & system::get_stats_map() const __restrict {
+	return processor_->get_stats_map();
+}
+
+std::unordered_map<const char *, size_t> & system::get_stats_map() __restrict {
 	return processor_->get_stats_map();
 }
 

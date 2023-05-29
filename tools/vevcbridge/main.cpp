@@ -107,7 +107,7 @@ int wmain(int argc, const wchar_t **argv) {
 			return false;
 		}
 
-		if (strcmp(true_false_text->Value(), "false") == 0) {
+		if (_stricmp(true_false_text->Value(), "false") == 0) {
 			return false;
 		}
 
@@ -171,19 +171,18 @@ int wmain(int argc, const wchar_t **argv) {
 		std::vector<wstring> cl_include;
 
 		tinyxml2::XMLDocument doc;
-		doc.LoadFile(to_string(build_options.project_file).c_str());
-		if (doc.Error()) {
-			throw 0;
+		if (doc.LoadFile(to_string(build_options.project_file).c_str()) != tinyxml2::XML_SUCCESS) { [[unlikely]]
+			throw std::exception("Failed to load XML");
 		}
 
 		const auto project = doc.FirstChildElement("Project");
-		if (!project) {
-			throw 0;
+		if (!project) [[unlikely]] {
+			throw std::exception("Failed to find 'Project' element");
 		}
 
 		auto item_group = project->FirstChildElement("ItemGroup");
-		if (!item_group) {
-			throw 0;
+		if (!item_group) [[unlikely]] {
+			throw std::exception("Failed to find 'ItemGroup' element");
 		}
 
 		while (item_group) {
