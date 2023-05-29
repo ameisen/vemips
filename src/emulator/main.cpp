@@ -126,6 +126,22 @@ namespace {
 #	define tstrcmp(a, b) std::strcmp(a, b)
 #endif
 
+	static long long string_to_ll(const wchar_t * __restrict str, const int base = 10) {
+		return std::wcstoll(str, nullptr, base);
+	}
+
+	static unsigned long long string_to_ull(const wchar_t * __restrict str, const int base = 10) {
+		return std::wcstoull(str, nullptr, base);
+	}
+
+	static long long string_to_ll(const char * __restrict str, const int base = 10) {
+		return std::strtoll(str, nullptr, base);
+	}
+
+	static unsigned long long string_to_ull(const char * __restrict str, const int base = 10) {
+		return std::strtoull(str, nullptr, base);
+	}
+
 #ifndef EMSCRIPTEN
 	static const std::vector<option> options = {
 		{
@@ -137,13 +153,13 @@ namespace {
 					std::exit(1);
 				}
 				++i;
-				const auto memory = std::stoll(args[i], nullptr, 0);
+				const auto memory = string_to_ll(args[i], 0);
 				if (memory < 4096) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify < 4096 bytes of memory to the emulator");
+					fmt::println(stderr, "Error: You cannot specify < 4096 bytes of memory");
 					std::exit(1);
 				}
-				if (memory > uint32(-1)) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of memory to the emulator");
+				if (memory > std::numeric_limits<uint32>::max()) [[unlikely]] {
+					fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of memory");
 					std::exit(1);
 				}
 				argument_data.available_memory = uint32(memory);
@@ -158,12 +174,12 @@ namespace {
 					std::exit(1);
 				}
 				++i;
-				const auto memory = std::stoll(args[i], nullptr, 0);
+				const auto memory = string_to_ll(args[i], 0);
 				if (memory < 0) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify < 0 bytes of stack to the emulator");
+					fmt::println(stderr, "Error: You cannot specify < 0 bytes of stack memory");
 					std::exit(1);
 				}
-				if (memory > uint32(-1)) [[unlikely]] {
+				if (memory > std::numeric_limits<uint32>::max()) [[unlikely]] {
 					fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of stack memory");
 					std::exit(1);
 				}
@@ -179,7 +195,7 @@ namespace {
 					std::exit(1);
 				}
 				++i;
-				const auto port = std::stoll(args[i], nullptr, 0);
+				const auto port = string_to_ll(args[i], 0);
 				if (!mips::within(port, std::numeric_limits<uint16>{})) [[unlikely]] {
 					fmt::println(stderr, "Error: Provided debugger port number is out of range.");
 					std::exit(1);
@@ -294,7 +310,7 @@ namespace {
 					std::exit(1);
 				}
 				++i;
-				argument_data.ticks = std::stoull(args[i], nullptr, 0);
+				argument_data.ticks = string_to_ull(args[i], 0);
 				if (argument_data.ticks == 0) [[unlikely]] {
 					fmt::println(stderr, "Error: You cannot specify 0 ticks");
 					std::exit(1);
@@ -512,7 +528,7 @@ namespace {
 			const size_t data_size = _ftelli64(fp);
 			std::rewind(fp);
 			argument_data.binary_data.resize(data_size);
-			if (data_size != std::fread(argument_data.binary_data.data.get(), 1, argument_data.binary_data.size, fp)) {
+			if (data_size != std::fread(argument_data.binary_data.data.get(), 1, argument_data.binary_data.size, fp)) [[unlikely]] {
 				fmt::println(TSTR("Could not read binary \"{}\""), binary_file);
 				std::fclose(fp);
 				return 1;
@@ -658,11 +674,11 @@ namespace {
 
 #ifdef UNICODE
 // ReSharper disable once IdentifierTypo
-int wmain(const int argc, const wchar_t **argv) {
+int wmain(const int argc, const wchar_t* argv[]) {
 	return main_impl(std::span{ argv, argv + argc });
 }
 #else
-int main(const int argc, const char **argv) {
+int main(const int argc, const char* argv[]) {
 	return main_impl(std::span{ argv, argv + argc });
 }
 #endif
