@@ -22,6 +22,8 @@ MIPS_CPP_FLAGS_BASE = \
 	-funwind-tables \
 	-fexceptions \
 	-fcxx-exceptions \
+	-Wno-invalid-constexpr \
+	-std=gnu++2b \
 	-$(shell ruby -e 'puts "mips#{ARGV[0].include?($(call enquote,64)) ? 64 : 32}r#{/.*r(\d+).*/.match(ARGV[0])&.[](1) || 6}"' -- $(MIPS_TARGET) ) \
 	"-I$(MIPS_SDK)/incxx" \
 	"-I$(MIPS_SDK)/inc"

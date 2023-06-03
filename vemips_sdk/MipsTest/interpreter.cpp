@@ -20,13 +20,87 @@
 #include <cstdio>
 #include <algorithm>
 #include <array>
-#include <bit>
+#if __has_include(<bit>)
+# include <bit>
+#endif
+#if __has_include(<span>)
+# include <span>
+#endif
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
 
 #include BENCHMARK
+
+namespace std {
+#if !__has_include(<bit>)
+  template <class TTo, class TFrom>
+  static constexpr TTo bit_cast(const TFrom &v) noexcept {
+    TTo result;
+    memcpy(&result, &v, sizeof(TTo));
+    return result;
+  }
+#endif
+
+#if !__has_include(<span>)
+  template <typename T>
+  class span {
+    using element_type = T;
+    using value_type = typename std::remove_cv<T>::type;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+    using pointer = T*;
+    using const_pointer = const T*;
+    using reference = T&;
+    using const_reference = const T&;
+
+    pointer pointer_ = nullptr;
+    size_type size_ = 0;
+
+  public:
+    template <typename U, std::size_t N>
+    requires(std::is_same<typename std::remove_cv<U>::type, typename std::remove_cv<T>::type>::value)
+    constexpr span(std::array<U, N>& arr) noexcept :
+      pointer_(arr.data()),
+      size_(arr.size())
+    {}
+
+    template <typename U, std::size_t N>
+    requires(std::is_same<typename std::remove_cv<U>::type, typename std::remove_cv<T>::type>::value)
+    constexpr span(const std::array<U, N>& arr) noexcept :
+      pointer_(arr.data()),
+      size_(arr.size())
+    {}
+
+    template <typename U>
+    requires(std::is_same<typename std::remove_cv<U>::type, typename std::remove_cv<T>::type>::value)
+    constexpr span(std::vector<U>& vec) noexcept :
+      pointer_(vec.data()),
+      size_(vec.size())
+    {}
+
+    template <typename U>
+    requires(std::is_same<typename std::remove_cv<U>::type, typename std::remove_cv<T>::type>::value)
+    constexpr span(const std::vector<U>& vec) noexcept :
+      pointer_(vec.data()),
+      size_(vec.size())
+    {}
+
+    constexpr size_type size() const {
+      return size_;
+    }
+
+    constexpr size_type size_bytes() const {
+      return size_ * sizeof(T);
+    }
+
+    constexpr reference operator[] (size_type idx) const {
+      return pointer_[idx];
+    }
+  };
+#endif
+}
 
 namespace {
   using uint = unsigned int;
@@ -47,11 +121,12 @@ namespace {
     output_byte = '.',
     input_byte = ',',
     jump_forth = '[',
-    jump_back = ']', 
+    jump_back = ']',
 
+#if RECODE
     // Extended Tokens
-		// [-]
-		zero_byte = 'a',
+    // [-]
+    zero_byte = 'a',
     // > seq 4b
     increment_pointer_seq_4 = 'b',
     // < seq 4b
@@ -102,9 +177,11 @@ namespace {
     // [->>>>>>>+<<+<<<+<<]
     // [->>+>>+<<<<]
     // [-<+>>>>+<<[-]]
+#endif
   };
 
   static constexpr inline uint32 get_operand_size(const token tok) {
+#if RECODE
     switch (tok) {
       case token::increment_pointer_seq_4:
       case token::decrement_pointer_seq_4:
@@ -134,8 +211,11 @@ namespace {
       case token::special_case_7:
         return 1;
       default: [[unlikely]]
-        return 0;
+        UNREACHABLE();
     }
+#else
+    return 0;
+#endif
   }
 
   struct token_info final {
@@ -144,44 +224,46 @@ namespace {
   };
 
   template <typename T> requires (sizeof(T) == sizeof(token) && std::is_trivially_copyable_v<T>)
-  static constexpr inline token_info get_token_info(const T byte) {
+    static constexpr inline token_info get_token_info(const T byte) {
     return { token(byte), get_operand_size(token(byte)) };
   }
 
   static constexpr inline token resize_jump_operand(const token tok, const uint32 new_size) {
+#if RECODE
     switch (tok) {
       case token::jump_back_2: [[likely]] {
         if (check(new_size == 1)) [[likely]] {
           return token::jump_back_1;
         }
-        return tok;
       }
       case token::jump_forth_2: [[likely]] {
         if (check(new_size == 1)) [[likely]] {
           return token::jump_forth_1;
         }
-        return tok;
       }
-      case token::jump_back_1: {
-        
+      case token::jump_back_1:
+      {
         if (check(new_size == 2)) [[likely]] {
           return token::jump_back_2;
         }
-        return tok;
       }
-      case token::jump_forth_1: {
+      case token::jump_forth_1:
+      {
         if (check(new_size == 2)) [[likely]] {
           return token::jump_forth_2;
         }
-        return tok;
       }
       default: [[unlikely]]
-        assert(false);
-        return tok;
+        UNREACHABLE();
     }
+#else
+    UNREACHABLE();
+    return tok;
+#endif
   }
 
   static constexpr inline token resize_operand(const token tok, const uint32 new_size) {
+#if RECODE
     switch (tok) {
       case token::increment_pointer_seq_4:
         switch (new_size) {
@@ -190,8 +272,7 @@ namespace {
           case 1:
             return token::increment_pointer_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::decrement_pointer_seq_4:
         switch (new_size) {
@@ -200,8 +281,7 @@ namespace {
           case 1:
             return token::decrement_pointer_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::increment_byte_seq_4:
         switch (new_size) {
@@ -210,8 +290,7 @@ namespace {
           case 1:
             return token::increment_byte_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::decrement_byte_seq_4:
         switch (new_size) {
@@ -220,8 +299,7 @@ namespace {
           case 1:
             return token::decrement_byte_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
 
       case token::increment_pointer_seq_2:
@@ -231,8 +309,7 @@ namespace {
           case 1:
             return token::increment_pointer_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::decrement_pointer_seq_2:
         switch (new_size) {
@@ -241,8 +318,7 @@ namespace {
           case 1:
             return token::decrement_pointer_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::increment_byte_seq_2:
         switch (new_size) {
@@ -251,8 +327,7 @@ namespace {
           case 1:
             return token::increment_byte_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::decrement_byte_seq_2:
         switch (new_size) {
@@ -261,8 +336,7 @@ namespace {
           case 1:
             return token::decrement_byte_seq_1;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
 
       case token::increment_pointer_seq_1:
@@ -272,8 +346,7 @@ namespace {
           case 2:
             return token::increment_pointer_seq_2;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::decrement_pointer_seq_1:
         switch (new_size) {
@@ -282,8 +355,7 @@ namespace {
           case 2:
             return token::decrement_pointer_seq_2;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::increment_byte_seq_1:
         switch (new_size) {
@@ -292,8 +364,7 @@ namespace {
           case 2:
             return token::increment_byte_seq_2;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::decrement_byte_seq_1:
         switch (new_size) {
@@ -302,8 +373,7 @@ namespace {
           case 2:
             return token::decrement_byte_seq_2;
           default: [[unlikely]]
-            assert(false);
-            return tok;
+            check(false);
         }
       case token::jump_back_2:
       case token::jump_back_1:
@@ -319,38 +389,42 @@ namespace {
       case token::special_case_6:
       case token::special_case_7:
         return tok; // no resizing for these
+
       default: [[unlikely]]
-        return tok;
+        UNREACHABLE();
     }
+#else
+    UNREACHABLE();
+#endif
   }
 
   template <typename T> requires (std::is_same_v<T, char> || std::is_same_v<T, uint8>)
-  static constexpr inline bool operator==(const token left, const T right) {
+    static constexpr inline bool operator==(const token left, const T right) {
     return left == std::bit_cast<token>(right);
   }
 
   template <typename T> requires (std::is_same_v<T, char> || std::is_same_v<T, uint8>)
-  static constexpr inline bool operator==(const T left, const token right) {
+    static constexpr inline bool operator==(const T left, const token right) {
     return std::bit_cast<token>(left) == right;
   }
 
   template <typename T> requires (std::is_trivially_copyable_v<T> && sizeof(T) == 1)
-  static constexpr uint8 byte_cast(T value) {
+    static constexpr uint8 byte_cast(T value) {
     return std::bit_cast<uint8>(value);
   }
 
-  template <typename T> requires (std::is_enum_v<T> && std::is_trivially_copyable_v<T>)
-  static constexpr std::underlying_type_t<T> enum_cast(T value) {
+  template <typename T> requires (std::is_enum_v<T> &&std::is_trivially_copyable_v<T>)
+    static constexpr std::underlying_type_t<T> enum_cast(T value) {
     return std::bit_cast<std::underlying_type_t<T>>(value);
   }
 
   template <typename T> requires (std::is_trivially_copyable_v<T>)
-  static constexpr std::array<uint8, sizeof(T)> array_cast(const T value) {
+    static constexpr std::array<uint8, sizeof(T)> array_cast(const T value) {
     return std::bit_cast<std::array<uint8, sizeof(T)>>(value);
   }
 
-  template <typename T> requires(std::is_integral_v<T> && std::is_trivially_copyable_v<T>)
-  static void push_back(byte_vector & __restrict vec, const T value) {
+  template <typename T> requires(std::is_integral_v<T> &&std::is_trivially_copyable_v<T>)
+    static void push_back(byte_vector &__restrict vec, const T value) {
     if constexpr (sizeof(T) == 1) {
       vec.push_back(value);
     }
@@ -360,12 +434,12 @@ namespace {
       const std::size_t start = vec.size();
       vec.resize(start + sizeof(T));
 
-      std::copy(bytes.data(), bytes.data() + sizeof(T), vec.data() + start);
+      std::copy(bytes.data(), &bytes[sizeof(T)], &vec[start]);
     }
   }
 
-  template <typename T> requires(std::is_integral_v<T> && std::is_trivially_copyable_v<T>)
-  static void insert_back(byte_vector & __restrict vec, const T value) {
+  template <typename T> requires(std::is_integral_v<T> &&std::is_trivially_copyable_v<T>)
+    static void insert_back(byte_vector &__restrict vec, const T value) {
     if constexpr (sizeof(T) == 1) {
       vec.back() = value;
     }
@@ -375,17 +449,24 @@ namespace {
       const std::size_t start = vec.size() - 1;
       vec.resize(start + sizeof(T) - 1);
 
-      std::copy(bytes.data(), bytes.data() + sizeof(T), vec.data() + start);
+      std::copy(bytes.data(), &bytes[sizeof(T)], &vec[start]);
     }
   }
 
-  static byte_vector recode(const char * __restrict code, const uint code_len, const std::unordered_map<uint32, uint32>& matching_brackets)
-  {
-  #if !RECODE
-	  return byte_vector(code, code + code_len);
-  #else
+  template <typename TTo, typename TFrom> requires (std::is_integral_v<TTo> && std::is_integral_v<TFrom>)
+  static constexpr TTo check_cast(TFrom value) {
+    check(value >= std::numeric_limits<TTo>::min() && value <= std::numeric_limits<TTo>::max());
+    return TTo(value);
+  }
+
+  static byte_vector recode(const std::span<const char> code, const std::unordered_map<uint32, uint32> &matching_brackets) {
+    __assume(code.size_bytes() <= std::numeric_limits<uint32>::max());
+
+#if !RECODE
+    return byte_vector(code, code + code_len);
+#else
     byte_vector recoded;
-    recoded.reserve(code_len);
+    recoded.reserve(code.size_bytes());
 
     // We recode the Brainfuck so that it's faster to execute.
     // We will handle a few optimizations here. Mainly detecting sequences.
@@ -395,13 +476,11 @@ namespace {
     {
       std::vector<uint32> loops;
       uint32 instruction_pointer = 0;
-      std::printf("Original Program Size: %u\n", code_len);
-      while (instruction_pointer < code_len)
-      {
-        const token i = token(code[instruction_pointer]);
+      std::printf("Original Program Size: %u\n", check_cast<uint32>(code.size_bytes()));
+      while (instruction_pointer < code.size_bytes()) {
+        const auto i = token(code[instruction_pointer]);
         recoded.push_back(byte_cast(i));
-        switch (i)
-        {
+        switch (i) {
           default: [[unlikely]]
             // Ignore all other symbols
             recoded.pop_back();
@@ -414,31 +493,26 @@ namespace {
           {
             // See if there's a sequence of them after it.
             uint32 seq_cnt = 1;
-            for (uint32 ii = instruction_pointer + 1; ii < code_len && code[ii] == token::increment_pointer_one; ++ii)
-            {
+            for (uint32 ii = instruction_pointer + 1; ii < code.size_bytes() && code[ii] == token::increment_pointer_one; ++ii) {
               ++seq_cnt;
             }
-            if (seq_cnt >= seq_min)
-            {
+            if (seq_cnt >= seq_min) {
               recoded.pop_back();
 
-              if (seq_cnt <= std::numeric_limits<uint8>::max())
-              {
+              if (seq_cnt <= std::numeric_limits<uint8>::max()) {
                 recoded.push_back(byte_cast(token::increment_pointer_seq_1));
 
                 recoded.push_back(uint8(seq_cnt));
               }
-              else if (seq_cnt <= std::numeric_limits<uint16>::max())
-              {
+              else if (seq_cnt <= std::numeric_limits<uint16>::max()) {
                 recoded.push_back(byte_cast(token::increment_pointer_seq_2));
 
                 push_back(recoded, uint16(seq_cnt));
               }
-              else
-              {
+              else {
                 recoded.push_back(byte_cast(token::increment_pointer_seq_4));
 
-							  push_back(recoded, uint32(seq_cnt));
+                push_back(recoded, uint32(seq_cnt));
               }
               instruction_pointer += seq_cnt - 1;
             }
@@ -447,28 +521,23 @@ namespace {
           {
             // See if there's a sequence of them after it.
             uint32 seq_cnt = 1;
-            for (uint32 ii = instruction_pointer + 1; ii < code_len && code[ii] == token::decrement_pointer_one; ++ii)
-            {
+            for (uint32 ii = instruction_pointer + 1; ii < code.size_bytes() && code[ii] == token::decrement_pointer_one; ++ii) {
               ++seq_cnt;
             }
-            if (seq_cnt >= seq_min)
-            {
+            if (seq_cnt >= seq_min) {
               recoded.pop_back();
 
-              if (seq_cnt <= std::numeric_limits<uint8>::max())
-              {
+              if (seq_cnt <= std::numeric_limits<uint8>::max()) {
                 recoded.push_back(byte_cast(token::decrement_pointer_seq_1));
 
                 recoded.push_back(uint8(seq_cnt));
               }
-              else if (seq_cnt <= std::numeric_limits<uint16>::max())
-              {
+              else if (seq_cnt <= std::numeric_limits<uint16>::max()) {
                 recoded.push_back(byte_cast(token::decrement_pointer_seq_2));
 
                 push_back(recoded, uint16(seq_cnt));
               }
-              else
-              {
+              else {
                 recoded.push_back(byte_cast(token::decrement_pointer_seq_4));
 
                 push_back(recoded, uint32(seq_cnt));
@@ -480,28 +549,23 @@ namespace {
           {
             // See if there's a sequence of them after it.
             uint32 seq_cnt = 1;
-            for (uint32 ii = instruction_pointer + 1; ii < code_len && code[ii] == token::increment_byte_one; ++ii)
-            {
+            for (uint32 ii = instruction_pointer + 1; ii < code.size_bytes() && code[ii] == token::increment_byte_one; ++ii) {
               ++seq_cnt;
             }
-            if (seq_cnt >= seq_min)
-            {
+            if (seq_cnt >= seq_min) {
               recoded.pop_back();
 
-              if (seq_cnt <= std::numeric_limits<uint8>::max())
-              {
+              if (seq_cnt <= std::numeric_limits<uint8>::max()) {
                 recoded.push_back(byte_cast(token::increment_byte_seq_1));
 
                 recoded.push_back(uint8(seq_cnt));
               }
-              else if (seq_cnt <= std::numeric_limits<uint16>::max())
-              {
+              else if (seq_cnt <= std::numeric_limits<uint16>::max()) {
                 recoded.push_back(byte_cast(token::increment_byte_seq_2));
 
                 push_back(recoded, uint16(seq_cnt));
               }
-              else
-              {
+              else {
                 recoded.push_back(byte_cast(token::increment_byte_seq_4));
 
                 push_back(recoded, uint32(seq_cnt));
@@ -513,28 +577,23 @@ namespace {
           {
             // See if there's a sequence of them after it.
             uint32 seq_cnt = 1;
-            for (uint32 ii = instruction_pointer + 1; ii < code_len && code[ii] == token::decrement_byte_one; ++ii)
-            {
+            for (uint32 ii = instruction_pointer + 1; ii < code.size_bytes() && code[ii] == token::decrement_byte_one; ++ii) {
               ++seq_cnt;
             }
-            if (seq_cnt >= seq_min)
-            {
+            if (seq_cnt >= seq_min) {
               recoded.pop_back();
 
-              if (seq_cnt <= std::numeric_limits<uint8>::max())
-              {
+              if (seq_cnt <= std::numeric_limits<uint8>::max()) {
                 recoded.push_back(byte_cast(token::decrement_byte_seq_1));
 
                 recoded.push_back(uint8(seq_cnt));
               }
-              else if (seq_cnt <= std::numeric_limits<uint16>::max())
-              {
+              else if (seq_cnt <= std::numeric_limits<uint16>::max()) {
                 recoded.push_back(byte_cast(token::decrement_byte_seq_2));
 
                 push_back(recoded, uint16(seq_cnt));
               }
-              else
-              {
+              else {
                 recoded.push_back(byte_cast(token::decrement_byte_seq_4));
 
                 push_back(recoded, uint32(seq_cnt));
@@ -545,23 +604,20 @@ namespace {
           case token::jump_forth:
           {
             // check for special case '[-]'
-            if (code[instruction_pointer + 1] == token::decrement_byte_one && code[instruction_pointer + 2] == token::jump_back)
-            {
+            if (code[instruction_pointer + 1] == token::decrement_byte_one && code[instruction_pointer + 2] == token::jump_back) {
               recoded[recoded.size() - 1] = byte_cast(token::zero_byte);
               instruction_pointer += 2;
               break;
             }
             // w = [<n] while (*ptr) ptr -= n
             {
-              uint32 ii = std::min(code_len, instruction_pointer + 1);
+              uint32 ii = std::min(uint32(code.size_bytes()), instruction_pointer + 1);
               uint32 seq_len = 0;
-              while (code[ii] == token::decrement_pointer_one)
-              {
-                ii = std::min(code_len, ii + 1);
+              while (code[ii] == token::decrement_pointer_one) {
+                ii = std::min(uint32(code.size_bytes()), ii + 1);
                 ++seq_len;
               }
-              if (seq_len > 0 && seq_len < std::numeric_limits<uint8>::max() && code[ii] == token::jump_back)
-              {
+              if (seq_len > 0 && seq_len < std::numeric_limits<uint8>::max() && code[ii] == token::jump_back) {
                 recoded[recoded.size() - 1] = byte_cast(token::special_case_6);
                 recoded.push_back(uint8(seq_len));
                 instruction_pointer = ii;
@@ -570,15 +626,13 @@ namespace {
             }
             // x = [>n] while (*ptr) ptr += n
             {
-              uint32 ii = std::min(code_len, instruction_pointer + 1);
+              uint32 ii = std::min(uint32(code.size_bytes()), instruction_pointer + 1);
               uint32 seq_len = 0;
-              while (code[ii] == token::increment_pointer_one)
-              {
-                ii = std::min(code_len, ii + 1);
+              while (code[ii] == token::increment_pointer_one) {
+                ii = std::min(uint32(code.size_bytes()), ii + 1);
                 ++seq_len;
               }
-              if (seq_len > 0 && seq_len < std::numeric_limits<uint8>::max() && code[ii] == token::jump_back)
-              {
+              if (seq_len > 0 && seq_len < std::numeric_limits<uint8>::max() && code[ii] == token::jump_back) {
                 recoded[recoded.size() - 1] = byte_cast(token::special_case_7);
                 recoded.push_back(uint8(seq_len));
                 instruction_pointer = ii;
@@ -591,34 +645,29 @@ namespace {
               code[instruction_pointer + 2] == token::increment_pointer_one &&
               code[instruction_pointer + 3] == token::increment_byte_one &&
               code[instruction_pointer + 4] == token::decrement_pointer_one &&
-              code[instruction_pointer + 5] == token::jump_back)
-            {
+              code[instruction_pointer + 5] == token::jump_back) {
               recoded[recoded.size() - 1] = byte_cast(token::special_case_1);
               instruction_pointer += 5;
               break;
             }
             // check for : // s = special case [->n+<n] (*(ptr + n) += *ptr; *ptr = 0
             {
-              if (uint32 ii = std::min(code_len, instruction_pointer + 1); code[ii] == token::decrement_byte_one)
-              {
-                ii = std::min(code_len, ii + 1);
+              if (uint32 ii = std::min(uint32(code.size_bytes()), instruction_pointer + 1); code[ii] == token::decrement_byte_one) {
+                ii = std::min(uint32(code.size_bytes()), ii + 1);
                 uint32 seq_len = 0;
-                while (code[ii] == token::increment_pointer_one)
-                {
-                  ii = std::min(code_len, ii + 1);
+                while (code[ii] == token::increment_pointer_one) {
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   ++seq_len;
                 }
                 if (seq_len && seq_len <= std::numeric_limits<uint8>::max() && code[ii] == token::increment_byte_one) // TODO if we want 2- and 4-b sequences, change this.
                 {
-                  ii = std::min(code_len, ii + 1);
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   uint32 seq_len2 = 0;
-                  while (code[ii] == token::decrement_pointer_one)
-                  {
-                    ii = std::min(code_len, ii + 1);
+                  while (code[ii] == token::decrement_pointer_one) {
+                    ii = std::min(uint32(code.size_bytes()), ii + 1);
                     ++seq_len2;
                   }
-                  if (seq_len2 == seq_len && code[ii] == token::jump_back)
-                  {
+                  if (seq_len2 == seq_len && code[ii] == token::jump_back) {
                     recoded[recoded.size() - 1] = byte_cast(token::special_case_2);
                     recoded.push_back(uint8(seq_len));
                     instruction_pointer = ii;
@@ -629,26 +678,22 @@ namespace {
             }
             // check for : // t = special case [->n+<n] (*(ptr - n) += *ptr; *ptr = 0
             {
-              if (uint32 ii = std::min(code_len, instruction_pointer + 1); code[ii] == token::decrement_byte_one)
-              {
-                ii = std::min(code_len, ii + 1);
+              if (uint32 ii = std::min(uint32(code.size_bytes()), instruction_pointer + 1); code[ii] == token::decrement_byte_one) {
+                ii = std::min(uint32(code.size_bytes()), ii + 1);
                 uint32 seq_len = 0;
-                while (code[ii] == token::decrement_pointer_one)
-                {
-                  ii = std::min(code_len, ii + 1);
+                while (code[ii] == token::decrement_pointer_one) {
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   ++seq_len;
                 }
                 if (seq_len && seq_len <= std::numeric_limits<uint8>::max() && code[ii] == token::increment_byte_one) // TODO if we want 2- and 4-b sequences, change this.
                 {
-                  ii = std::min(code_len, ii + 1);
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   uint32 seq_len2 = 0;
-                  while (code[ii] == token::increment_pointer_one)
-                  {
-                    ii = std::min(code_len, ii + 1);
+                  while (code[ii] == token::increment_pointer_one) {
+                    ii = std::min(uint32(code.size_bytes()), ii + 1);
                     ++seq_len2;
                   }
-                  if (seq_len2 == seq_len && code[ii] == token::jump_back)
-                  {
+                  if (seq_len2 == seq_len && code[ii] == token::jump_back) {
                     recoded[recoded.size() - 1] = byte_cast(token::special_case_3);
                     recoded.push_back(uint8(seq_len));
                     instruction_pointer = ii;
@@ -659,26 +704,22 @@ namespace {
             }
             // check for : // s = special case [->n+<n] (*(ptr + n) -= *ptr; *ptr = 0
             {
-              if (uint32 ii = std::min(code_len, instruction_pointer + 1); code[ii] == token::decrement_byte_one)
-              {
-                ii = std::min(code_len, ii + 1);
+              if (uint32 ii = std::min(uint32(code.size_bytes()), instruction_pointer + 1); code[ii] == token::decrement_byte_one) {
+                ii = std::min(uint32(code.size_bytes()), ii + 1);
                 uint32 seq_len = 0;
-                while (code[ii] == token::increment_pointer_one)
-                {
-                  ii = std::min(code_len, ii + 1);
+                while (code[ii] == token::increment_pointer_one) {
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   ++seq_len;
                 }
                 if (seq_len && seq_len <= std::numeric_limits<uint8>::max() && code[ii] == token::decrement_byte_one) // TODO if we want 2- and 4-b sequences, change this.
                 {
-                  ii = std::min(code_len, ii + 1);
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   uint32 seq_len2 = 0;
-                  while (code[ii] == token::decrement_pointer_one)
-                  {
-                    ii = std::min(code_len, ii + 1);
+                  while (code[ii] == token::decrement_pointer_one) {
+                    ii = std::min(uint32(code.size_bytes()), ii + 1);
                     ++seq_len2;
                   }
-                  if (seq_len2 == seq_len && code[ii] == token::jump_back)
-                  {
+                  if (seq_len2 == seq_len && code[ii] == token::jump_back) {
                     recoded[recoded.size() - 1] = byte_cast(token::special_case_4);
                     recoded.push_back(uint8(seq_len));
                     instruction_pointer = ii;
@@ -689,26 +730,22 @@ namespace {
             }
             // check for : // t = special case [->n+<n] (*(ptr - n) -= *ptr; *ptr = 0
             {
-              if (uint32 ii = std::min(code_len, instruction_pointer + 1); code[ii] == token::decrement_byte_one)
-              {
-                ii = std::min(code_len, ii + 1);
+              if (uint32 ii = std::min(uint32(code.size_bytes()), instruction_pointer + 1); code[ii] == token::decrement_byte_one) {
+                ii = std::min(uint32(code.size_bytes()), ii + 1);
                 uint32 seq_len = 0;
-                while (code[ii] == token::decrement_pointer_one)
-                {
-                  ii = std::min(code_len, ii + 1);
+                while (code[ii] == token::decrement_pointer_one) {
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   ++seq_len;
                 }
                 if (seq_len && seq_len <= std::numeric_limits<uint8>::max() && code[ii] == token::decrement_byte_one) // TODO if we want 2- and 4-b sequences, change this.
                 {
-                  ii = std::min(code_len, ii + 1);
+                  ii = std::min(uint32(code.size_bytes()), ii + 1);
                   uint32 seq_len2 = 0;
-                  while (code[ii] == token::increment_pointer_one)
-                  {
-                    ii = std::min(code_len, ii + 1);
+                  while (code[ii] == token::increment_pointer_one) {
+                    ii = std::min(uint32(code.size_bytes()), ii + 1);
                     ++seq_len2;
                   }
-                  if (seq_len2 == seq_len && code[ii] == token::jump_back)
-                  {
+                  if (seq_len2 == seq_len && code[ii] == token::jump_back) {
                     recoded[recoded.size() - 1] = byte_cast(token::special_case_5);
                     recoded.push_back(uint8(seq_len));
                     instruction_pointer = ii;
@@ -721,23 +758,20 @@ namespace {
 
             // r = special case [->+<] (*(ptr - 1) += *ptr; *ptr = 0
 
-             loops.push_back(uint32(recoded.size() - 1));
+            loops.push_back(uint32(recoded.size() - 1));
 
-            const uint32 target = code_len;
+            const uint32 target = code.size_bytes();
             const uint32 match = 0;
 
-            if (target <= std::numeric_limits<uint8>::max())
-            {
+            if (target <= std::numeric_limits<uint8>::max()) {
               recoded[recoded.size() - 1] = byte_cast(token::jump_forth_1);
               push_back(recoded, uint8(match));
             }
-            else if (target <= std::numeric_limits<uint16>::max())
-            {
+            else if (target <= std::numeric_limits<uint16>::max()) {
               recoded[recoded.size() - 1] = byte_cast(token::jump_forth_2);
               push_back(recoded, uint16(match));
             }
-            else
-            {
+            else {
               push_back(recoded, uint32(match));
             }
           }  break;
@@ -746,72 +780,71 @@ namespace {
             uint32 last_loop_offset = loops.back();
             loops.pop_back();
 
-            const uint32 last_loop_end_offset = [&] 
-            {
+            const uint32 last_loop_end_offset = [&] () -> uint32 {
               uint32 operand_size;
 
-              const uint32 lambda_offset = code_len;
+              const uint32 lambda_offset = uint32(code.size_bytes());
 
-              if (lambda_offset <= std::numeric_limits<uint8>::max()) [[likely]]
-              {
+              if (lambda_offset <= std::numeric_limits<uint8>::max()) [[likely]] {
                 operand_size = sizeof(uint8);
-                static_assert(sizeof(uint8) == 1);
               }
-              else if (lambda_offset <= std::numeric_limits<uint16>::max())
-              {
+              else if (lambda_offset <= std::numeric_limits<uint16>::max()) {
                 operand_size = sizeof(uint16);
-                static_assert(sizeof(uint16) == 2);
               }
-              else [[unlikely]]
-              {
+              else if (lambda_offset <= std::numeric_limits<uint32>::max()) [[unlikely]] {
                 operand_size = sizeof(uint32);
-                static_assert(sizeof(uint32) == 4);
+              }
+              else {
+                UNREACHABLE();
+                operand_size = sizeof(uint64);
               }
 
-              return(recoded.size() - 1) - (last_loop_offset + 1 + operand_size);
+              return (recoded.size() - 1) - (last_loop_offset + 1 + operand_size);
             }();
 
             uint32 return_loc_val;
 
-            if (last_loop_end_offset <= std::numeric_limits<uint8>::max())
-            {
-              return_loc_val = recoded.size() + 1;
+            if (last_loop_end_offset <= std::numeric_limits<uint8>::max()) {
+              return_loc_val = check_cast<uint32>(recoded.size()) + 1;
               recoded[recoded.size() - 1] = byte_cast(token::jump_back_1);
               push_back(recoded, uint8(last_loop_end_offset));
             }
-            else if (last_loop_end_offset <= std::numeric_limits<uint16>::max())
-            {
-              return_loc_val = recoded.size() + 2;
+            else if (last_loop_end_offset <= std::numeric_limits<uint16>::max()) {
+              return_loc_val = check_cast<uint32>(recoded.size()) + 2;
               recoded[recoded.size() - 1] = byte_cast(token::jump_back_2);
               push_back(recoded, uint16(last_loop_end_offset));
             }
-            else
-            {
-              return_loc_val = recoded.size() + 4;
+            else if (last_loop_end_offset <= std::numeric_limits<uint32>::max()) {
+              return_loc_val = check_cast<uint32>(recoded.size()) + 4;
               push_back(recoded, uint32(last_loop_end_offset));
+            }
+            else {
+              UNREACHABLE();
+              return_loc_val = check_cast<uint32>(recoded.size()) + 8;
+              push_back(recoded, uint64(last_loop_end_offset));
             }
 
 #if !PRE_SCAN
-            const auto get_target_size = [] (const uint32 value) {
+            const auto get_target_size = [] (const uint32 value) -> uint32 {
               if (value <= std::numeric_limits<uint8>::max()) {
-                return 1;
+                return sizeof(uint8);
               }
               else if (value <= std::numeric_limits<uint16>::max()) [[likely]] {
-                return 2;
+                return sizeof(uint16);
               }
               else if (value <= std::numeric_limits<uint32>::max()) [[unlikely]] {
-                return 4;
+                return sizeof(uint32);
               }
               else {
                 UNREACHABLE();
-                return 0;
+                return sizeof(uint64);
               }
             };
 
             static constexpr const bool recode_instruction = false;
 
             if constexpr (recode_instruction) {
-              const auto reencode_start = [&] (uint32 target) {
+              const auto reencode_start = [&] (const uint32 target) {
                 // const uint32 current_operand_size = get_target_size(code_len);
                 const uint32 operand_size = get_target_size(return_loc_val);
 
@@ -824,7 +857,7 @@ namespace {
                     recoded[target] = byte_cast(new_token);
                     recoded.erase(erase_iterator, erase_iterator + to_remove);
                   }
-                } 
+                }
               };
 
               reencode_start(last_loop_offset);
@@ -833,22 +866,20 @@ namespace {
             // write this offset back in.
             const auto return_loc = &recoded[last_loop_offset + 1];
 
-            const uint32 compare_value = recode_instruction ? return_loc_val : code_len;
+            const uint32 compare_value = recode_instruction ? return_loc_val : uint32(code.size_bytes());
 
-            if (compare_value <= std::numeric_limits<uint8>::max())
-            {
-              *reinterpret_cast<uint8* __restrict>(return_loc) = uint8(return_loc_val);
+            if (compare_value <= std::numeric_limits<uint8>::max()) {
+              *reinterpret_cast<uint8 *__restrict>(return_loc) = uint8(return_loc_val);
             }
-            else if (compare_value <= std::numeric_limits<uint16>::max()) [[likely]]
-            {
-              *reinterpret_cast<uint16* __restrict>(return_loc) = uint16(return_loc_val);
+            else if (compare_value <= std::numeric_limits<uint16>::max()) [[likely]] {
+              *reinterpret_cast<uint16 *__restrict>(return_loc) = uint16(return_loc_val);
             }
-            else if (compare_value <= std::numeric_limits<uint32>::max()) [[unlikely]]
-            {
-              *reinterpret_cast<uint32* __restrict>(return_loc) = return_loc_val;
+            else if (compare_value <= std::numeric_limits<uint32>::max()) [[unlikely]] {
+              *reinterpret_cast<uint32 *__restrict>(return_loc) = return_loc_val;
             }
             else {
               UNREACHABLE();
+              *reinterpret_cast<uint64 *__restrict>(return_loc) = return_loc_val;
             }
 #endif
           }  break;
@@ -858,114 +889,114 @@ namespace {
     }
 
     return recoded;
-  #endif
+#endif
   }
 
-  template <uint32 count = 32'768>
-  struct cell_t final : std::array<uint8, count> {
+  template <uint32 Count = 32'768>
+  struct cell_t final : std::array<uint8, Count> {
   private:
-    static constexpr const bool count_pow2 = (count & (count - 1u)) == 0u;
+    static constexpr const bool count_pow2 = (Count & (Count - 1u)) == 0u;
 
   public:
     uint32 index = 0;
 
-    uint8 & operator++() __restrict {
-      ++index;
+    uint8 &operator++() {
       if constexpr (count_pow2) {
-        index &= count - 1;
+        ++index;
+        index &= Count - 1;
       }
       else {
-        if (index >= count) [[unlikely]] {
-          index %= count;
+        if (index >= Count - 1) [[unlikely]] {
+          index = 0;
         }
       }
 
       return (*this)[index];
     }
 
-    uint8 & operator++(int) __restrict {
+    uint8 &operator++(int) {
       const uint32 original_index = index;
-      ++index;
       if constexpr (count_pow2) {
-        index &= count - 1;
+        ++index;
+        index &= Count - 1;
       }
       else {
-        if (index >= count) [[unlikely]] {
-          index %= count;
+        if (index >= Count - 1) [[unlikely]] {
+          index = 0;
         }
       }
 
       return (*this)[original_index];
     }
 
-    uint8 & operator--() __restrict {
+    uint8 &operator--() {
       if constexpr (count_pow2) {
         --index;
-        index &= count - 1;
+        index &= Count - 1;
       }
       else {
         if (1 > index) [[unlikely]] {
-          index = count - 1;
+          index = Count - 1;
         }
       }
 
       return (*this)[index];
     }
 
-    uint8 & operator--(int) __restrict {
+    uint8 &operator--(int) {
       const uint32 original_index = index;
       if constexpr (count_pow2) {
         --index;
-        index &= count - 1;
+        index &= Count - 1;
       }
       else {
         if (1 > index) [[unlikely]] {
-          index = count - 1;
+          index = Count - 1;
         }
       }
 
       return (*this)[original_index];
     }
 
-    uint8 & operator+(uint32 value) __restrict {
+    uint8 &operator+(const uint32 value) {
       uint32 current_index = index;
       current_index += value;
       if constexpr (count_pow2) {
-        current_index &= count - 1;
+        current_index &= Count - 1;
       }
       else {
-        if (current_index >= count) [[unlikely]] {
-          current_index %= count;
+        if (current_index >= Count) [[unlikely]] {
+          current_index %= Count;
         }
       }
 
       return (*this)[current_index];
     }
 
-    uint8 & operator-(uint32 value) __restrict {
+    uint8 &operator-(const uint32 value) {
       uint32 current_index = index;
       if constexpr (count_pow2) {
         current_index -= value;
-        current_index &= count - 1;
+        current_index &= Count - 1;
       }
       else {
         if (value > current_index) [[unlikely]] {
-          current_index = count - (value - current_index);
+          current_index = Count - (value - current_index);
         }
       }
 
       return (*this)[current_index];
     }
 
-    uint8 & operator+=(uint32 value) __restrict {
+    uint8 &operator+=(const uint32 value) {
       uint32 current_index = index;
       current_index += value;
       if constexpr (count_pow2) {
-        current_index &= count - 1;
+        current_index &= Count - 1;
       }
       else {
-        if (current_index >= count) [[unlikely]] {
-          current_index %= count;
+        if (current_index >= Count) [[unlikely]] {
+          current_index %= Count;
         }
       }
 
@@ -973,15 +1004,15 @@ namespace {
       return (*this)[current_index];
     }
 
-    uint8 & operator-=(uint32 value) __restrict {
+    uint8 &operator-=(const uint32 value) {
       uint32 current_index = index;
       if constexpr (count_pow2) {
         current_index -= value;
-        current_index &= count - 1;
+        current_index &= Count - 1;
       }
       else {
         if (value > current_index) [[unlikely]] {
-          current_index = count - (value - current_index);
+          current_index = Count - (value - current_index);
         }
       }
 
@@ -989,38 +1020,137 @@ namespace {
       return (*this)[current_index];
     }
 
-    uint8 & operator*() __restrict {
+    uint8 operator*() const {
+      return (*this)[index];
+    }
+
+    uint8 &operator*() {
       return (*this)[index];
     }
   };
 
-  static cell_t cells = {};
-}
+  template <size_t N>
+  static void dump_count(const char(&__restrict value)[N]) {
+#if 0
+    if constexpr (N == 1) {
+      std::putchar(value[0]);
+    }
+    else {
+      std::fputs(value, stdout);
+    }
+#endif
+  }
 
-int main()
-{
-  static constexpr const char * const __restrict code = bench::program;
-  static constexpr size_t code_len = sizeof(bench::program);
-  check(code_len <= std::numeric_limits<uint32>::max());
+  static void dump_count(const char value) {
+#if 0
+    std::putchar(value);
+#endif
+  }
 
-  // Pre-scan the code for matching brackets to get offsets.
-  // Also will allow the recoder to use smaller offsets.
-  std::unordered_map<uint32, uint32> matching_brackets;
+  static void dump_instructions(std::span<const uint8_t> data) {
+#if PRINT_RECODE
+    std::puts("Recoded Bytecode:\n");
+
+    for (uint32 instruction_pointer = 0; instruction_pointer < data.size_bytes(); ++instruction_pointer) {
+      const auto i = token(data[instruction_pointer]);
+      std::putchar(enum_cast(i));
+
+      switch (i) {
+#if RECODE
+        case token::zero_byte: // [-] special case
+        case token::special_case_1: // r = special case [->+<] (*(ptr - 1) += *ptr; *ptr = 0
+          break;
+        case token::special_case_6:
+        case token::special_case_7:
+        case token::special_case_2: // s = special case [->n+<n] (*(ptr + n) += *ptr; *ptr = 0
+        case token::special_case_3: // t = special case [->n+<n] (*(ptr - n) += *ptr; *ptr = 0
+        case token::special_case_4: // u = special case [->n+<n] (*(ptr + n) -= *ptr; *ptr = 0
+        case token::special_case_5: // v = special case [->n+<n] (*(ptr - n) -= *ptr; *ptr = 0
+        {
+          dump_count('#');
+          ++instruction_pointer;
+        } break;
+        case token::increment_pointer_seq_4: // > sequence special case
+        case token::decrement_pointer_seq_4: // < sequence special case
+        case token::increment_byte_seq_4: // + sequence special case
+        case token::decrement_byte_seq_4: // - sequence special case
+        {
+          dump_count("####");
+          instruction_pointer += 4;
+        } break;
+        case token::increment_pointer_seq_2: // > sequence special case
+        case token::decrement_pointer_seq_2: // < sequence special case
+        case token::increment_byte_seq_2: // + sequence special case
+        case token::decrement_byte_seq_2: // - sequence special case
+        {
+          dump_count("##");
+          instruction_pointer += 2;
+        } break;
+        case token::increment_pointer_seq_1: // > sequence special case
+        case token::decrement_pointer_seq_1: // < sequence special case
+        case token::increment_byte_seq_1: // + sequence special case
+        case token::decrement_byte_seq_1: // - sequence special case
+        {
+          dump_count('#');
+          ++instruction_pointer;
+        } break;
+        case token::increment_pointer_one:
+        case token::decrement_pointer_one:
+        case token::increment_byte_one:
+        case token::decrement_byte_one:
+        case token::output_byte:
+        case token::input_byte:
+          // don't handle yet.
+          break;
+        case token::jump_forth:
+        case token::jump_back:
+          dump_count("####");
+          instruction_pointer += 4;
+          break;
+        case token::jump_back_2:
+        case token::jump_forth_2:
+          dump_count("##");
+          instruction_pointer += 2;
+          break;
+        case token::jump_back_1:
+        case token::jump_forth_1:
+          dump_count("#");
+          ++instruction_pointer;
+          break;
+#endif
+#if !RECODE
+        case token('\0'):  // NOLINT(clang-diagnostic-switch)
+          break;
+#endif
+        default:  // NOLINT(clang-diagnostic-covered-switch-default)
+#if RECODE
+          UNREACHABLE();
+#else
+          break;
+#endif
+      }
+    }
+#endif
+  }
+
+  static std::unordered_map<uint32, uint32> pre_scan(const std::span<const char> code) {
 #if PRE_SCAN
-  {
+    std::unordered_map<uint32, uint32> matching_brackets;
+
     std::vector<uint32> bracket_stack;
 
-    for (uint32 i = 0; i < code_len; ++i) {
+    for (uint32 i = 0; i < code.size(); ++i) {
       switch (code[i]) {
-        case '[':
+        case uint8(uint8(token::jump_forth)):
           bracket_stack.push_back(i);
           break;
-        case ']': {
+        case uint8(uint8(token::jump_back)):
+        {
           check(!bracket_stack.empty());
           const uint32 matching_offset = bracket_stack.back();
           bracket_stack.pop_back();
-          matching_brackets.insert({i, matching_offset});
-          matching_brackets.insert({matching_offset, i});
+          matching_brackets.insert({ i, matching_offset });
+          matching_brackets.insert({ matching_offset, i });
         } break;
         default:
           break;
@@ -1028,27 +1158,54 @@ int main()
     }
 
     check(bracket_stack.empty());
-  }
+
+    return matching_brackets;
+#else
+    return {};
 #endif
+  }
 
-  std::printf("Generating %s via Brainfuck\n", bench::name);
-  const byte_vector recoded = recode(code, code_len, matching_brackets);
+  struct stdout_buffer_toggle final {
+  private:
+    static inline size_t toggle_count_ = 0;
+    bool success_;
 
-  {
+    static NO_THROW bool toggle() noexcept {
+      if (toggle_count_++) [[unlikely]] {
+        return false;
+      }
+      return 0 == std::setvbuf(stdout, nullptr, _IONBF, BUFSIZ);
+    }
+
+  public:
+    NO_THROW stdout_buffer_toggle() noexcept : success_(toggle()) {}
+
+    stdout_buffer_toggle(const stdout_buffer_toggle&) = delete;
+    stdout_buffer_toggle(stdout_buffer_toggle&& value) = delete;
+    void operator=(const stdout_buffer_toggle&) = delete;
+    void operator=(stdout_buffer_toggle&&) = delete;
+
+    NO_THROW ~stdout_buffer_toggle() noexcept {
+      if (--toggle_count_ == 0 && success_) [[likely]] {
+        check(0 == std::setvbuf(stdout, nullptr, _IOFBF, BUFSIZ));
+      }
+    }
+  };
+
+  static cell_t cells = {};
+
+  static void execute(const std::span<const uint8_t> code) {
+    stdout_buffer_toggle disable_buffering_scope;
+
     uint32 instruction_pointer = 0;
 
     // Now execute it recoded.
 
-    check(recoded.size() <= std::numeric_limits<uint32>::max());
-    const uint32 recoded_size = uint32(recoded.size());
-    const uint8 * __restrict recoded_data = recoded.data();
+    check(code.size() <= std::numeric_limits<uint32>::max());
 
-    std::printf("Recoded Program Size: %u\n", recoded_size);
-    while (instruction_pointer < recoded_size)
-    {
-      const token i = static_cast<const token>(recoded_data[instruction_pointer]);
-      switch (i)
-      {
+    std::printf("Recoded Program Size: %u\n", uint32(code.size()));
+    while (instruction_pointer < code.size()) {
+      switch (static_cast<const token>(code[instruction_pointer])) {
 #if RECODE
         case token::zero_byte: // [-] special case
           *cells = 0;
@@ -1059,125 +1216,105 @@ int main()
           break;
         case token::special_case_6:
         {
-          ++instruction_pointer;
-          const uint8 count = recoded_data[instruction_pointer];
-          while (*cells)
-          {
+          const uint8 count = code[++instruction_pointer];
+          while (*cells) {
             cells -= count;
           }
         } break;
         case token::special_case_7:
         {
-          ++instruction_pointer;
-          const uint8 count = recoded_data[instruction_pointer];
-          while (*cells)
-          {
+          const uint8 count = code[++instruction_pointer];
+          while (*cells) {
             cells += count;
           }
         } break;
         case token::special_case_2: // s = special case [->n+<n] (*(ptr + n) += *ptr; *ptr = 0
         {
-          ++instruction_pointer;
-          const uint8 count = recoded_data[instruction_pointer];
+          const uint8 count = code[++instruction_pointer];
           (cells + count) += *cells;
           *cells = 0;
         } break;
         case token::special_case_3: // t = special case [->n+<n] (*(ptr - n) += *ptr; *ptr = 0
         {
-          ++instruction_pointer;
-          const uint8 count = recoded_data[instruction_pointer];
+          const uint8 count = code[++instruction_pointer];
           (cells - count) += *cells;
           *cells = 0;
         } break;
         case token::special_case_4: // u = special case [->n+<n] (*(ptr + n) -= *ptr; *ptr = 0
         {
-          ++instruction_pointer;
-          const uint8 count = recoded_data[instruction_pointer];
+          const uint8 count = code[++instruction_pointer];
           (cells + count) -= *cells;
           *cells = 0;
         } break;
         case token::special_case_5: // v = special case [->n+<n] (*(ptr - n) -= *ptr; *ptr = 0
         {
-          ++instruction_pointer;
-          const uint8 count = recoded_data[instruction_pointer];
+          const uint8 count = code[++instruction_pointer];
           (cells - count) -= *cells;
           *cells = 0;
         } break;
         case token::increment_pointer_seq_4: // > sequence special case
         {
-          ++instruction_pointer;
-          const uint32 value = reinterpret_cast<const uint32 & __restrict>(recoded_data[instruction_pointer]);
-          instruction_pointer += 3;
+          const uint32 value = reinterpret_cast<const uint32 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 4;
           cells += value;
         } break;
         case token::decrement_pointer_seq_4: // < sequence special case
         {
-          ++instruction_pointer;
-          const uint32 value = reinterpret_cast<const uint32 & __restrict>(recoded_data[instruction_pointer]);
-          instruction_pointer += 3;
+          const uint32 value = reinterpret_cast<const uint32 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 4;
           cells -= value;
         } break;
         case token::increment_byte_seq_4: // + sequence special case
         {
-          ++instruction_pointer;
-          const uint32 value = reinterpret_cast<const uint32 & __restrict>(recoded_data[instruction_pointer]);
-          instruction_pointer += 3;
+          const uint32 value = reinterpret_cast<const uint32 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 4;
           *cells += value;
         } break;
         case token::decrement_byte_seq_4: // - sequence special case
         {
-          ++instruction_pointer;
-          const uint32 value = reinterpret_cast<const uint32 & __restrict>(recoded_data[instruction_pointer]);
-          instruction_pointer += 3;
+          const uint32 value = reinterpret_cast<const uint32 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 4;
           *cells -= value;
         } break;
         case token::increment_pointer_seq_2: // > sequence special case
         {
-          ++instruction_pointer;
-          const uint16 value = reinterpret_cast<const uint16 & __restrict>(recoded_data[instruction_pointer]);
-          ++instruction_pointer;
+          const uint16 value = reinterpret_cast<const uint16 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 2;
           cells += value;
         } break;
         case token::decrement_pointer_seq_2: // < sequence special case
         {
-          ++instruction_pointer;
-          const uint16 value = reinterpret_cast<const uint16 & __restrict>(recoded_data[instruction_pointer]);
-          ++instruction_pointer;
+          const uint16 value = reinterpret_cast<const uint16 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 2;
           cells -= value;
         } break;
         case token::increment_byte_seq_2: // + sequence special case
         {
-          ++instruction_pointer;
-          const uint16 value = reinterpret_cast<const uint16 & __restrict>(recoded_data[instruction_pointer]);
-          ++instruction_pointer;
+          const uint16 value = reinterpret_cast<const uint16 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 2;
           *cells += value;
         } break;
         case token::decrement_byte_seq_2: // - sequence special case
         {
-          ++instruction_pointer;
-          const uint16 value = reinterpret_cast<const uint16 & __restrict>(recoded_data[instruction_pointer]);
-          ++instruction_pointer;
+          const uint16 value = reinterpret_cast<const uint16 & __restrict>(code[instruction_pointer + 1]);
+          instruction_pointer += 2;
           *cells -= value;
         } break;
         case token::increment_pointer_seq_1: // > sequence special case
         {
-          ++instruction_pointer;
-          cells += recoded_data[instruction_pointer];
+          cells += code[++instruction_pointer];
         } break;
         case token::decrement_pointer_seq_1: // < sequence special case
         {
-          ++instruction_pointer;
-          cells -= recoded_data[instruction_pointer];
+          cells -= code[++instruction_pointer];
         } break;
         case token::increment_byte_seq_1: // + sequence special case
         {
-          ++instruction_pointer;
-          *cells += recoded_data[instruction_pointer];
+          *cells += code[++instruction_pointer];
         } break;
         case token::decrement_byte_seq_1: // - sequence special case
         {
-          ++instruction_pointer;
-          *cells -= recoded_data[instruction_pointer];
+          *cells -= code[++instruction_pointer];
         } break;
 #endif
         case token::increment_pointer_one:
@@ -1190,18 +1327,15 @@ int main()
           --*cells; break;
         case token::output_byte:
           std::putchar(*cells);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
           break;
         case token::input_byte: [[unlikely]]
           // don't handle yet.
           break;
         case token::jump_forth:
-          if (*cells == 0)
-          {
+          if (*cells == 0) {
 #if RECODE
             // Jump.
-            const uint32 value = reinterpret_cast<const uint32 & __restrict>(recoded_data[instruction_pointer + 1]);
-            instruction_pointer = value;
+            instruction_pointer = reinterpret_cast<const uint32 & __restrict>(code[instruction_pointer + 1]);
             continue;
 #else
 # if PRE_SCAN
@@ -1209,31 +1343,33 @@ int main()
 # else
             uint32 extra_count = 0;
             uint8 t;
-            while (((t = recoded_data[++instruction_pointer]) != ']') | (extra_count != 0)) {
-              if (t == '[') {
+            while (instruction_pointer < code.size() && (((t = code[++instruction_pointer]) != uint8(token::jump_back)) | (extra_count != 0))) {
+              if (t == uint8(token::jump_forth)) {
                 ++extra_count;
               }
-              else if (t == ']') {
+              else if (t == uint8(token::jump_back)) {
                 --extra_count;
               }
+            }
+
+            if (extra_count != 0) [[unlikely]] {
+              std::fputs("Unmatched '[' token", stderr);  // NOLINT(cert-err33-c)
+              std::exit(2);  // NOLINT(concurrency-mt-unsafe)
             }
 # endif
 #endif
           }
 #if RECODE
-          else
-          {
+          else {
             instruction_pointer += 4;
           }
 #endif
           break;
         case token::jump_back:
-          if (*cells != 0)
-          {
+          if (*cells != 0) {
 #if RECODE
             // Jump.
-            const uint32 value = reinterpret_cast<const uint32 & __restrict>(recoded_data[instruction_pointer + 1]);
-            instruction_pointer -= value;
+            instruction_pointer -= reinterpret_cast<const uint32 & __restrict>(code[instruction_pointer + 1]);
             continue;
 #else
 # if PRE_SCAN
@@ -1241,257 +1377,98 @@ int main()
 # else
             uint32 extra_count = 0;
             uint8 t;
-            while (((t = recoded_data[--instruction_pointer]) != '[') | (extra_count != 0)) {
-              if (t == ']') {
+            while (instruction_pointer > 0 && (((t = code[--instruction_pointer]) != uint8(token::jump_forth)) | (extra_count != 0))) {
+              if (t == uint8(token::jump_back)) {
                 ++extra_count;
               }
-              else if (t == '[') {
+              else if (t == uint8(token::jump_forth)) {
                 --extra_count;
               }
+            }
+
+            if (extra_count != 0) [[unlikely]] {
+              std::fputs("Unmatched ']' token", stderr);  // NOLINT(cert-err33-c)
+              std::exit(2);  // NOLINT(concurrency-mt-unsafe)
             }
 # endif
 #endif
           }
 #if RECODE
-          else
-          {
+          else {
             instruction_pointer += 4;
           }
 #endif
           break;
 #if RECODE
         case token::jump_back_2:
-          if (*cells != 0)
-          {
+          if (*cells != 0) {
             // Jump.
-            const uint16 value = reinterpret_cast<const uint16 & __restrict>(recoded_data[instruction_pointer + 1]);
-            instruction_pointer -= value;
+            instruction_pointer -= reinterpret_cast<const uint16 & __restrict>(code[instruction_pointer + 1]);
             continue;
           }
-          else
-          {
+          else {
             instruction_pointer += 2;
           } break;
         case token::jump_back_1:
-          if (*cells != 0)
-          {
+          if (*cells != 0) {
             // Jump.
-            instruction_pointer -= recoded_data[instruction_pointer + 1];
+            instruction_pointer -= code[instruction_pointer + 1];
             continue;
           }
-          else
-          {
+          else {
             ++instruction_pointer;
           } break;
         case token::jump_forth_2:
-          if (*cells == 0)
-          {
+          if (*cells == 0) {
             // Jump.
-            const uint16 value = reinterpret_cast<const uint16 & __restrict>(recoded_data[instruction_pointer + 1]);
-            instruction_pointer = value;
+            instruction_pointer = reinterpret_cast<const uint16 & __restrict>(code[instruction_pointer + 1]);
             continue;
           }
-          else
-          {
+          else {
             instruction_pointer += 2;
           } break;
         case token::jump_forth_1: [[unlikely]]
-          if (*cells == 0)
-          {
+          if (*cells == 0) {
             // Jump.
-            instruction_pointer = recoded_data[instruction_pointer + 1];
+            instruction_pointer = code[instruction_pointer + 1];
             continue;
           }
-          else
-          {
+          else {
             ++instruction_pointer;
           } break;
 #endif
-        case token('\0'): [[unlikely]]
+#if !RECODE
+        case token('\0'): [[unlikely]]  // NOLINT(clang-diagnostic-switch)
           break;
-        default: [[unlikely]]
-            // recoding strips unexpected tokens
+#endif
+        default: [[unlikely]]  // NOLINT(clang-diagnostic-covered-switch-default)
+          // recoding strips unexpected tokens
 #if RECODE
           UNREACHABLE();
-#endif
+#else
           break;
+#endif
       }
       ++instruction_pointer;
     }
+  }
+}
 
+int main() {
+  static constexpr const auto code = std::to_array(bench::program);
+  check(code.size() <= std::numeric_limits<uint32>::max());
 
-#if PRINT_RECODE
+  // Pre-scan the code for matching brackets to get offsets.
+  // Also will allow the recoder to use smaller offsets.
+  const auto matching_brackets = pre_scan(code);
 
-    std::printf("Recoded Bytecode:\n\n");
+  std::printf("Generating %s via Brainfuck\n", bench::name);
+  const byte_vector recoded = recode(code, matching_brackets);
 
-    instruction_pointer = 0;
-    while (instruction_pointer < recoded_size)
-    {
-      const token i = token(recoded_data[instruction_pointer]);
-      std::putchar(enum_cast(i));
+  {
+    execute(recoded);
 
-      switch (i)
-      {
-#if RECODE
-        case token::zero_byte: // [-] special case
-          break;
-        case token::special_case_1: // r = special case [->+<] (*(ptr - 1) += *ptr; *ptr = 0
-          break;
-        case token::special_case_6:
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::special_case_7:
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::special_case_2: // s = special case [->n+<n] (*(ptr + n) += *ptr; *ptr = 0
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::special_case_3: // t = special case [->n+<n] (*(ptr - n) += *ptr; *ptr = 0
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::special_case_4: // u = special case [->n+<n] (*(ptr + n) -= *ptr; *ptr = 0
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::special_case_5: // v = special case [->n+<n] (*(ptr - n) -= *ptr; *ptr = 0
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::increment_pointer_seq_4: // > sequence special case
-        {
-          //std::fputs("####", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 4;
-        } break;
-        case token::decrement_pointer_seq_4: // < sequence special case
-        {
-          //std::fputs("####", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 4;
-        } break;
-        case token::increment_byte_seq_4: // + sequence special case
-        {
-          //std::fputs("####", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 4;
-        } break;
-        case token::decrement_byte_seq_4: // - sequence special case
-        {
-          //std::fputs("####", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 4;
-        } break;
-        case token::increment_pointer_seq_2: // > sequence special case
-        {
-          //std::fputs("##", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 2;
-        } break;
-        case token::decrement_pointer_seq_2: // < sequence special case
-        {
-          //std::fputs("##", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 2;
-        } break;
-        case token::increment_byte_seq_2: // + sequence special case
-        {
-          //std::fputs("##", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 2;
-        } break;
-        case token::decrement_byte_seq_2: // - sequence special case
-        {
-          //std::fputs("##", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 2;
-        } break;
-        case token::increment_pointer_seq_1: // > sequence special case
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::decrement_pointer_seq_1: // < sequence special case
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::increment_byte_seq_1: // + sequence special case
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::decrement_byte_seq_1: // - sequence special case
-        {
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-        } break;
-        case token::increment_pointer_one:
-          break;
-        case token::decrement_pointer_one:
-          break;
-        case token::increment_byte_one:
-          break;
-        case token::decrement_byte_one:
-          break;
-        case token::output_byte:
-          break;
-        case token::input_byte:
-          // don't handle yet.
-          break;
-        case token::jump_forth:
-          //std::fputs("####", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 4;
-          break;
-        case token::jump_back:
-          //std::fputs("####", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 4;
-          break;
-        case token::jump_back_2:
-          //std::fputs("##", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 2;
-          break;
-        case token::jump_back_1:
-          //std::putchar('#');
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          ++instruction_pointer;
-          break;
-        case token::jump_forth_2:
-          //std::fputs("##", stdout);
-          std::fflush(stdout);  // NOLINT(cert-err33-c)
-          instruction_pointer += 2;
-          break;
-#endif
-        case token('\0'):
-          break;
-        default:
-          UNREACHABLE();
-      }
-      ++instruction_pointer;
-    }
-#endif
+    dump_instructions(recoded);
   }
   std::fflush(stdout);  // NOLINT(cert-err33-c)
 }

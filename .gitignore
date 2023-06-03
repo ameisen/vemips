@@ -9,3 +9,4 @@ src/mips/processor/jit/xbyak.old/
 tools/vevcbridge/.vs/
 vemips_sdk/MipsTest/x64/
 docs/
+sdk/.build/
