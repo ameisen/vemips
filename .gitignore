@@ -10,3 +10,6 @@ tools/vevcbridge/.vs/
 vemips_sdk/MipsTest/x64/
 docs/
 sdk/.build/
+sdk/.build.linux/
+sdk/.build.windows/
+sdk/.vscode/

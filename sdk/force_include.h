@@ -1,0 +1,28 @@
+#pragma once
+
+#ifndef _VEMIPS_SDK_FORCE_INCLUDE_H
+#define _VEMIPS_SDK_FORCE_INCLUDE_H
+
+#ifdef LZMA_API_IMPORT
+#	undef LZMA_API_IMPORT
+#endif /* LZMA_API_IMPORT */
+#define LZMA_API_IMPORT
+
+#ifdef ZSTD_DLL_IMPORT
+#	undef ZSTD_DLL_IMPORT
+#endif /* ZSTD_DLL_IMPORT */
+#define ZSTD_DLL_IMPORT 0
+
+#ifndef ZSTD_STATIC_LINKING_ONLY
+#	define ZSTD_STATIC_LINKING_ONLY 1
+#endif /* ZSTD_STATIC_LINKING_ONLY */
+
+#ifndef LIBXML_STATIC
+#	define LIBXML_STATIC 1
+#endif /* LIBXML_STATIC */
+
+#ifndef ZLIB_COMPAT
+#	define ZLIB_COMPAT 1
+#endif /* ZLIB_COMPAT */
+
+#endif /* _VEMIPS_SDK_FORCE_INCLUDE_H */

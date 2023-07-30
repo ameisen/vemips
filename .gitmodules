@@ -1,12 +1,15 @@
 [submodule "ext/tinyxml2"]
 	path = ext/tinyxml2
 	url = https://github.com/leethomason/tinyxml2.git
+	branch = 9.0.0
 [submodule "ext/fmt"]
 	path = ext/fmt
 	url = https://github.com/fmtlib/fmt.git
+	branch = 10.0.0
 [submodule "ext/uni-algo-single-include"]
 	path = ext/uni-algo-single-include
 	url = https://github.com/uni-algo/uni-algo-single-include
+	branch = 69d68e754fb20a34d96d474c9eb3cee2609a25f4
 [submodule "sdk/llvm-project"]
 	path = sdk/llvm-project
 	url = https://github.com/ameisen/llvm-project.git
@@ -18,7 +21,20 @@
 [submodule "sdk/zstd"]
 	path = sdk/zstd
 	url = https://github.com/facebook/zstd.git
+	branch = v1.5.5
 [submodule "sdk/xz"]
 	path = sdk/xz
-	url = https://github.com/tukaani-project/xz.git
-	branch = v5.4.3
+	url = https://github.com/ameisen/xz.git
+	branch = vemips
+[submodule "sdk/libxml2"]
+	path = sdk/libxml2
+	url = https://github.com/GNOME/libxml2.git
+	branch = v2.11.4
+[submodule "sdk/zlib-ng"]
+	path = sdk/zlib-ng
+	url = https://github.com/zlib-ng/zlib-ng.git
+	branch = 2.0.7
+[submodule "sdk/rpmalloc"]
+	path = sdk/rpmalloc
+	url = https://github.com/mjansson/rpmalloc.git
+	branch = 1.4.4
