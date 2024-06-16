@@ -481,9 +481,11 @@ TARGETS = [
 			#'COMPILER_RT_COMMON_CFLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
 		}, *LLVMCommonFlags::HOST),
 		depends: [
+			'llvm-exe.stage1',
 			'musl',
 		],
 	),
+=begin
 	LLVMTarget.new(
 		name: "llvm-libs.stage3",
 		configure_flags: CMakeFlags.new({
@@ -500,7 +502,6 @@ TARGETS = [
 			'llvm-exe.stage2',
 		],
 	),
-=begin
 	Target.new(
 		name: "llvm-compiler-rt",
 		path: Directories::ROOT + 'llvm-project' + 'llvm',

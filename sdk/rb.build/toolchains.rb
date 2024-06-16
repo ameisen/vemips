@@ -11,7 +11,21 @@ module ToolchainProto
 
 		return nil if value.nil?
 
-		value = mod::TOOL_ROOT + value if mod::const_defined?(:TOOL_ROOT)
+		begin
+			root_base = nil
+			value_bases = []
+			mod::TOOL_ROOT.ascend { |v| root_base = v.basename.to_s; break; }
+			value.descend { |v| value_bases << v.basename.to_s }
+
+			value_index = value_bases.index(root_base)
+			unless value_index.nil?
+				value_bases = value_bases[value_index + 1..-1]
+				value = Pathname.new(File.join(value_bases))
+			end
+
+			value = mod::TOOL_ROOT + value.basename
+		rescue
+		end
 
 		value = Platform::resolved_tool_path(value)
 

@@ -22,6 +22,7 @@
     <None Include="Readme\images\ocdproperties.png">
       <Filter>Readme\images</Filter>
     </None>
+    <None Include="mandelbrot.inc" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Readme\readme.html">
