@@ -434,7 +434,7 @@ namespace {
       const std::size_t start = vec.size();
       vec.resize(start + sizeof(T));
 
-      std::copy(bytes.data(), &bytes[sizeof(T)], &vec[start]);
+      std::copy(bytes.cbegin(), bytes.cend(), &vec[start]);
     }
   }
 
@@ -449,7 +449,7 @@ namespace {
       const std::size_t start = vec.size() - 1;
       vec.resize(start + sizeof(T) - 1);
 
-      std::copy(bytes.data(), &bytes[sizeof(T)], &vec[start]);
+      std::copy(bytes.cbegin(), bytes.cend(), &vec[start]);
     }
   }
 
@@ -476,7 +476,7 @@ namespace {
     {
       std::vector<uint32> loops;
       uint32 instruction_pointer = 0;
-      std::printf("Original Program Size: %u\n", check_cast<uint32>(code.size_bytes()));
+      fmt::println("Original Program Size: {}", check_cast<uint32>(code.size_bytes()));
       while (instruction_pointer < code.size_bytes()) {
         const auto i = token(code[instruction_pointer]);
         recoded.push_back(byte_cast(i));
@@ -900,7 +900,7 @@ namespace {
   public:
     uint32 index = 0;
 
-    uint8 &operator++() {
+    __forceinline uint8 &operator++() {
       if constexpr (count_pow2) {
         ++index;
         index &= Count - 1;
@@ -914,7 +914,7 @@ namespace {
       return (*this)[index];
     }
 
-    uint8 &operator++(int) {
+    __forceinline uint8 &operator++(int) {
       const uint32 original_index = index;
       if constexpr (count_pow2) {
         ++index;
@@ -929,7 +929,7 @@ namespace {
       return (*this)[original_index];
     }
 
-    uint8 &operator--() {
+    __forceinline uint8 &operator--() {
       if constexpr (count_pow2) {
         --index;
         index &= Count - 1;
@@ -943,7 +943,7 @@ namespace {
       return (*this)[index];
     }
 
-    uint8 &operator--(int) {
+    __forceinline uint8 &operator--(int) {
       const uint32 original_index = index;
       if constexpr (count_pow2) {
         --index;
@@ -958,7 +958,7 @@ namespace {
       return (*this)[original_index];
     }
 
-    uint8 &operator+(const uint32 value) {
+    __forceinline uint8 &operator+(const uint32 value) {
       uint32 current_index = index;
       current_index += value;
       if constexpr (count_pow2) {
@@ -973,7 +973,7 @@ namespace {
       return (*this)[current_index];
     }
 
-    uint8 &operator-(const uint32 value) {
+    __forceinline uint8 &operator-(const uint32 value) {
       uint32 current_index = index;
       if constexpr (count_pow2) {
         current_index -= value;
@@ -988,7 +988,7 @@ namespace {
       return (*this)[current_index];
     }
 
-    uint8 &operator+=(const uint32 value) {
+    __forceinline uint8 &operator+=(const uint32 value) {
       uint32 current_index = index;
       current_index += value;
       if constexpr (count_pow2) {
@@ -1004,7 +1004,7 @@ namespace {
       return (*this)[current_index];
     }
 
-    uint8 &operator-=(const uint32 value) {
+    __forceinline uint8 &operator-=(const uint32 value) {
       uint32 current_index = index;
       if constexpr (count_pow2) {
         current_index -= value;
@@ -1020,11 +1020,11 @@ namespace {
       return (*this)[current_index];
     }
 
-    uint8 operator*() const {
+    __forceinline const uint8 operator*() const {
       return (*this)[index];
     }
 
-    uint8 &operator*() {
+    __forceinline uint8 &operator*() {
       return (*this)[index];
     }
   };
@@ -1203,7 +1203,7 @@ namespace {
 
     check(code.size() <= std::numeric_limits<uint32>::max());
 
-    std::printf("Recoded Program Size: %u\n", uint32(code.size()));
+    fmt::println("Recoded Program Size: {}", uint32(code.size()));
     while (instruction_pointer < code.size()) {
       switch (static_cast<const token>(code[instruction_pointer])) {
 #if RECODE
@@ -1462,10 +1462,11 @@ int main() {
   // Also will allow the recoder to use smaller offsets.
   const auto matching_brackets = pre_scan(code);
 
-  std::printf("Generating %s via Brainfuck\n", bench::name);
-  const byte_vector recoded = recode(code, matching_brackets);
+  fmt::println("Generating {} via Brainfuck", bench::name);
 
   {
+    const byte_vector recoded = recode(code, matching_brackets);
+
     execute(recoded);
 
     dump_instructions(recoded);

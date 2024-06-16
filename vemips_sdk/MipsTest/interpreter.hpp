@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <exception>
 
+#define FMT_HEADER_ONLY 1
 #include "../../ext/fmt/include/fmt/core.h"
 #include "../../ext/fmt/include/fmt/xchar.h"
 
