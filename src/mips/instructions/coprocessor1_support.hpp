@@ -158,9 +158,9 @@ namespace mips::instructions
 		{
 			// Depends on rounding mode.
 			// O (RN) // Supplies an infinity with the sign of the intermediate result.
-			// 1 (RZ) // Supplies the format’s largest finite number with the sign of the intermediate result.
-			// 2 (RP) // For positive overflow values, supplies positive infinity. For negative overflow values, supplies the format’s most negative finite number.
-			// 3 (RM) // For positive overflow values, supplies the format’s largest finite number. For negative overflow values, supplies minus infinity.
+			// 1 (RZ) // Supplies the format's largest finite number with the sign of the intermediate result.
+			// 2 (RP) // For positive overflow values, supplies positive infinity. For negative overflow values, supplies the format's most negative finite number.
+			// 3 (RM) // For positive overflow values, supplies the format's largest finite number. For negative overflow values, supplies minus infinity.
 			coprocessor1::FCSR _fcsr = (get_current_coprocessor<coprocessor1>())->get_FCSR();
 			switch (_fcsr.RoundingMode)
 			{

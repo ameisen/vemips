@@ -12,11 +12,13 @@
 
 #if _DEBUG
 	// ReSharper disable once CppInconsistentNaming
-#	define check(condition) ([&]() noexcept { const bool result_condition = bool(condition); assert(result_condition && #condition); return result_condition; }())
+#	define carbide_check(condition) ([&]() noexcept { const bool result_condition = bool(condition); assert(result_condition && #condition); return result_condition; }())
 #else
 	// ReSharper disable once CppInconsistentNaming
-#	define check(condition) ([&]() noexcept { const bool result_condition = bool(condition); __assume(result_condition); return result_condition; }()) // NOLINT(clang-diagnostic-assume)
+#	define carbide_check(condition) ([&]() noexcept { const bool result_condition = bool(condition); __assume(result_condition); return result_condition; }()) // NOLINT(clang-diagnostic-assume)
 #endif
+// ReSharper disable once CppInconsistentNaming
+#define check(condition) carbide_check(condition)
 
 #include "platform/platform.hpp"
 #include "libfmt.hpp"

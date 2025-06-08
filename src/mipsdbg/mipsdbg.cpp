@@ -105,7 +105,7 @@ namespace {
 			}
 
 			PROCESS_INFORMATION process_info = {};
-			STARTUPINFO start_info = {
+			STARTUPINFOA start_info = {
 				.cb = sizeof(start_info),
 				.dwFlags = STARTF_USESTDHANDLES,
 				.hStdInput = stdin_.read,
@@ -251,7 +251,7 @@ namespace {
 		debugged_process(const std::string & process_name, const std::string & arguments)
 		{
 			PROCESS_INFORMATION process_info = {};
-			STARTUPINFO start_info = {
+			STARTUPINFOA start_info = {
 				.cb = sizeof(start_info)
 			};
 
