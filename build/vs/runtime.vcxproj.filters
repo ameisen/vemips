@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\..\src\elf\pch.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\src\common.hpp" />
+    <ClInclude Include="..\..\src\elf\pch.hpp" />
+    <ClInclude Include="..\..\src\platform\platform.hpp">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\platform\common.hpp">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\runtime\directory_table.hpp">
+      <Filter>runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\runtime\basic_allocator.hpp">
+      <Filter>runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\runtime\associate_cache.hpp">
+      <Filter>runtime</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\std.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\xchar.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\args.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\chrono.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\color.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\compile.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\core.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\format.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\format-inl.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\os.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\ostream.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\printf.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\external\fmt\ranges.h">
+      <Filter>external\fmt</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="platform">
+      <UniqueIdentifier>{be21a840-8a2d-47d0-b66c-c303ad5aab42}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="runtime">
+      <UniqueIdentifier>{5cd638f4-19de-4937-9dd3-c8ffc6bc7acc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="external">
+      <UniqueIdentifier>{2aee593c-b520-46f8-a7a7-ccd9e3f354f8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="external\fmt">
+      <UniqueIdentifier>{9f24f89c-ddac-44a9-bd4e-2f27dc55a7ad}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\platform\windows.inc">
+      <Filter>platform</Filter>
+    </None>
+  </ItemGroup>
+</Project>

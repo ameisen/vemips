@@ -1,0 +1,9 @@
+// Hint files help the Visual Studio IDE interpret Visual C++ identifiers
+// such as names of functions and macros.
+// For more information see https://go.microsoft.com/fwlink/?linkid=865984
+#define __prepacked __pragma(pack(push, 1))
+#define _packed_struct __pragma(pack(1)) struct
+#define _packed_struct struct __attribute__((packed))
+// Hint files help the Visual Studio IDE interpret Visual C++ identifiers
+// such as names of functions and macros.
+// For more information see https://go.microsoft.com/fwlink/?linkid=865984
