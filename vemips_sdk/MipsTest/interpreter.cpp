@@ -1460,6 +1460,99 @@ namespace {
   }
 }
 
+static constexpr int pow10i(int exponent)
+{
+	if (exponent < 0)
+	{
+		return 0;
+	}
+	
+	int result = 1;
+	for(; exponent > 0; --exponent)
+	{
+		result *= 10;
+	}
+	
+	return result;
+}
+
+static constexpr std::array<int, 3> split_version3(const int version, const unsigned major_shift, const unsigned minor_shift)
+{
+	const unsigned major_version_div = pow10i(major_shift);
+	const unsigned minor_version_div = pow10i(minor_shift);
+	const int major_version = (version / major_version_div);
+	const int minor_version = (version / minor_version_div) - (major_version * pow10i(major_shift - minor_shift));
+	const int build_version = (version) - (major_version * major_version_div) - (minor_version * minor_version_div);
+	
+	return { major_version, minor_version, build_version };
+}
+
+static void print_toolchain()
+{	
+	#if defined(_MSC_VER) && !defined(__clang__)
+	{
+		const auto msvc_version = split_version3(_MSC_FULL_VER, 7, 5);
+		std::puts("Toolchain: MSVC");
+		fmt::println(
+			"   Compiler: CL {:02}.{:02}.{:05}.{}",
+			msvc_version[0],
+			msvc_version[1],
+			msvc_version[2],
+			(_MSC_BUILD)
+		);
+	}
+	#elif defined(__clang__)
+	std::puts("Toolchain: LLVM");
+	fmt::println("   Compiler: Clang {}", __clang_version__);
+	#elif defined(__GNUC__)
+	std::puts("Toolchain: GNU");
+	fmt::println("   Compiler: GCC {}.{}.{}", __GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__);
+	#else
+	std::puts("Toolchain: unknown");
+	#endif
+	
+	#if defined(__MUSL__)
+		#if defined(__MUSL_VER_MAJOR__)
+	fmt::println("       libc: musl {}.{}.{}", __MUSL_VER_MAJOR__, __MUSL_VER_MINOR__, __MUSL_VER_PATCH__);
+		#else
+	fmt::println("       libc: musl");
+		#endif
+	#elif defined(__GLIBC__)
+	fmt::println("       libc: glibc {}.{}", __GLIBC__, __GLIBC_MINOR__);
+	#elif defined(_MSC_VER)
+	// nothing
+	#else
+	std::puts("       libc: unknown");
+	#endif
+	
+	#if defined(_LIBCPP_VERSION)
+	{
+		const auto libcpp_version = split_version3(_LIBCPP_VERSION, 4, 2);
+		fmt::println(
+			"     libcxx: libcxx {}.{}.{}",
+			libcpp_version[0],
+			libcpp_version[1],
+			libcpp_version[2]
+		);
+	}
+	#elif defined(__GLIBCXX__)
+	{
+		const auto libstdcpp_version = split_version3(__GLIBCXX__, 4, 2);
+		fmt::println(
+			"     libc++: libstdc++ {} {}.{}.{}",
+			_GLIBCXX_RELEASE,
+			libstdcpp_version[0],
+			libstdcpp_version[1],
+			libstdcpp_version[2]
+		);
+	}
+	#elif defined(_MSC_VER)
+	// nothing
+	#else
+	std::puts("     libc++: unknown");
+	#endif
+}
+
 int main() {
   static constexpr const auto code = std::to_array(bench::program);
   check(code.size() <= std::numeric_limits<uint32>::max());
@@ -1467,6 +1560,10 @@ int main() {
   // Pre-scan the code for matching brackets to get offsets.
   // Also will allow the recoder to use smaller offsets.
   const auto matching_brackets = pre_scan(code);
+
+	std::puts("Brainfuck Test Interpreter");
+	
+	print_toolchain();
 
   fmt::println("Generating {} via Brainfuck", bench::name);
 

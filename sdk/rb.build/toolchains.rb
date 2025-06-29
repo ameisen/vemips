@@ -275,7 +275,7 @@ module ToolchainOptions
 	end
 
 	module Host
-		def self.lto? = LinkTimeOptimization::NONE
+		def self.lto? = LinkTimeOptimization::THIN
 
 		CMAKE_FLAGS = LazyArray.new{[
 			*parent::Common::cmake_flags(host: true),
@@ -394,7 +394,7 @@ module ToolchainOptions
 	end
 
 	module Target
-		def self.lto? = LinkTimeOptimization::THIN
+		def self.lto? = LinkTimeOptimization::FULL
 
 		CMAKE_FLAGS = LazyArray.new{[
 			*parent::Common::cmake_flags(host: false),

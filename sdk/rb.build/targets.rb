@@ -15,6 +15,23 @@ CMAKE_SYSTEM_NAME = 'Generic'
 
 TARGET_ROOT = Pathname.new('[[target_root]]').freeze
 
+LLVM_PROJECTS = [
+	#'bolt',
+	'clang',
+	'clang-tools-extra',
+	#'compiler-rt',
+	#'cross-project-tests',
+	#'flang', # doesn't support MIPS
+	#'libc',
+	#'libclc',
+	'lld',
+	'lldb',
+	#'mlir',
+	#'openmp',
+	'polly',
+	#'pstl',
+]
+
 class CMakeFlags
 	include Enumerable
 
@@ -314,6 +331,10 @@ module LLVMCommonFlags
 		'LLVM_INCLUDE_EXAMPLES',
 		'LLVM_INCLUDE_BENCHMARKS',
 		'LLVM_INCLUDE_TESTS',
+		'LLVM_INCLUDE_DOCS',
+		'LLVM_ENABLE_OCAMLDOC',
+		'LLVM_BUILD_TELEMETRY',
+		'LLVM_INCLUDE_BENCHMARKS',
 
 		# threads aren't currently supported...
 		'LIBCXX_ENABLE_THREADS',
@@ -324,6 +345,9 @@ module LLVMCommonFlags
 		'LIBCXXABI_ENABLE_THREADS',
 		'LIBCXXABI_HAS_PTHREAD_API',
 		'LIBCXXABI_HAS_PTHREAD_LIB',
+
+		'LLDB_INCLUDE_UNITTESTS',
+		'LLDB_INCLUDE_TESTS',
 	]
 
 	ALWAYS_ENABLE = [
@@ -578,10 +602,11 @@ TARGETS = [
 		],
 		options: ToolchainOptions::Host::Library
 	),
+
 	LLVMTarget.new(
 		name: "llvm-exe.stage1",
 		configure_flags: CMakeFlags.new({
-			'LLVM_ENABLE_PROJECTS' => "clang;lld",
+			'LLVM_ENABLE_PROJECTS' => LLVM_PROJECTS.join(';'),
 			'LLVM_BUILD_EXTERNAL_COMPILER_RT' => true,
 		}, *LLVMCommonFlags::HOST),
 		depends: [
