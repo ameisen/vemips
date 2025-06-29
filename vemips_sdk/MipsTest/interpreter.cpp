@@ -33,6 +33,11 @@
 
 #include BENCHMARK
 
+#ifndef _MSC_VER
+#	define __assume(...) __builtin_assume(__VA_ARGS__)
+#	define __forceinline __attribute__((__always_inline__))
+#endif
+
 namespace std {
 #if !__has_include(<bit>)
   template <class TTo, class TFrom>
@@ -759,7 +764,7 @@ namespace {
             // r = special case [->+<] (*(ptr - 1) += *ptr; *ptr = 0
 
             loops.push_back(uint32(recoded.size() - 1));
-
+						
             const uint32 target = code.size_bytes();
             const uint32 match = 0;
 
@@ -1327,6 +1332,7 @@ namespace {
           --*cells; break;
         case token::output_byte:
           std::putchar(*cells);
+					std::fflush(stdout);
           break;
         case token::input_byte: [[unlikely]]
           // don't handle yet.

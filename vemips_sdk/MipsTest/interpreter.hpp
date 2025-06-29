@@ -1,5 +1,7 @@
 #pragma once
 
+#define FMT_OPTIMIZE_SIZE 1
+
 #include <cstdio>
 #include <exception>
 
@@ -40,6 +42,10 @@
 # endif
 #endif
 
+#ifdef _MSC_VER
+#	define __builtin_unreachable() __assume(0)
+#endif
+
 #define MIPSTEST_STRINGIZE_DETAIL(x) #x  // NOLINT(clang-diagnostic-unused-macros)
 #define MIPSTEST_STRINGIZE(x) MIPSTEST_STRINGIZE_DETAIL(x)  // NOLINT(clang-diagnostic-unused-macros)
 
@@ -74,7 +80,7 @@
   }()
 
 // ReSharper disable once CppInconsistentNaming
-# define UNREACHABLE() MIPSTEST_ASSERT(false && "unreachable", "unreachable point reached")
+# define UNREACHABLE() do { MIPSTEST_ASSERT(false && "unreachable", "unreachable point reached"); __builtin_unreachable(); } while(true)
 # define ASSUME(expr) MIPSTEST_ASSERT(expr, "assume check failed")
 #else
 # if defined(__INTELLISENSE__) || defined(_MSC_VER)
