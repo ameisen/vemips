@@ -17,7 +17,7 @@
 [submodule "sdk/musl"]
 	path = sdk/musl
 	url = https://github.com/ameisen/musl.git
-	branch = mips-musl-1.2.4
+	branch = mips-musl-1.2.5
 [submodule "sdk/zstd"]
 	path = sdk/zstd
 	url = https://github.com/facebook/zstd.git
@@ -34,7 +34,3 @@
 	path = sdk/zlib-ng
 	url = https://github.com/zlib-ng/zlib-ng.git
 	branch = 2.2.4
-[submodule "sdk/rpmalloc"]
-	path = sdk/rpmalloc
-	url = https://github.com/mjansson/rpmalloc.git
-	branch = 1.4.5

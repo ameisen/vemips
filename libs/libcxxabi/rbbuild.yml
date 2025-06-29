@@ -1,8 +1,0 @@
----
-name: libc++abi
-include: [include, ..\libcxx\include]
-source: [src]
-exclude_dir_token: [win32, solaris]
-cpp_cmd: -fasynchronous-unwind-tables -funwind-tables -D__linux__=1 -g -mips32r6
-c_cmd: -fasynchronous-unwind-tables -funwind-tables -D__linux__=1 -g -mips32r6
-...

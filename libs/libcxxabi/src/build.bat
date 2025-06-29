@@ -1,3 +1,0 @@
-..\..\..\common\tools\mipsc -c -std=c++14 -ffreestanding -fno-builtin -Wall -Wextra -Wpedantic -Wshadow -O3 -nobuiltininc -ID:\Projects\vemips\common\inc -I..\include abort_message.cpp cxa_aux_runtime.cpp cxa_default_handlers.cpp cxa_demangle.cpp cxa_exception_storage.cpp cxa_guard.cpp cxa_handlers.cpp cxa_new_delete.cpp cxa_unexpected.cpp cxa_vector.cpp cxa_virtual.cpp exception.cpp private_typeinfo.cpp stdexcept.cpp typeinfo.cpp
-
-ar rcs libcxxabi.a abort_message.o cxa_aux_runtime.o cxa_default_handlers.o cxa_demangle.o cxa_exception_storage.o cxa_guard.o cxa_handlers.o cxa_new_delete.o cxa_unexpected.o cxa_vector.o cxa_virtual.o exception.o private_typeinfo.o stdexcept.o typeinfo.o
