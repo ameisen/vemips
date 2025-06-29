@@ -510,7 +510,7 @@ namespace {
 			fmt::println("\tRealtime-mode enabled");
 		}
 		else {
-			fmt::println("\tLockstep-mode enabled, %{} cycles", argument_data.ticks);
+			fmt::println("\tLockstep-mode enabled, {} cycles", argument_data.ticks);
 		}
 
 		{
