@@ -1861,16 +1861,15 @@ namespace mips::instructions
 		const uint32 selector = TinyInt<3>(instruction >> 6).zextend<uint32>();
 		const uint32 reg_number = rd.get_register();
 
-		if (reg_number == 29 && selector == 0)
-		{
-			return write_result(rt, processor.user_value_);
-		}
-		else if (reg_number == 1 && selector == 0)
-		{
-			return write_result(rt, 0x100ul);
-		}
-
 		// only handle 0:1 and 0:29, as MUSL uses that.
+		const uint64 selected_reg = (uint64(selector) << 32) | reg_number;
+		switch (selected_reg)
+		{
+			case (0ULL << 32) | 1U:
+				return write_result(rt, 0x100ul);
+			case (0ULL << 32) | 29U:
+				return write_result(rt, processor.user_value_);
+		}
 
 #pragma message("Implement when COP0 is finished")
 		throw CPU_Exception{ CPU_Exception::Type::Impl1, processor.get_program_counter() };
@@ -1961,7 +1960,7 @@ namespace mips::instructions
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
 		const uint32 address = base.value<uint32>() + offset;
-		const uint8 value = rt.value<uint8>();
+		const uint32 value = rt.value<uint8>();
 		rt.set<uint32>(1);
 		processor.mem_write(address, value);
 		return true;
@@ -1984,7 +1983,7 @@ namespace mips::instructions
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
 		const uint32 address = base.value<uint32>() + offset;
-		const uint8 value = rt.value<uint8>();
+		const uint32 value = rt.value<uint32>();
 		rt.set<uint32>(1);
 		processor.mem_write(address, value);
 		return true;

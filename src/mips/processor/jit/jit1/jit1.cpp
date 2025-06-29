@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #define NOMINMAX 1
+#define WIN32_LEAN_AND_MEAN  // NOLINT(clang-diagnostic-unused-macros)
 #include <Windows.h>
 
 #include <mutex>
@@ -86,11 +87,13 @@ _forceinline jit1::chunk_data& jit1::MapLevel1::operator [] (uint32 idx) {
 #endif
 
 jit1::jit_instructionexec_t jit1_get_instruction(jit1 * __restrict _this, uint32 address) {
-	return _this->get_instruction(address);
+	auto result = _this->get_instruction(address);
+	return result;
 }
 
 jit1::jit_instructionexec_t jit1_fetch_instruction(jit1* __restrict _this, uint32 address) {
-	return _this->fetch_instruction(address);
+	auto result = _this->fetch_instruction(address);
+	return result;
 }
 
 namespace {
@@ -342,11 +345,11 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		const instructions::InstructionInfo * __restrict instruction_info_ptr = nullptr;
 
 #if JIT_INSERT_IDENTIFIERS
-		const Xbyak__Label id_label;
+		const Xbyak::Label id_label;
 		jmp(id_label);
-		nop();nop();nop();nop();
+		nop(4, false);
 		mov(eax, int32(current_address));
-		nop();nop();nop();nop();
+		nop(4, false);
 		L(id_label);
 #endif
 		
@@ -443,7 +446,13 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					}
 
 					// Was the instruction a memory-altering instruction?
-					if (instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::Store))
+					// TODO : temporary for debugging
+					if (false)
+					{
+						insert_procedure_ecx(current_address, uint64(instruction_info_ptr->Proc), instruction, *instruction_info_ptr);
+						can_except = true;
+					}
+					else if (instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::Store))
 					{
 						if (write_STORE(chunk_offset, current_address, instruction, *instruction_info_ptr))
 						{
@@ -713,8 +722,16 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		else
 		{
 			// AdEL
-			mov(eax, int32(current_address));
-			mov(ecx, eax);
+			if (current_address == 0U)
+			{
+				xor_(eax, eax);
+				xor_(ecx, ecx);
+			}
+			else
+			{
+				mov(eax, int32(current_address));
+				mov(ecx, eax);
+			}
 			jmp(intrinsics_.adel, T_NEAR);
 		}
 		// Epilog for store ops, as we need to test afterwards to see if they may have altered JIT memory.
@@ -835,7 +852,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			}
 		}
 #if JIT_INSTRUCTION_SEPARATE
-		rdata << bytes({ 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90 });
+		nop(8, false);
 #endif
 
 		start_address += 4;
@@ -1093,6 +1110,24 @@ bool jit1::memory_touched(const uint32 address)
 	*/
 }
 
+namespace
+{
+	struct JitScopeGuard final
+	{
+		processor& processor_;
+
+		JitScopeGuard(processor& in_processor) : processor_(in_processor)
+		{
+			processor_.in_jit = true;
+		}
+
+		~JitScopeGuard()
+		{
+			processor_.in_jit = false;
+		}
+	};
+}
+
 void jit1::execute_instruction(uint32 address)
 {
 	current_executing_chunk_address_ = address;
@@ -1117,7 +1152,10 @@ void jit1::execute_instruction(uint32 address)
 		.frame_pointer = processor.registers_[30]
 	};
 
-	const uintptr result = jit1_springboard(uintptr(instruction), uintptr(&processor), processor.instruction_count_, uintptr(&parameter_pack), 0, 0);
+	const uintptr result = [&] {
+		JitScopeGuard guard{processor};
+		return jit1_springboard(uintptr(instruction), uintptr(&processor), processor.instruction_count_, uintptr(&parameter_pack), 0, 0);
+	}();
 	if _unlikely(guest->is_execution_complete()) [[unlikely]]
 	{
 		if _likely(guest->is_execution_success()) [[likely]] {

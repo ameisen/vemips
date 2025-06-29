@@ -2,14 +2,18 @@
 
 #include "mips/config.hpp"
 #include <common.hpp>
+
 #include <mips/mips_common.hpp>
 #include <mips/memory_source.hpp>
 
+#include <expected>
 #include <unordered_map>
 #include <memory>
 
 #include <map>
 #include "mips/mmu.hpp"
+
+// TODO : doesn't handle wraparound address properly.
 
 namespace mips::instructions {
 	struct InstructionInfo;
@@ -74,6 +78,7 @@ namespace mips {
 			jit1 * __restrict								jit1_;
 			jit2 * __restrict								jit2_;
 		};
+		bool in_jit = false;
 	private:
 		const JitType											  jit_type_;
 
@@ -233,60 +238,173 @@ namespace mips {
 		void memory_touched(uint32 pointer, uint32 size) const __restrict;
 		void memory_touched_jit(uint32 pointer, uint32 size) const __restrict;
 
+	private:
+		std::optional<uint32> mem_poke_host(uint32 address, uint32 size) const __restrict;
+		std::optional<uint32> mem_fetch_host(void* dst, uint32 address, uint32 size) const __restrict;
+		std::optional<uint32> mem_write_host(const void* src, uint32 address, uint32 size) const __restrict;
+
+	public:
 		template <typename T>
 		void mem_poke(uint32 address) const __restrict {
 			if (mmu_type_ == mmu::host) {
-				memory_source_->at(address, sizeof(T)); // TODO this doesn't actually work
+				// TODO : handle literal edge case - overflows 32-bit address space
+				if (const auto result = mem_poke_host(address, sizeof(T)); result.has_value()) [[unlikely]]
+				{
+					throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, result.value() };
+				}
+				
+				return;
 			}
 			else {
 				if _unlikely(address == 0) [[unlikely]] {
-					throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, address };
+					throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
 				}
 
 				address += stack_size_;
 
 				if (mmu_type_ == mmu::emulated) {
-					if _unlikely(!memory_source_->at(address, sizeof(T))) [[unlikely]] {
-						throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
+					if _unlikely(memory_source_->at(address, sizeof(T))) [[unlikely]] {
+						return;
 					}
 				}
-				else if _unlikely(address >= memory_size_) [[unlikely]] {
-					throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
+				else if _unlikely(address < memory_size_) [[unlikely]] {
+					return;
 				}
+			}
+
+			// error path
+			[&] __declspec(noinline) {
+				if (mmu_type_ == mmu::emulated)
+				{
+					const std::optional<uint32> invalid_address = memory_source_->get_first_unreadable(address, sizeof(T));
+
+					if (invalid_address.has_value())
+					{
+						throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, invalid_address.value() };
+					}
+				}
+				else
+				{
+					for (uint32 i = 0; i < sizeof(T); ++i)
+					{
+						if (address >= memory_size_ || address == 0U)
+						{
+							throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
+						}
+					}
+				}
+
+				throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
+			}();
+		}
+
+		template <typename T>
+		[[nodiscard]]
+		std::expected<T, uint32> try_mem_fetch_except(uint32 address) const __restrict {
+			if (mmu_type_ == mmu::host) {
+				// TODO : handle literal edge case - overflows 32-bit address space
+				std::remove_const_t<T> result;
+				if (
+					const auto result_error = mem_fetch_host(&result, address, sizeof(T));
+					result_error.has_value()
+				) [[unlikely]]
+				{
+					return std::unexpected(result_error.value());
+				}
+
+				return result;
+			}
+			else {
+				if _unlikely(address == 0) [[unlikely]] {
+					return std::unexpected(0U);
+				}
+
+				address += stack_size_;
+
+				if (mmu_type_ == mmu::emulated) {
+					const T* __restrict val_ptr = static_cast<const T * __restrict>(memory_source_->at(address, sizeof(T)));
+					if _likely(val_ptr) [[likely]] {
+						return *val_ptr;
+					}
+				}
+				else if _likely(address < memory_size_) [[likely]] {
+					return *reinterpret_cast<const T * __restrict>(uintptr_t(memory_ptr_) + address);
+				}
+			}
+
+			// error path
+			return [&] __declspec(noinline) {
+				if (mmu_type_ == mmu::emulated)
+				{
+					const std::optional<uint32> invalid_address = memory_source_->get_first_unreadable(address, sizeof(T));
+
+					if (invalid_address.has_value())
+					{
+						return std::unexpected(invalid_address.value());
+					}
+				}
+				else
+				{
+					for (uint32 i = 0; i < sizeof(T); ++i)
+					{
+						if (address >= memory_size_ || address == 0U)
+						{
+							return std::unexpected(address);
+						}
+					}
+				}
+
+				return std::unexpected(address);
+			}();
+		}
+
+		template <typename T>
+		[[nodiscard]]
+		std::optional<T> try_mem_fetch(const uint32 address) const __restrict {
+			if (
+				const auto result = try_mem_fetch_except<T>(address);
+				result.has_value()
+			)
+			{
+				return result.value();
+			}
+			else
+			{
+				return {};
 			}
 		}
 
 		template <typename T>
 		[[nodiscard]]
 		T mem_fetch(uint32 address) const __restrict {
-			if (mmu_type_ == mmu::host) {
-				return *(const T * __restrict)(uintptr_t(memory_ptr_) + address);
+			if (
+				const auto result = try_mem_fetch_except<T>(address);
+				result.has_value()
+			)
+			{
+				return result.value();
 			}
-			else {
-				if _unlikely(address == 0) [[unlikely]] {
-					throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, address };
-				}
-
-				address += stack_size_;
-
-				if (mmu_type_ == mmu::emulated) {
-					const T* __restrict val_ptr = (const T * __restrict)memory_source_->at(address, sizeof(T));
-					if _likely(val_ptr) [[likely]] {
-						return *val_ptr;
-					}
-				}
-				else if _likely(address < memory_size_) [[likely]] {
-					return *(const T * __restrict)(uintptr_t(memory_ptr_) + address);
-				}
+			else
+			{
+				throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, result.error() };
 			}
-			throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
 		}
 
 		template <typename T>
 		const T * mem_fetch_debugger(uint32 address) const __restrict {
 			if (mmu_type_ == mmu::host)
 			{
-				return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
+				// TODO : handle literal edge case - overflows 32-bit address space
+				T result;
+				if (
+					const auto result_error = mem_fetch_host(&result, address, sizeof(T));
+					result_error.has_value()
+				) [[unlikely]]
+				{
+					return nullptr;
+				}
+
+				return reinterpret_cast<const T * __restrict>(uintptr_t(memory_ptr_) + address);
 			}
 			else {
 				if _unlikely(address == 0) [[unlikely]] {
@@ -311,7 +429,17 @@ namespace mips {
 		template <typename T>
 		T * __restrict safe_mem_fetch_exec(uint32 address) const __restrict {
 			if (mmu_type_ == mmu::host) {
-				return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
+				// TODO : handle literal edge case - overflows 32-bit address space
+				std::remove_const_t<T> result;
+				if (
+					const auto result_error = mem_fetch_host(&result, address, sizeof(T));
+					result_error.has_value()
+				) [[unlikely]]
+				{
+					return nullptr;
+				}
+
+				return reinterpret_cast<const T * __restrict>(uintptr_t(memory_ptr_) + address);
 			}
 			else {
 				if _unlikely(address == 0) [[unlikely]] {
@@ -335,41 +463,79 @@ namespace mips {
 		}
 
 		template <typename T>
-		void mem_write(uint32 address, T value) __restrict {
+		[[nodiscard]]
+		std::optional<uint32> try_mem_write_except(uint32 address, T value) const __restrict {
 			if (mmu_type_ == mmu::host) {
-				*(T * __restrict)(uintptr_t(memory_ptr_) + address) = value;
-				memory_touched(address, sizeof(T));
-				return;
+				// TODO : handle literal edge case - overflows 32-bit address space
+				if (
+					const auto result_error = mem_write_host(&value, address, sizeof(T));
+					result_error.has_value()
+				) [[unlikely]]
+				{
+					return result_error.value();
+				}
+
+				return {};
 			}
 			else {
 				if _unlikely(address == 0) [[unlikely]] {
-					throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, address };
+					return 0U;
 				}
 
 				address += stack_size_;
 
 				if (mmu_type_ == mmu::emulated) {
-					T* __restrict val_ptr = (T * __restrict)memory_source_->write_at(address, sizeof(T));
-					if _likely(val_ptr) [[likely]] {
-						*val_ptr = value;
-						memory_touched(address, sizeof(T));
-						return;
-					}
+					*static_cast<T * __restrict>(memory_source_->write_at(address, sizeof(T))) = value;
+					memory_touched(address, sizeof(T));
+					return {};
 				}
 				else if _likely(address < memory_size_) [[likely]] {
-					*(T * __restrict)(uintptr_t(memory_ptr_) + address) = value;
+					*reinterpret_cast<T * __restrict>(uintptr_t(memory_ptr_) + address) = value;
 					memory_touched(address, sizeof(T));
-					return;
+					return {};
 				}
 			}
-			throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, address };
+
+			// error path
+			return [&] __declspec(noinline) {
+				if (mmu_type_ == mmu::emulated)
+				{
+					const std::optional<uint32> invalid_address = memory_source_->get_first_unreadable(address, sizeof(T));
+
+					if (invalid_address.has_value())
+					{
+						return invalid_address.value();
+					}
+				}
+				else
+				{
+					for (uint32 i = 0; i < sizeof(T); ++i)
+					{
+						if (address >= memory_size_ || address == 0U)
+						{
+							return address;
+						}
+					}
+				}
+
+				return address;
+			}();
+		}
+
+		template <typename T>
+		void mem_write(uint32 address, T value) __restrict {
+			const auto result = try_mem_write_except(address, value);
+			if (result.has_value()) [[unlikely]]
+			{
+				throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, result.value() };
+			}
 		}
 
 		uintptr_t get_mem_write_jit(uint32 address, uint32 size) __restrict {
 			if (mmu_type_ != mmu::host) {
 				address += stack_size_;
 			}
-			const uintptr_t val_ptr = (uintptr_t)memory_source_->at(address, size);
+			const uintptr_t val_ptr = (uintptr_t)memory_source_->write_at(address, size);
 			if _likely(val_ptr) [[likely]] {
 				memory_touched(address, size);
 			}
@@ -381,7 +547,7 @@ namespace mips {
 			if (mmu_type_ != mmu::host) {
 				address += stack_size_;
 			}
-			const uintptr_t val_ptr = (uintptr_t)memory_source_->at(address, size);
+			const uintptr_t val_ptr = (uintptr_t)memory_source_->write_at(address, size);
 			return val_ptr;
 		}
 

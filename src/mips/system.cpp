@@ -37,6 +37,25 @@ public:
 		return uint32(m_Memory.size());
 	}
 
+	virtual bool is_readable(const uint32 offset) const override {
+		return at(offset, 1) != nullptr;
+	}
+
+	virtual bool is_writable(const uint32 offset) const override {
+		if (at(offset, 1) == nullptr) {
+			return false;
+		}
+
+		// Check Executable Blocks
+		for (auto&& pair : m_ExecutableBlocks) {
+			if _unlikely(offset >= pair.first && offset + 1 <= pair.second) [[unlikely]] {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	virtual const void * at(const uint32 offset, const uint32 size) const override {
 		const size_t end_offset = size_t(offset) + size;
 		if _unlikely(end_offset > uint32(m_Memory.size())) [[unlikely]] {
@@ -362,7 +381,9 @@ void system::clock(const uint64 clocks) __restrict {
 		return;
 	}
 
-	while _likely(!options_.ticked || processor_->instruction_count_ < processor_->target_instructions_) [[likely]] {
+	uint64 end_target = processor_->target_instructions_ + clocks;
+
+	do {
 		if _unlikely(debugger_ && debugger_->should_pause()) [[unlikely]] {
 			debugger_->wait();
 			if _unlikely(debugger_->should_kill()) [[unlikely]] {
@@ -370,7 +391,7 @@ void system::clock(const uint64 clocks) __restrict {
 			}
 		}
 		processor_->execute(clocks);
-	}
+	} while _likely(!options_.ticked || processor_->instruction_count_ < end_target);
 }
 
 uint64 system::get_instruction_count() const __restrict {

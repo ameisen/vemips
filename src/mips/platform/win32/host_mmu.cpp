@@ -2,6 +2,7 @@
 
 #include "host_mmu.hpp"
 
+#define WIN32_LEAN_AND_MEAN  // NOLINT(clang-diagnostic-unused-macros)
 #include <Windows.h>
 
 using namespace mips::platform;

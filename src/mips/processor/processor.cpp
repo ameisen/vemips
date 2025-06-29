@@ -11,6 +11,12 @@
 #include "instructions/instructions_table.hpp"
 #endif
 
+#if _WIN32
+#	define WIN32_LEAN_AND_MEAN  // NOLINT(clang-diagnostic-unused-macros)
+#	include <Windows.h>
+#endif
+
+
 using namespace mips;
 
 namespace mips {
@@ -381,6 +387,111 @@ void processor::memory_touched(const uint32 pointer, uint32 size) const __restri
 }
 
 void processor::memory_touched_jit(uint32 pointer, uint32 size) const __restrict {
+}
+
+std::optional<uint32> processor::mem_poke_host(const uint32 address, const uint32 size) const __restrict
+{
+	xassert(mmu_type_ == mmu::host);
+
+	LPEXCEPTION_POINTERS exception_info = {};
+	__try {
+		const volatile char* source = reinterpret_cast<const volatile char * __restrict>(memory_ptr_);
+		for (uint32 i = 0; i < size; ++i)
+		{
+			[[maybe_unused]] char temp = source[uint32(address + i)];
+		}
+
+		return {};
+	}
+	// EXCEPTION_CONTINUE_EXECUTION
+	__except([](const LPEXCEPTION_POINTERS ex)
+	{
+		switch (ex->ExceptionRecord->ExceptionCode)
+		{
+			case STATUS_ACCESS_VIOLATION:
+			case EXCEPTION_IN_PAGE_ERROR:
+				return EXCEPTION_EXECUTE_HANDLER;
+			default: [[unlikely]]
+				return EXCEPTION_CONTINUE_SEARCH;
+		}
+	}(exception_info = GetExceptionInformation()))
+	{
+		const uintptr_t exception_address = reinterpret_cast<uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress);
+		const uint32 exception_offset = exception_address - memory_ptr_;
+
+		return exception_offset;
+	}
+}
+
+std::optional<uint32> processor::mem_fetch_host(void* const dst, const uint32 address, const uint32 size) const __restrict
+{
+	xassert(mmu_type_ == mmu::host);
+
+	LPEXCEPTION_POINTERS exception_info = {};
+	// TODO : handle literal edge case - overflows 32-bit address space
+	__try {
+		memcpy(
+			dst,
+			reinterpret_cast<const void * __restrict>(memory_ptr_ + address),
+			size
+		);
+
+		return {};
+	}
+	__except([](const LPEXCEPTION_POINTERS ex)
+	{
+		switch (ex->ExceptionRecord->ExceptionCode)
+		{
+			case STATUS_ACCESS_VIOLATION:
+			case EXCEPTION_IN_PAGE_ERROR:
+				return EXCEPTION_EXECUTE_HANDLER;
+			default: [[unlikely]]
+				return EXCEPTION_CONTINUE_SEARCH;
+		}
+	}(exception_info = GetExceptionInformation()))
+	{
+		const uintptr_t exception_address = reinterpret_cast<uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress);
+		const uint32 exception_offset = exception_address - memory_ptr_;
+
+		return exception_offset;
+	}
+}
+
+std::optional<uint32> processor::mem_write_host(const void* const src, const uint32 address, const uint32 size) const __restrict
+{
+	xassert(mmu_type_ == mmu::host);
+
+	LPEXCEPTION_POINTERS exception_info = {};
+	// TODO : handle literal edge case - overflows 32-bit address space
+	__try {
+		memcpy(
+			reinterpret_cast<void * __restrict>(memory_ptr_ + address),
+			src,
+			size
+		);
+		memory_touched(address, size);
+
+		return {};
+	}
+	__except([](const LPEXCEPTION_POINTERS ex)
+	{
+		switch (ex->ExceptionRecord->ExceptionCode)
+		{
+			case STATUS_ACCESS_VIOLATION:
+			case EXCEPTION_IN_PAGE_ERROR:
+				return EXCEPTION_EXECUTE_HANDLER;
+			default: [[unlikely]]
+				return EXCEPTION_CONTINUE_SEARCH;
+		}
+	}(exception_info = GetExceptionInformation()))
+	{
+		const uintptr_t exception_address = reinterpret_cast<uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress);
+		const uint32 exception_offset = exception_address - memory_ptr_;
+
+		memory_touched(address, exception_offset - address);
+
+		return exception_offset;
+	}
 }
 
 size_t processor::get_jit_max_instruction_size() const __restrict {

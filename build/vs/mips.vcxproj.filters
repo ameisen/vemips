@@ -121,6 +121,7 @@
     <ClCompile Include="..\..\src\mips\instructions\instructions_table.cpp">
       <Filter>instructions</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\mips\memory_source.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="coprocessor">
