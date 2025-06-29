@@ -310,12 +310,50 @@ private
 			]
 		end
 
+		flags = *Environment::current::CMAKE_FLAGS
+
+		if (target.skip_tools)
+			flags.delete_if { |flag|
+				if !flag.start_with?('-D') && !flag.include?('=')
+					false
+				else
+					f = flag.split('=', 2)[0]
+					f = f[2..-1]
+					f.strip!
+
+					found = false
+
+					CMake::TOOLS_MAP.each { |k, v|
+						if (k.to_s == f)
+							found = true
+							break
+						end
+					}
+
+					found
+				end
+			}
+		end
+
+		target_out_host = target.out_host || target.host?
+
+		install_path = nil
+		if target.out_path.nil?
+			install_path = Directories::Intermediate::get(target_out_host)::OUT_ROOT.mkpath
+		else
+			install_path = (Directories::Intermediate::get(target_out_host)::ROOT + target.out_path).mkpath
+		end
+
+		install_path.mkpath
+
 		cmd = [
 			(@path or CMAKE_PATH.value!),
 			"--no-warn-unused-cli",
-			*Environment::current::CMAKE_FLAGS,
+			"-Wno-dev",
+			*flags,
 			*target.configure_flags,
-			CMake::define('CMAKE_INSTALL_PREFIX', Directories::Intermediate::get(target.host?)::OUT_ROOT.unix),
+			CMake::define('CMAKE_INSTALL_PREFIX', install_path),
+			CMake::define('CMAKE_POLICY_WARNING_CMP0116', false),
 			*ccache,
 			#"-DMSVC_RUNTIME_LIBRARY=MultiThreaded",
 			"-B", build_path,
@@ -328,16 +366,27 @@ private
 	end
 
 	def build(build_path, path, target)
+		build_option = nil
+		begin
+			build_option = target.build_option
+		rescue
+		end
+
 		cmd = [
 			NINJA_PATH.value!,
 			"-j", Options::concurrency,
 			"-l", self.load_average,
-			'-C', build_path
-		].map!(&:to_s)
+			'-C', build_path,
+			build_option,
+		].compact.map!(&:to_s)
 
 		dump_command(cmd, build_path)
 
-		return CMakeTool::common_system_parse(*cmd)
+		result = CMakeTool::common_system_parse(*cmd)
+
+		return result if !result || !target.install
+
+		return CMakeTool::common_system_parse(*cmd, 'install')
 	end
 end
 

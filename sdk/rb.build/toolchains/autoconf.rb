@@ -122,13 +122,24 @@ class AutoConfTool < Tool
 
 		FileUtils.rm_f(build_path + 'Makefile')
 
-		result = nil
+		target_out_host = target.out_host || target.host?
 
+		install_path = nil
+		if target.out_path.nil?
+			install_path = Directories::Intermediate::get(target_out_host)::OUT_ROOT.mkpath
+		else
+			install_path = (Directories::Intermediate::get(target_out_host)::ROOT + target.out_path).mkpath
+		end
+
+		install_path.mkpath
+
+		result = nil
 		Dir.chdir(build_path.to_s) do
 			sub_cmd = [
 				source_path + 'configure',
 				*Environment::current::AUTOCONF_FLAGS,
 				"--srcdir=#{source_path.unix}",
+				"--prefix=#{install_path.unix}",
 				*target.configure_flags,
 			]
 
@@ -169,7 +180,11 @@ class AutoConfTool < Tool
 
 			dump_command(cmd, build_path)
 
-			return smart_system(*cmd, do_yield: false)
+			result = smart_system(*cmd, do_yield: false)
+
+			return result if !result || !target.install
+
+			return smart_system(*[*cmd, 'install'], do_yield: false)
 		end
 	end
 end

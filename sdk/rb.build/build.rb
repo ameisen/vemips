@@ -8,7 +8,7 @@ require 'etc'
 require 'find'
 require 'pathname'
 
-require_relative 'rb.build/common.rb'
+require_relative 'common.rb'
 
 module Options
 	# using Ninja rules as per `GuessParallelism`
@@ -59,7 +59,11 @@ module Options
 	@build_directory = nil
 end
 
-require_relative 'rb.build/option.rb'
+ENV['VEMIPS_MUSL_VERSION_MAJOR'] = '1'
+ENV['VEMIPS_MUSL_VERSION_MINOR'] = '2'
+ENV['VEMIPS_MUSL_VERSION_PATCH'] = '5'
+
+require_relative 'option.rb'
 
 OPTIONS = Hash.new
 [
@@ -384,7 +388,7 @@ proc {
 	end
 }.call
 
-require_relative 'rb.build/platform.rb'
+require_relative 'platform.rb'
 
 if Options::build_directory.nil?
 	Options::build_directory = Pathname.new(proc {
@@ -400,7 +404,7 @@ if Options::build_directory.nil?
 	}[])
 end
 
-require_relative 'rb.build/common_post.rb'
+require_relative 'common_post.rb'
 
 Options::build_targets.each { |target|
 	fail "Unknown Target requested: #{target}" unless TARGETS.has_key?(target)
@@ -480,7 +484,7 @@ while !to_build.empty?
 
 	puts "Processing '#{item.to_s.light_green}'".light_cyan
 
-	Environment::configure(item, item.options, ALTERNATE_COMPILER_SETTING || !item.tool.has_define_override?,unix_path: item.unix) {
+	Environment::configure(item, item.options, ALTERNATE_COMPILER_SETTING || !item.tool&.has_define_override?, unix_path: item.unix) {
 		if Options::tasks.include?('clean')
 			puts "Cleaning '#{item.to_s.light_cyan}'"
 			item.clean
@@ -500,11 +504,12 @@ while !to_build.empty?
 			dirs_module = Directories::Intermediate::get(item.host?)
 			libs_dir = dirs_module::LIBS
 			includes_dir = dirs_module::INCLUDES
+			modules_dir = dirs_module::MODULES
 
-			copy_artifact = lambda { |artifact|
+			copy_artifact = lambda { |artifact, artifact_dst|
 				fail "Copy Artifact '#{artifact}' could not be found" unless File.exist?(artifact)
 
-				def header?(path)
+				def header_file?(path)
 					return false unless File.file?(path)
 					ext = File.extname(path.to_s)
 					return ['.h', '.hpp', '.inc'].include?(ext.downcase)
@@ -512,26 +517,53 @@ while !to_build.empty?
 
 				def header_dir?(path)
 					return Dir.glob("#{path}/**/*").all? { |e|
-						File.directory?(e) || header?(e)
+						File.directory?(e) || header?(e) || File.basename(e.to_s) == 'CMakeLists.txt'
 					}
 				end
 
+				def header?(path)
+					return File.directory?(path.to_s) ? header_dir?(path) : header_file?(path)
+				end
+
+				def module_file?(path)
+					return false unless File.file?(path)
+					ext = File.extname(path.to_s)
+					return ['.cppm', '.inc'].include?(ext.downcase)
+				end
+
+				def module_dir?(path)
+					return Dir.glob("#{path}/**/*").all? { |e|
+						File.directory?(e) || module?(e) || File.basename(e.to_s) == 'CMakeLists.txt'
+					}
+				end
+
+				def module?(path)
+					return File.directory?(path.to_s) ? module_dir?(path) : module_file?(path)
+				end
+
 				dest_dir = nil
+
 				if header?(artifact)
 					dest_dir = includes_dir
+				elsif module?(artifact)
+					dest_dir = modules_dir
 				else
-					if File.directory?(artifact.to_s) && header_dir?(artifact)
-						dest_dir = includes_dir
-					else
-						dest_dir = libs_dir
-					end
+					dest_dir = libs_dir # fallback
 				end
+
+				dest_dir += artifact_dst unless artifact_dst.nil?
 
 				dest_dir.mkpath rescue nil
 				fail "Build Target directory '#{dest_dir}' does not exist and could not be created" unless dest_dir.directory?
 
 				# TODO : just strip item + build_path from full artifact path to get copy location
 				FileUtils.cp_r(artifact, dest_dir + item.copy_target + File.basename(artifact))
+
+				Dir.glob("#{dest_dir}/**/*").each { |e|
+					if (File.basename(e.to_s) == 'CMakeLists.txt')
+						FileUtils.rm_f(e)
+					end
+				}
 			}
 
 			copy_item = lambda { |artifact|
@@ -568,15 +600,22 @@ while !to_build.empty?
 			}
 
 			item.artifacts.each { |artifact|
+				artifact_dst = nil
+
+				if artifact.instance_of?(Array)
+					artifact_dst = artifact[1]
+					artifact = artifact[0]
+				end
+
 				artifact_path = item.build_path + artifact
 
 				if artifact_path.basename.to_s == '*'
 					artifact_path = artifact_path.parent
 					artifact_path.each_child { |child|
-						copy_artifact[child]
+						copy_artifact[child, artifact_dst]
 					}
 				else
-					copy_artifact[artifact_path]
+					copy_artifact[artifact_path, artifact_dst]
 				end
 			}
 

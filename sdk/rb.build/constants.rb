@@ -13,8 +13,9 @@ module Directories
 			OUT_ROOT = ROOT + 'out'
 			LIBS = OUT_ROOT + 'libs'
 			INCLUDES = OUT_ROOT + 'include'
+			MODULES = OUT_ROOT + 'modules'
 
-			PREFIX = [LIBS, INCLUDES]
+			PREFIX = [LIBS, INCLUDES, MODULES]
 		end
 
 		module Target
@@ -22,8 +23,9 @@ module Directories
 			OUT_ROOT = ROOT + 'out'
 			LIBS = OUT_ROOT + 'libs'
 			INCLUDES = OUT_ROOT + 'include'
+			MODULES = OUT_ROOT + 'modules'
 
-			PREFIX = [LIBS, INCLUDES]
+			PREFIX = [LIBS, INCLUDES, MODULES]
 		end
 
 		def self.get(host) = host ? Host : Target

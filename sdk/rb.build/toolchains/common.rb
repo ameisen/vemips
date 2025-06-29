@@ -1,4 +1,5 @@
 require 'etc'
+require 'colorize'
 
 class Tool
 	LOAD_AVERAGE_GOAL = 0.8
@@ -18,6 +19,6 @@ class Tool
 	def load_average = LOAD_AVERAGE_GOAL * Etc.nprocessors
 
 	def dump_command(cmd, build_path)
-		puts "[", *self.class.escape_command(build_path, cmd), "]"
+		STDERR.puts "[", *self.class.escape_command(build_path, cmd), "]"
 	end
 end

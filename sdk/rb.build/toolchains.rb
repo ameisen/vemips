@@ -2,12 +2,27 @@ require_relative 'platform.rb'
 
 CCACHE_PATH = where_async?('ccache')
 
+class KeyValue
+	attr_accessor :key, :value
+
+	def initialize(key, value)
+		@key = key
+		@value = value
+	end
+end
+
 module ToolchainProto
-	def define_tool(mod, name, value)
+	def define_tool(mod, name, value, raw: false)
 		return nil if ALTERNATE_COMPILER_SETTING
 
 		value_key = value
 		value = mod.evaluate(value)
+
+		args = nil
+		if value.instance_of?(Array)
+			args = value[1]
+			value = value[0]
+		end
 
 		return nil if value.nil?
 
@@ -33,13 +48,34 @@ module ToolchainProto
 			value = "#{CCACHE_PATH.value!.normalize} #{value}"
 		end
 
+		if raw || !args.nil?
+			value = value.to_s.gsub('\\', '/')
+			value += " #{args}" unless args.nil?
+			if raw
+				return [name.to_s, value]
+			else
+				return self.define(name, value)
+			end
+		end
+
 		return self.define(name, value)
 	end
 
 	def define_tools(mod)
-		self::TOOLS_MAP.map{ |k,v|
+		result = self::TOOLS_MAP.map{ |k,v|
 			self::define_tool(mod, k, v)
-		}.normalize!
+		}
+		result.normalize!
+		return result
+	end
+
+	def define_tools_env(mod)
+		result = self::TOOLS_ENV_MAP.map{ |k,v|
+			result = self::define_tool(mod, k, v, raw: true)
+			KeyValue.new(result[0], result[1]) if !result.nil? && !result.empty?
+		}
+		result.compact!
+		return result
 	end
 end
 
@@ -47,14 +83,26 @@ module CMake
 	extend ToolchainProto
 
 	TOOLS_MAP = {
-		:CMAKE_C_COMPILER =>					:COMPILER_C,
-		:CMAKE_CXX_COMPILER =>				:COMPILER_CXX,
-		:CMAKE_ASM_COMPILER =>				:ASSEMBLER,
-		:CMAKE_ASM_MASM_COMPILER =>		:ASSEMBLER_MASM,
-		:CMAKE_LINKER =>							:LINKER,
-		:CMAKE_AR =>									:ARCHIVER,
-		:CMAKE_NM =>									:NM,
-		:CMAKE_RANLIB =>							:RANLIB,
+		:CMAKE_C_COMPILER =>        :COMPILER_C,
+		:CMAKE_CXX_COMPILER =>      :COMPILER_CXX,
+		:CMAKE_ASM_COMPILER =>      :ASSEMBLER,
+		:CMAKE_ASM_MASM_COMPILER => :ASSEMBLER_MASM,
+		:CMAKE_LINKER =>            :LINKER,
+		:CMAKE_AR =>                :ARCHIVER,
+		:CMAKE_NM =>                :NM,
+		:CMAKE_RANLIB =>            :RANLIB,
+	}.freeze
+
+	TOOLS_ENV_MAP = {
+		:CC =>			:COMPILER_C,
+		:CXX =>			:COMPILER_CXX,
+		:AS =>			:ASSEMBLER,
+		:ASM =>			:ASSEMBLER,
+		:MASM =>		:ASSEMBLER_MASM,
+		:LD =>			:LINKER,
+		:AR =>			:ARCHIVER,
+		:NM =>			:NM,
+		:RANLIB =>	:RANLIB,
 	}.freeze
 
 	def self.define(name, value, delimiter: ' ', condition: true)
@@ -75,12 +123,15 @@ module AutoConf
 		:CC =>			:COMPILER_C,
 		:CXX =>			:COMPILER_CXX,
 		:AS =>			:ASSEMBLER,
+		:ASM =>			:ASSEMBLER,
 		:MASM =>		:ASSEMBLER_MASM,
 		:LD =>			:LINKER,
 		:AR =>			:ARCHIVER,
 		:NM =>			:NM,
 		:RANLIB =>	:RANLIB,
 	}.freeze
+
+	TOOLS_ENV_MAP = TOOLS_MAP
 
 	extend ToolchainProto
 
@@ -137,8 +188,8 @@ module ToolchainOptions
 		COMPILER_C = where? 'clang'
 		COMPILER_CXX = where? 'clang++'
 		LINKER = where? 'lld'
-		#ASSEMBLER = 'llvm-as'
-		#ASSEMBLER_MASM = 'llvm-as'
+		ASSEMBLER = where? 'clang' #'llvm-as'
+		ASSEMBLER_MASM = where? 'llvm-as'
 		ARCHIVER = where? 'llvm-ar'
 		RANLIB = where? 'llvm-ranlib'
 		NM = where? 'llvm-nm'
@@ -157,6 +208,8 @@ module ToolchainOptions
 		COMPILER_C = 'clang-cl'
 		COMPILER_CXX = 'clang-cl'
 		LINKER = 'lld-link'
+		ASSEMBLER = 'clang-cl'
+		ASSEMBLER_MASM = 'ml64' #'llvm-ml' #'llvm-ml' #'clang-cl'
 		#ASSEMBLER = 'llvm-ml' #ml64
 		#ASSEMBLER_MASM = 'llvm-ml' #ml64
 	end
@@ -183,9 +236,9 @@ module ToolchainOptions
 				CMake::define('CMAKE_BUILD_TYPE', Options::configuration),
 				CMake::define('CMAKE_LIBRARY_PATH', Directories::Intermediate::get(host)::LIBS),
 				CMake::define('CMAKE_INCLUDE_PATH', Directories::Intermediate::get(host)::INCLUDES),
-				CMake::define('CMAKE_PREFIX_PATH', Directories::Intermediate::get(host)::PREFIX, delimiter: ';'),
+				CMake::define('CMAKE_PREFIX_PATH', Directories::Intermediate::get(host)::PREFIX.uniq, delimiter: ';'),
 				CMake::define('CMAKE_POSITION_INDEPENDENT_CODE', true),
-				Common::conditional(Platform::windows?) { CMake::define('CMAKE_ASM_MASM_FLAGS', ["/nologo", "/quiet", "/Gy"]) },
+				CMake::define('CMAKE_REQUIRED_FLAGS', "-Wno-error=unused-command-line-argument"),
 			].normalize!
 		end
 
@@ -197,11 +250,16 @@ module ToolchainOptions
 			].normalize!
 		end
 
+		def self.environment_variables(host:)
+			return []
+		end
+
 		def self.cflags(host:) = [
 			"-O2",
 			"-g0",
 			"-fcolor-diagnostics",
 			"-Wno-user-defined-literals",
+			"-Wno-unused-command-line-argument",
 			*xcc1("-fno-pch-timestamp"),
 		].normalize!
 
@@ -221,10 +279,15 @@ module ToolchainOptions
 
 		CMAKE_FLAGS = LazyArray.new{[
 			*parent::Common::cmake_flags(host: true),
+			Common::conditional(Platform::windows?) { CMake::define('CMAKE_ASM_MASM_FLAGS', ["/nologo", "/quiet", "/Gy"]) },
 		].normalize!}
 
 		AUTOCONF_FLAGS = LazyArray.new{[
 			*parent::Common::autoconf_flags(host: true),
+		].normalize!}
+
+		ENVIRONMENT_VARIABLES = LazyArray.new{[
+			*parent::Common::environment_variables(host: true),
 		].normalize!}
 
 		CFLAGS = LazyArray.new{[
@@ -259,12 +322,17 @@ module ToolchainOptions
 				*parent::CMAKE_FLAGS,
 				*CMake::define_tools(self),
 				CMake::define("CMAKE_C_FLAGS_#{Options::configuration.upcase}", "-w"),
-				Common::conditional(Platform::windows?) { CMake::define('CMAKE_RC_FLAGS', "/nologo") },
+				#Common::conditional(Platform::windows?) { CMake::define('CMAKE_RC_FLAGS', "/nologo") },
 			].normalize!}
 
 			AUTOCONF_FLAGS = LazyArray.new{[
 				*parent::AUTOCONF_FLAGS,
 				*AutoConf::define_tools(self),
+			].normalize!}
+
+			ENVIRONMENT_VARIABLES = LazyArray.new{[
+				*parent::ENVIRONMENT_VARIABLES,
+				*AutoConf::define_tools_env(self),
 			].normalize!}
 		end
 
@@ -317,6 +385,11 @@ module ToolchainOptions
 				*parent::AUTOCONF_FLAGS,
 				*AutoConf::define_tools(self),
 			].normalize!}
+
+			ENVIRONMENT_VARIABLES = LazyArray.new{[
+				*parent::ENVIRONMENT_VARIABLES,
+				*AutoConf::define_tools_env(self),
+			].normalize!}
 		end
 	end
 
@@ -325,15 +398,24 @@ module ToolchainOptions
 
 		CMAKE_FLAGS = LazyArray.new{[
 			*parent::Common::cmake_flags(host: false),
+			CMake::define("CMAKE_C_COMPILER_WORKS", true),
+			CMake::define("CMAKE_CXX_COMPILER_WORKS", true),
+			#CMake::define("TARGET_SUPPORTS_SHARED_LIBS", true),
 		].normalize!}
 
 		AUTOCONF_FLAGS = LazyArray.new{[
 			*parent::Common::autoconf_flags(host: false),
 		].normalize!}
 
+		ENVIRONMENT_VARIABLES = LazyArray.new{[
+			*parent::Common::environment_variables(host: false),
+		].normalize!}
+
 		CFLAGS = LazyArray.new{[
 			*parent::Common::cflags(host: false),
 			lto?,
+			"-march=mips32r6",
+			#"-I#{Directories::Intermediate::get(false)::INCLUDES}",
 			*[Directories::Intermediate::get(false)::LIBS].flatten.map { |path| "-L#{path}" }
 		].normalize!}
 
@@ -363,11 +445,59 @@ module ToolchainOptions
 			CMAKE_FLAGS = LazyArray.new{[
 				*parent::CMAKE_FLAGS,
 				*CMake::define_tools(self),
+
+				CMake::define("CMAKE_FIND_ROOT_PATH", Directories::Intermediate::get(false)::PREFIX.uniq.join(';')),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_PROGRAM", 'BOTH'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_LIBRARY", 'ONLY'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_INCLUDE", 'ONLY'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_PACKAGE", 'ONLY'),
+
+				#CMake::define("CMAKE_TRY_COMPILE_TARGET_TYPE", 'STATIC_LIBRARY'),
 			].normalize!}
 
 			AUTOCONF_FLAGS = LazyArray.new{[
 				*parent::AUTOCONF_FLAGS,
 				*AutoConf::define_tools(self),
+			].normalize!}
+
+			ENVIRONMENT_VARIABLES = LazyArray.new{[
+				*parent::ENVIRONMENT_VARIABLES,
+				*AutoConf::define_tools_env(self),
+			].normalize!}
+		end
+
+		module LibraryStage2
+			include parent::parent::LLVM_Binaries
+
+			TOOL_ROOT = Directories::Intermediate::Host::ROOT + 'llvm.stage1' + 'bin'
+
+			CFLAGS = LazyArray.new{[
+				*parent::CFLAGS
+			].normalize!}
+			CXXFLAGS = []
+			LDFLAGS = []
+			ASFLAGS = []
+			CMAKE_FLAGS = LazyArray.new{[
+				*parent::CMAKE_FLAGS,
+				*CMake::define_tools(self),
+
+				CMake::define("CMAKE_FIND_ROOT_PATH", Directories::Intermediate::get(false)::PREFIX.uniq.join(';')),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_PROGRAM", 'BOTH'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_LIBRARY", 'ONLY'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_INCLUDE", 'ONLY'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_PACKAGE", 'ONLY'),
+
+				#CMake::define("CMAKE_TRY_COMPILE_TARGET_TYPE", 'STATIC_LIBRARY'),
+			].normalize!}
+
+			AUTOCONF_FLAGS = LazyArray.new{[
+				*parent::AUTOCONF_FLAGS,
+				*AutoConf::define_tools(self),
+			].normalize!}
+
+			ENVIRONMENT_VARIABLES = LazyArray.new{[
+				*parent::ENVIRONMENT_VARIABLES,
+				*AutoConf::define_tools_env(self),
 			].normalize!}
 		end
 
@@ -387,12 +517,47 @@ module ToolchainOptions
 				*parent::CMAKE_FLAGS,
 				*CMake::define_tools(self),
 				CMake::define("CMAKE_C_COMPILER_WORKS", true),
-				CMake::define("CMAKE_CXX_COMPILER_WORKS", true)
+				CMake::define("CMAKE_CXX_COMPILER_WORKS", true),
+				CMake::define("LLVM_BUILD_EXTERNAL_COMPILER_RT", true),
+
+				CMake::define("COMPILER_RT_BUILD_LIBFUZZER", false),
+				CMake::define("COMPILER_RT_BUILD_MEMPROF", false),
+				CMake::define("COMPILER_RT_BUILD_PROFILE", false),
+				CMake::define("COMPILER_RT_BUILD_SANITIZERS", false),
+				CMake::define("COMPILER_RT_BUILD_XRAY", false),
+
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_PROGRAM", 'BOTH'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_LIBRARY", 'ONLY'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_INCLUDE", 'ONLY'),
+				CMake::define("CMAKE_FIND_ROOT_PATH_MODE_PACKAGE", 'ONLY'),
+
+				CMake::define("CMAKE_C_COMPILER_TARGET", TRIPLE),
+				CMake::define("CMAKE_CXX_COMPILER_TARGET", TRIPLE),
+
+				CMake::define("LIBCXX_ENABLE_TIME_ZONE_DATABASE", false),
+
+				#CMake::define("LLVM_DIR", Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'lib' + 'cmake' + 'llvm'),
+				#CMake::define("LLVM_CMAKE_DIR", Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'lib' + 'cmake' + 'llvm'),
+				CMake::define("LLVM_DIR", Directories::ROOT + 'llvm-project' + 'llvm' + 'cmake' + 'modules'),
+				#CMake::define("CLANG_DIR", Directories::ROOT + 'llvm-project' + 'clang' + 'cmake' + 'modules'),
+				CMake::define("CLANG_DIR", Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'bin'),
+
+				CMake::define("LLVM_CMAKE_DIR", Directories::ROOT + 'llvm-project' + 'llvm'),
+				#CMake::define("LLVM_CONFIG_PATH", Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'tools' + 'llvm-config'),
+
+				CMake::define("CMAKE_MAKE_PROGRAM", where?('ninja')),
+
+				#CMake::define("CMAKE_TRY_COMPILE_TARGET_TYPE", 'STATIC_LIBRARY'),
 			].normalize!}
 
 			AUTOCONF_FLAGS = LazyArray.new{[
 				*parent::AUTOCONF_FLAGS,
 				*AutoConf::define_tools(self),
+			].normalize!}
+
+			ENVIRONMENT_VARIABLES = LazyArray.new{[
+				*parent::ENVIRONMENT_VARIABLES,
+				*AutoConf::define_tools_env(self),
 			].normalize!}
 		end
 	end
@@ -407,11 +572,20 @@ module Environment
 
 	def self.conditional_path(mod, sym, alt, unix:)
 		value = mod.evaluate(sym)
+		value_ext = []
+
+		if value.is_a?(Array)
+			value_ext = value[1..-1]
+			value = value[0]
+		end
+
 		value = mod::TOOL_ROOT + value if mod::const_defined?(:TOOL_ROOT)
 
 		return nil unless alt
 
 		normalized_path = resolve_tool_path(value, unix: unix)
+
+		normalized_path += " #{value_ext.join(' ')}" unless value_ext.empty?
 
 		return normalized_path
 	end
@@ -451,7 +625,15 @@ module Environment
 	def self.configure(item, mod, alt, unix_path: false)
 		original = Hash.new
 
-		max_key = ENV_MAPPING.keys.max_by{ |k| k.length }.length
+		env_mapping = ENV_MAPPING.dup
+
+		if (mod.instance_of?(Module))
+			mod::ENVIRONMENT_VARIABLES.each { |kvp|
+				env_mapping[kvp.key] = kvp.value
+			}
+		end
+
+		max_key = env_mapping.keys.max_by{ |k| k.length }.length
 
 		updated_flags = Hash.new
 
@@ -466,15 +648,25 @@ module Environment
 			end
 		end
 
-		ENV_MAPPING.each { |key_s, func|
+		env_mapping.each { |key_s, func|
 			next if func.nil?
 			key = key_s.to_s
 			original[key] = orig = ENV[key]
 			orig = nil unless Options::with_environment
-			new_value = func[orig, mod, alt, unix_path] rescue nil
+			if func.instance_of?(String)
+				new_value = func
+			elsif func.instance_of?(Array)
+				new_value = func.join(' ')
+			else
+				new_value = func[orig, mod, alt, unix_path] rescue nil
+			end
 			next if new_value.nil?
 
-			if Options::ccache && ['CC', 'CXX'].include?(key)
+			if new_value.instance_of?(Array)
+				new_value = new_value.join(' ')
+			end
+
+			if Options::ccache && ['CC', 'CXX'].include?(key) && !new_value.start_with?(CCACHE_PATH.value!.normalize.to_s)
 				new_value = "#{CCACHE_PATH.value!.normalize} #{new_value}"
 			end
 			updated_flags[key] = ENV[key] = new_value.to_s
@@ -494,6 +686,7 @@ module Environment
 				orig = updated_value
 			end
 			new_value = flag_mapping(orig, item_value, alt) rescue nil
+
 			next if new_value.nil?
 			updated_flags[key] = ENV[key] = new_value.to_s
 		}

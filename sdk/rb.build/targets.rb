@@ -4,7 +4,14 @@ require 'shellwords'
 require 'io/console'
 require 'fileutils'
 
-TRIPLE = 'mipsisa32r6el-vemips-generic-musl'
+GENERIC_SYSTEM_NAME_FULL = 'Generic'
+EMULATED_SYSTEM_NAME_FULL = 'VeMIX'
+GENERIC_SYSTEM_NAME = GENERIC_SYSTEM_NAME_FULL.downcase
+EMULATED_SYSTEM_NAME = EMULATED_SYSTEM_NAME_FULL.downcase
+
+TRIPLE = "mipsisa32r6el-vemips-generic-musl" #mipsisa32r6el
+BASIC_TRIPLE = "mipsisa32r6el-vemips-generic-musl"
+CMAKE_SYSTEM_NAME = 'Generic'
 
 TARGET_ROOT = Pathname.new('[[target_root]]').freeze
 
@@ -60,10 +67,41 @@ class Target
 	attr_reader :unix
 	attr_reader :extra
 	attr_reader :no_msys
+	attr_reader :skip_tools
+	attr_reader :build_option
+	attr_reader :artifact_path
+	attr_reader :out_path
+	attr_reader :out_host
+	attr_reader :install
 
-	def initialize(name:, root: nil, path:, tool:, artifacts:, copy: [], copy_target: ".", depends: [], options:, configure_flags: nil, make_flags: nil, unix: false, host: true, extra: nil, no_msys: true)
-		path = Pathname.new(path)
-		fail "Target Path '#{path}' does not exist" unless path.directory?
+	def initialize(
+		name:,
+		root: nil,
+		path:,
+		tool:,
+		artifacts:,
+		copy: [],
+		copy_target: ".",
+		depends: [],
+		options:,
+		configure_flags: nil,
+		make_flags: nil,
+		unix: false,
+		host: true,
+		extra: nil,
+		no_msys: true,
+		skip_tools: false,
+		build_option: nil,
+		artifact_path: nil,
+		out_path: nil,
+		out_host: nil,
+		install: false,
+		clean: true
+	)
+		unless path.nil?
+			path = Pathname.new(path)
+			fail "Target Path '#{path}' does not exist" unless path.directory?
+		end
 
 		extra = Hash.new if extra.nil?
 
@@ -71,7 +109,13 @@ class Target
 		path = root if path.nil?
 
 		artifacts.map! { |item|
-			Pathname.new(item)
+			if item.instance_of?(Array)
+				item.map { |i|
+					Pathname.new(i)
+				}
+			else
+				Pathname.new(item)
+			end
 		}
 
 		copy.map! { |item|
@@ -79,9 +123,9 @@ class Target
 		}
 
 		@name = name
-		(@root = root).freeze
-		(@path = path).freeze
-		(@tool = tool).freeze
+		(@root = root)&.freeze
+		(@path = path)&.freeze
+		(@tool = tool)&.freeze
 		@configure_flags = configure_flags or []
 		(@make_flags = make_flags or []).freeze
 		(@artifacts = artifacts.to_set).freeze
@@ -93,6 +137,13 @@ class Target
 		@host = host
 		(@extra = extra).freeze
 		@no_msys = no_msys
+		@skip_tools = skip_tools
+		@build_option = build_option
+		(@artifact_path = artifact_path).freeze
+		(@out_path = out_path).freeze
+		@out_host = out_host
+		@install = install
+		@do_clean = clean
 
 		self.freeze
 	end
@@ -105,6 +156,7 @@ class Target
 	def source_path = @root
 
 	def clean()
+		return unless @do_clean
 		build_path.rmtree if build_path.exist?
 	end
 
@@ -120,11 +172,46 @@ class Target
 	def host? = @host
 end
 
+class CommandTarget < Target
+	def initialize(
+		name:,
+		command:,
+		depends: [],
+		clean: true
+	)
+		@command = command
+
+		super(
+			name: name,
+			root: nil,
+			path: nil,
+			tool: nil,
+			artifacts: [],
+			options: [],
+			depends: depends,
+			clean: clean
+		)
+	end
+
+	def build(jobs)
+		build_path.mkpath if build_path.exist?
+
+		begin
+			result = self.instance_exec(build_path, @depends, &@command)
+		rescue => ex
+			STDERR.puts("Exception building `#{@name}`: #{ex}")
+			result = false
+		end
+		return result
+	end
+end
+
 class LLVMTarget < Target
 	def initialize(
 		name:,
 		root: nil,
 		path: Directories::ROOT + 'llvm-project' + 'llvm',
+		subpath: nil,
 		tool: Tools::CMAKE,
 		artifacts: [],
 		copy: [],
@@ -136,7 +223,14 @@ class LLVMTarget < Target
 		unix: false,
 		host: true,
 		extra: nil,
-		no_msys: true
+		no_msys: true,
+		skip_tools: false,
+		build_option: nil,
+		artifact_path: nil,
+		out_path: nil,
+		out_host: nil,
+		install: false,
+		clean: true
 	)
 		default_configure_flags = CMakeFlags.new({
 				'LLVM_ENABLE_PROJECTS' => "",
@@ -159,7 +253,7 @@ class LLVMTarget < Target
 		super(
 			name: name,
 			root: root,
-			path: path,
+			path: subpath.nil? ? path : path + subpath,
 			tool: tool,
 			artifacts: artifacts,
 			copy: copy,
@@ -177,7 +271,14 @@ class LLVMTarget < Target
 			unix: unix,
 			host: host,
 			extra: extra,
-			no_msys: no_msys
+			no_msys: no_msys,
+			skip_tools: skip_tools,
+			build_option: build_option,
+			artifact_path: artifact_path,
+			out_path: out_path,
+			out_host: out_host,
+			install: install,
+			clean: clean
 		)
 	end
 end
@@ -194,6 +295,7 @@ module LLVMCommonFlags
 		'COMPILER_RT_BUILD_GWP_ASAN',
 		'COMPILER_RT_CAN_EXECUTE_TESTS',
 		'COMPILER_RT_EXCLUDE_ATOMIC_BUILTIN',
+		'COMPILER_RT_BUILD_STANDALONE_LIBATOMIC',
 
 		'LIBCXX_HAS_GCC_LIB',
 		'LIBCXX_ENABLE_SHARED',
@@ -201,6 +303,8 @@ module LLVMCommonFlags
 		'LIBCXXABI_ENABLE_SHARED',
 
 		'LIBUNWIND_ENABLE_SHARED',
+		'LIBUNWIND_ENABLE_ASSERTIONS',
+		'LIBUNWIND_ENABLE_THREADS',
 
 		'LIBOMP_ENABLE_SHARED',
 
@@ -210,26 +314,42 @@ module LLVMCommonFlags
 		'LLVM_INCLUDE_EXAMPLES',
 		'LLVM_INCLUDE_BENCHMARKS',
 		'LLVM_INCLUDE_TESTS',
+
+		# threads aren't currently supported...
+		'LIBCXX_ENABLE_THREADS',
+		'LIBCXX_HAS_PTHREAD_API',
+		'LIBCXX_HAS_PTHREAD_LIB',
+		'LIBCXX_ENABLE_FILESYSTEM',
+
+		'LIBCXXABI_ENABLE_THREADS',
+		'LIBCXXABI_HAS_PTHREAD_API',
+		'LIBCXXABI_HAS_PTHREAD_LIB',
 	]
 
 	ALWAYS_ENABLE = [
+		'LLVM_ENABLE_PER_TARGET_RUNTIME_DIR',
+
+		'LIBCXX_ENABLE_LOCALIZATION',
 		'COMPILER_RT_BUILD_BUILTINS',
-		'COMPILER_RT_BUILD_STANDALONE_LIBATOMIC',
-		'COMPILER_RT_USE_LLVM_UNWINDER',
+		#'COMPILER_RT_USE_LLVM_UNWINDER',
+		#'COMPILER_RT_ENABLE_STATIC_UNWINDER',
 		'COMPILER_RT_STATIC_CXX_LIBRARY',
 		'COMPILER_RT_BAREMETAL_BUILD',
+		'COMPILER_RT_BUILD_CRT',
+		'COMPILER_RT_HAS_CRT',
 
 		'SANITIZER_USE_STATIC_CXX_ABI',
 		'SANITIZER_USE_STATIC_LLVM_UNWINDER',
 
 		'LIBCXX_HAS_MUSL_LIBC',
-		'LIBCXX_HAS_PTHREAD_API',
+		#'LIBCXX_HAS_PTHREAD_API',
 		'LIBCXX_ENABLE_FILESYSTEM',
 		'LIBCXX_USE_COMPILER_RT',
 		'LIBCXX_ENABLE_STATIC_ABI_LIBRARY',
 		'LIBCXX_ENABLE_STATIC',
 
 		'LIBCXXABI_USE_LLVM_UNWINDER',
+		'LIBCXXABI_ENABLE_STATIC_UNWINDER',
 		'LIBCXXABI_USE_COMPILER_RT',
 		'LIBCXXABI_ENABLE_STATIC',
 
@@ -244,6 +364,8 @@ module LLVMCommonFlags
 		'LLVM_ENABLE_MODULES',
 		'LLVM_ENABLE_LLD',
 		'LLVM_BUILD_EXTERNAL_COMPILER_RT',
+
+		'ZLIB_USE_STATIC_LIBS',
 	]
 
 	COMMON = CMakeFlags.new(
@@ -251,6 +373,7 @@ module LLVMCommonFlags
 			'LLVM_TARGETS_TO_BUILD' => 'Mips',
 			'LLVM_TARGET_ARCH' => 'Mips',
 			'LLVM_DEFAULT_TARGET_TRIPLE' => TRIPLE,
+			'LLVM_TARGET_TRIPLE' => TRIPLE,
 			'LLVM_CCACHE_BUILD' => Options::ccache,
 
 			'CLANG_DEFAULT_CXX_STDLIB' => 'libc++',
@@ -264,9 +387,31 @@ module LLVMCommonFlags
 
 			'COMPILER_RT_DEFAULT_TARGET_ARCH' => 'mips',
 			'COMPILER_RT_DEFAULT_TARGET_TRIPLE' => TRIPLE,
+			'COMPILER_RT_OS_DIR' => TRIPLE,
+			#'COMPILER_RT_DEFAULT_TARGET_ONLY' => true,
 			'LLVM_STATIC_LINK_CXX_STDLIB' => true,
 
 			'LIBCXX_CXX_ABI' => "libcxxabi",
+
+			'TOOLCHAIN_SHARED_LIBS' => false,
+			'TOOLCHAIN_USE_STATIC_LIBS' => true,
+
+			#'CMAKE_C_COMPILER_TARGET' => TRIPLE,
+			#'CMAKE_CXX_COMPILER_TARGET' => TRIPLE,
+			'LLVM_RUNTIME_TARGETS' => TRIPLE,
+			'LLVM_BUILTIN_TARGETS' => TRIPLE,
+			'TOOLCHAIN_TARGET_TRIPLE' => TRIPLE,
+			#"BUILTINS_#{TRIPLE}_CMAKE_SYSROOT" => ???,
+			##"BUILTINS_#{TRIPLE}_CMAKE_SYSTEM_NAME" => CMAKE_SYSTEM_NAME, # Generic
+			##"BUILTINS_#{TRIPLE}_COMPILER_RT_BAREMETAL_BUILD" => true,
+			##"BUILTINS_#{TRIPLE}_COMPILER_RT_OS_DIR" => 'baremetal',
+			##"BUILTINS_#{TRIPLE}_CMAKE_SYSTEM_NAME" => CMAKE_SYSTEM_NAME, # generic
+			#'LIBCXX_ADDITIONAL_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
+			#'LIBCXXABI_ADDITIONAL_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
+			#'COMPILER_RT_COMMON_CFLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
+			#'LIBCXX_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
+			#'LIBCXXABI_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
+			#'COMPILER_RT_COMMON_CFLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
 
 			#'COMPILER_RT_USE_BUILTINS_LIBRARY' => true,
 			#COMPILER_RT_CXX_LIBRARY
@@ -294,10 +439,14 @@ module LLVMCommonFlags
 
 	TARGET = CMakeFlags.new({
 		'LLVM_ENABLE_LTO' => ToolchainOptions::Target::lto?.casename,
-		'LLVM_HOST_TRIPLE' => TRIPLE,
-		'CMAKE_SYSTEM_NAME' => 'Linux', # Generic
-		'CMAKE_SYSTEM_VERSION' => '5',
+		'LLVM_HOST_TRIPLE' => BASIC_TRIPLE,
+		'CMAKE_SYSTEM_NAME' => CMAKE_SYSTEM_NAME, # Generic not used because LLVM generates shared targets even if we do not use them
+		'CMAKE_SYSTEM_VERSION' => '1',
 		'CMAKE_SYSTEM_PROCESSOR' => 'Mips',
+		'CMAKE_STATIC_LIBRARY_SUFFIX' => '.a',
+		'CMAKE_C_OUTPUT_EXTENSION' => '.o',
+		'CMAKE_CXX_OUTPUT_EXTENSION' => '.o',
+		'CMAKE_ASM_OUTPUT_EXTENSION' => '.o',
 	})
 end
 
@@ -367,7 +516,7 @@ TARGETS = [
 			'CREATE_LZMA_SYMLINKS' => false,
 		}),
 		artifacts: [
-			"liblzma#{LIB_SUFFIX}"
+			Platform::windows? ? "lzma#{LIB_SUFFIX}" : "liblzma#{LIB_SUFFIX}"
 		],
 		copy: LazyArray.new{[
 			TARGET_ROOT + 'src' + 'liblzma' + 'api' + 'lzma.h',
@@ -426,7 +575,6 @@ TARGETS = [
 		depends: [
 			'liblzma',
 			'zlib',
-			'liblzma',
 		],
 		options: ToolchainOptions::Host::Library
 	),
@@ -434,10 +582,20 @@ TARGETS = [
 		name: "llvm-exe.stage1",
 		configure_flags: CMakeFlags.new({
 			'LLVM_ENABLE_PROJECTS' => "clang;lld",
+			'LLVM_BUILD_EXTERNAL_COMPILER_RT' => true,
 		}, *LLVMCommonFlags::HOST),
+		depends: [
+			'libzstd',
+			'liblzma',
+			'zlib',
+			'libxml2',
+		],
+		out_path: 'llvm.stage1',
+		out_host: true,
+		install: true
 	),
 	Target.new(
-		name: "musl",
+		name: "musl.stage1",
 		path: Directories::ROOT + 'musl',
 		tool: Tools::AUTOCONF,
 		configure_flags: LazyArray.new{
@@ -448,7 +606,7 @@ TARGETS = [
 				"--target=#{TRIPLE}", #originally had 'linux' as the system
 				#"--host=",
 				"--disable-shared",
-				"--with-malloc=oldmalloc"
+				"--with-malloc=oldmalloc",
 			].normalize!
 		},
 		artifacts: [
@@ -466,25 +624,141 @@ TARGETS = [
 		options: ToolchainOptions::Target::Library,
 		unix: true,
 		host: false,
-		no_msys: false
+		no_msys: false,
+		out_path: 'llvm.stage1',
+		out_host: true,
+		install: true
 	),
+	LLVMTarget.new(
+		name: "llvm-crt.stage1",
+		subpath: "../compiler-rt",
+		configure_flags: CMakeFlags.new({
+			'LLVM_ENABLE_RUNTIMES' => "compiler-rt",
+			'CMAKE_FIND_ROOT_PATH' => Directories::Intermediate::get(false)::PREFIX.concat(
+				[Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'lib']
+			).uniq.join(';'),
+		}, *LLVMCommonFlags::TARGET),
+		depends: [
+			'llvm-exe.stage1',
+			'libzstd',
+			'liblzma',
+			'zlib',
+			'libxml2',
+			"musl.stage1",
+		],
+		options: ToolchainOptions::Target::LibraryBuiltin,
+		host: false,
+		out_path: 'llvm.stage1',
+		out_host: true,
+		install: true
+	),
+	LLVMTarget.new(
+		name: "llvm-lib.stage1",
+		subpath: "../runtimes",
+		configure_flags: CMakeFlags.new({
+			'LLVM_ENABLE_RUNTIMES' => "libcxx;libcxxabi;libunwind",
+			'CMAKE_FIND_ROOT_PATH' => Directories::Intermediate::get(false)::PREFIX.concat(
+				[Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'lib']
+			).uniq.join(';'),
+		}, *LLVMCommonFlags::TARGET),
+		depends: [
+			'llvm-exe.stage1',
+			'libzstd',
+			'liblzma',
+			'zlib',
+			'libxml2',
+			"musl.stage1",
+		],
+		artifacts: [
+			#'lib/libc++.a',
+			#'lib/libc++.modules.json',
+			#'lib/libc++abi.a',
+			#'lib/libc++experimental.a',
+			#'lib/libunwind.a',
+			#'modules',
+		],
+		options: ToolchainOptions::Target::LibraryBuiltin,
+		host: false,
+		out_path: 'llvm.stage1',
+		out_host: true,
+		install: true
+	),
+	CommandTarget.new(
+		name: "llvm.stage1",
+		depends: [
+			'llvm-exe.stage1',
+			'llvm-crt.stage1',
+			'llvm-lib.stage1',
+		],
+		clean: false,
+		command: lambda { |path, depends|
+			dst_root = self.build_path
+
+			dst = Directories::Intermediate::get(true)::ROOT + 'llvm.stage1'
+
+			src_dst_pairs = {
+				Directories::Intermediate::get(false)::ROOT + 'out' + 'include' => dst + 'include_c' + TRIPLE, # C include dst
+				Directories::Intermediate::get(false)::ROOT + 'out' + 'libs' => dst + 'lib' + TRIPLE
+			}
+
+			src_dst_pairs.each { |src, dst|
+				dst.mkpath
+
+				src.glob('**/*').each { |item|
+					next unless item.file?
+
+					relative_item = item.relative_path_from(src)
+
+					item_dst = dst + relative_item
+
+					item_dst.dirname.mkpath
+
+					puts "#{item} -> #{item_dst}"
+					item_dst.unlink if item_dst.exist?
+					begin
+					item_dst.make_link(item)
+					rescue
+					FileUtils.cp(item.to_s, item_dst.to_s)
+					end
+				}
+			}
+
+			return true
+		}
+	),
+	CommandTarget.new(
+		name: "llvm.out",
+		depends: [
+			'llvm.stage1',
+		],
+		clean: false,
+		command: lambda { |path, depends|
+			dst_root = self.build_path
+
+			src = Directories::Intermediate::get(true)::ROOT + 'llvm.stage1'
+			dst = Directories::Intermediate::ROOT + 'vemips-llvm'
+
+			FileUtils.cp_r(src.to_s, dst.to_s)
+
+			puts "LLVM toolchain copied to `#{dst}`"
+
+			return true
+		}
+	),
+=begin
 	LLVMTarget.new(
 		name: "llvm-exe.stage2",
 		configure_flags: CMakeFlags.new({
-			'LLVM_ENABLE_PROJECTS' => "clang;lld",
-			'LLVM_ENABLE_RUNTIMES' => "compiler-rt;libcxx;libcxxabi",
-			#'LIBCXX_ADDITIONAL_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
-			#'LIBCXXABI_ADDITIONAL_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
-			#'COMPILER_RT_COMMON_CFLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
-			#'LIBCXX_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
-			#'LIBCXXABI_COMPILE_FLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
-			#'COMPILER_RT_COMMON_CFLAGS' => "-I#{Directories::Intermediate::Target::INCLUDES}",
+			'LLVM_ENABLE_PROJECTS' => "clang;lld",  # ;lldb;clang-tools-extra
+			#'LLVM_ENABLE_RUNTIMES' => "compiler-rt;libcxx;libcxxabi;libunwind",
 		}, *LLVMCommonFlags::HOST),
 		depends: [
 			'llvm-exe.stage1',
-			'musl',
-		],
+			'musl.stage2',
+		]#,
+		#skip_tools: true
 	),
+=end
 =begin
 	LLVMTarget.new(
 		name: "llvm-libs.stage3",
@@ -627,7 +901,7 @@ TARGETS.each { |kt, vt|
 		parse_target = pending.shift
 
 		parse_target.depends.each { |depend_name|
-			depend = TARGETS.find { |k, v| v.name == depend_name }[1]
+			depend = TARGETS.find { |k, v| v.name == depend_name }[1] rescue nil
 			fail "Dependency '#{depend_name}' was not defined" if depend.nil?
 
 			if depend == vt
