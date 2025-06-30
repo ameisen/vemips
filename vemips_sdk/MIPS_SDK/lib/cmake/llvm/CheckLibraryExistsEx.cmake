@@ -1,0 +1,8 @@
+include(CheckSymbolExists)
+
+function(check_library_exists_ex LIBRARY FUNCTION LOCATION HEADER VARIABLE)
+	set(OLD_CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES})
+	list(APPEND CMAKE_REQUIRED_LIBRARIES ${LIBRARY})
+	check_symbol_exists(${FUNCTION} ${HEADER} ${VARIABLE})
+	set(CMAKE_REQUIRED_LIBRARIES ${OLD_CMAKE_REQUIRED_LIBRARIES})
+endfunction(check_compiler_version)

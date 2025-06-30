@@ -1,0 +1,7 @@
+DIAG_ENUM(MemClassWorkaround)
+DIAG_ENUM_ITEM(0, AliasDecl)
+DIAG_ENUM_ITEM(1, TypedefDecl)
+DIAG_ENUM_ITEM(2, ReferenceDecl)
+DIAG_ENUM_ITEM(3, ConstVar)
+DIAG_ENUM_ITEM(4, ConstexprVar)
+DIAG_ENUM_END()
