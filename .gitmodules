@@ -12,11 +12,11 @@
 	branch = b9f9ab4168c552656ed7c1690a6169d659675437
 [submodule "sdk/llvm-project"]
 	path = sdk/llvm-project
-	url = https://github.com/ameisen/llvm-project.git
-	branch = mipsc-16.0.5
+	url = https://github.com/vemips/llvm-project.git
+	branch = mipsc-20.1.6
 [submodule "sdk/musl"]
 	path = sdk/musl
-	url = https://github.com/ameisen/musl.git
+	url = https://github.com/vemips/musl.git
 	branch = mips-musl-1.2.5
 [submodule "sdk/zstd"]
 	path = sdk/zstd
