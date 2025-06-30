@@ -2,9 +2,8 @@
 
 #include "system_vemix.hpp"
 
+#include "../../vemips_sdk/MIPS_SDK/include_c/mipsisa32r6el-vemips-generic-musl/bits/syscall.h"
 
-// #include "../../vemips_sdk/MIPS_SDK/inc/bits/syscall.h"
-#include "../../sdk/.build.windows/target/musl.stage1/obj/include/bits/syscall.h"
 
 using namespace mips;
 
