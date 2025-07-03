@@ -1,5 +1,6 @@
 namespace bench {
 	static constexpr const char name[] = "Mandelbrot Set";
+	// https://github.com/erikdubbelboer/brainfuck-jit/blob/master/mandelbrot.bf
 	static constexpr const char program[] =
 		"+++++++++++++[->++>>>+++++>++>+<<<<<<]>>>>>++++++>--->>>>>>>>>>+++++++++++++++[[>>>>>>>>>]+[<<<<<<"
 		"<<<]>>>>>>>>>-]+[>>>>>>>>[-]>]<<<<<<<<<[<<<<<<<<<]>>>>>>>>[-]+<<<<<<<+++++[-[->>>>>>>>>+<<<<<<<<<]"

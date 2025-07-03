@@ -14,3 +14,4 @@ sdk/.build/
 sdk/.build.linux/
 sdk/.build.windows/
 sdk/.vscode/
+vemips_sdk/MipsTest/MipsTest/

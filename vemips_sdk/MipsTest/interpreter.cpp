@@ -33,11 +33,6 @@
 
 #include BENCHMARK
 
-#ifndef _MSC_VER
-#	define __assume(...) __builtin_assume(__VA_ARGS__)
-#	define __forceinline __attribute__((__always_inline__))
-#endif
-
 namespace std {
 #if !__has_include(<bit>)
   template <class TTo, class TFrom>
@@ -892,6 +887,8 @@ namespace {
         ++instruction_pointer;
       }
     }
+		
+		recoded.shrink_to_fit();
 
     return recoded;
 #endif

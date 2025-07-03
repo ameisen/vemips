@@ -44,6 +44,11 @@
 
 #ifdef _MSC_VER
 #	define __builtin_unreachable() __assume(0)
+#else
+#	define __assume(...) __builtin_assume(__VA_ARGS__)
+#	ifndef __forceinline
+#		define __forceinline __attribute__((__always_inline__))
+#	endif
 #endif
 
 #define MIPSTEST_STRINGIZE_DETAIL(x) #x  // NOLINT(clang-diagnostic-unused-macros)
