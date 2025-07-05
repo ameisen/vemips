@@ -205,6 +205,7 @@
     <ClCompile Include="..\..\src\mips\debugger.cpp" />
     <ClCompile Include="..\..\src\mips\instructions\coprocessor1_inst.cpp" />
     <ClCompile Include="..\..\src\mips\instructions\instructions.cpp" />
+    <ClCompile Include="..\..\src\mips\instructions\instructions_common.cpp" />
     <ClCompile Include="..\..\src\mips\instructions\instructions_table.cpp" />
     <ClCompile Include="..\..\src\mips\instructions\processor_inst.cpp" />
     <ClCompile Include="..\..\src\mips\memory_source.cpp" />

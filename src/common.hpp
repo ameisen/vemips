@@ -234,4 +234,91 @@ namespace mips {
 	static constexpr _nothrow _forceinline size_t count_of(T (& __restrict)[N]) {
 		return N;
 	}
+
+	template<class T> struct is_restrict          : std::false_type {};
+	template<class T> struct is_restrict<T* __restrict> : std::true_type {};
+	template<class T> struct is_restrict<T& __restrict> : std::true_type {};
+
+	template <typename Type>
+	static constexpr const bool is_restrict_v = false;
+
+	template <typename TFrom, typename TTo>
+	using copy_const = std::conditional_t<
+		std::is_const_v<TFrom>,
+		const TTo,
+		TTo
+	>;
+
+	template <typename TFrom, typename TTo>
+	using copy_volatile = std::conditional_t<
+		std::is_volatile_v<TFrom>,
+		volatile TTo,
+		TTo
+	>;
+
+	template <typename TFrom, typename TTo>
+	using copy_restrict = std::conditional_t<
+		std::is_volatile_v<TFrom>,
+		volatile TTo,
+		TTo
+	>;
+
+	template <typename TFrom, typename TTo>
+	using copy_qualifiers_cv =
+		copy_const<
+			TFrom,
+			copy_volatile<
+				TFrom,
+				TTo
+			>
+		>;
+
+	// TODO : missing most qualifiers
+	template <typename TFrom, typename TTo>
+	using copy_qualifiers_ptr =
+		copy_restrict<
+			TFrom,
+			copy_const<
+				TFrom,
+				copy_volatile<
+					TFrom,
+					TTo
+				>
+			>*
+		>;
+
+		// TODO : missing most qualifiers
+	template <typename TFrom, typename TTo>
+	using copy_qualifiers_ref =
+		copy_restrict<
+			TFrom,
+			copy_const<
+				TFrom,
+				copy_volatile<
+					TFrom,
+					TTo
+				>
+			>&
+		>;
+
+	
+	// TODO : missing most qualifiers
+	template <typename TFrom, typename TTo>
+	using copy_qualifiers =
+		std::conditional_t<
+			std::is_pointer_v<TTo>,
+			copy_qualifiers_ptr<TFrom, std::remove_pointer_t<TTo>>,
+			std::conditional_t<
+				std::is_rvalue_reference_v<TTo>,
+				std::remove_reference_t<copy_qualifiers_ptr<TFrom, std::remove_reference_t<TTo>>>&&,
+				std::conditional_t<
+					std::is_lvalue_reference_v<TTo>,
+					std::remove_reference_t<copy_qualifiers_ptr<TFrom, std::remove_reference_t<TTo>>>&,
+					copy_qualifiers_cv<TFrom, TTo>
+				>
+			>
+		>;
 }
+
+#define _make_qual(type) copy_qualifiers<decltype(self), type>
+

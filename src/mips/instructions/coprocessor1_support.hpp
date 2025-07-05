@@ -314,28 +314,67 @@ namespace mips::instructions
 		}
 	};
 
-	template <uint32 offset, uint32 size>
+	template <uint32 offset = 0, uint32 size = 0>
 	class FPRegister : public _Register<offset, size, coprocessor1>
 	{
 		using parent = _Register<offset, size, coprocessor1>;
 
 	public:
-		FPRegister(instruction_t instruction, coprocessor1 & __restrict _processor) :
-			parent(instruction, _processor) {}
+		FPRegister(const instruction_t instruction, coprocessor1& _processor)
+			: parent(instruction, _processor) {}
+
+		FPRegister(const instruction_t instruction, coprocessor1* const _processor)
+			: parent(instruction, *_processor)
+		{
+			xassert(_processor != nullptr);
+		}
+
+		FPRegister(const instruction_t instruction, processor& _processor)
+			: parent(instruction, _processor.get_fpu_coprocessor()) {}
+
+		FPRegister(const instruction_t instruction, processor* const _processor)
+			: parent(instruction, _processor ? _processor->get_fpu_coprocessor() : nullptr)
+		{
+			xassert(_processor != nullptr);
+		}
+
+		FPRegister(const uint32 _register)
+			: parent(_register) {}
 
 		template <typename format_t>
 		format_t value_upper() const
 		{
+			xassert(parent::m_Processor != nullptr);
+
 			xassert(sizeof(coprocessor1::register_type) / 2 == sizeof(format_t));
-			return parent::m_Processor.template get_register_upper<format_t>(parent::m_Register);
+			return parent::m_Processor->template get_register_upper<format_t>(parent::m_Register);
 		}
 
 		template <typename format_t>
 		format_t set_upper(format_t value)
 		{
+			xassert(parent::m_Processor != nullptr);
+
 			xassert(sizeof(coprocessor1::register_type) / 2 == sizeof(format_t));
-			parent::m_Processor.template set_register_upper<format_t>(parent::m_Register, value);
+			parent::m_Processor->template set_register_upper<format_t>(parent::m_Register, value);
 			return value;
+		}
+
+		_forceinline constexpr bool is_constant() const
+		{
+			return false;
+		}
+
+		_forceinline constexpr std::optional<double> get_constant() const
+		{
+			xassert(!is_constant());
+
+			return {};
+		}
+
+		_forceinline int16 get_offset() const
+		{
+			return _RegisterBase::get_offset_fp();
 		}
 	};
 
@@ -351,6 +390,8 @@ namespace mips::instructions
 		template <typename format_t>
 		format_t value() const
 		{
+			xassert(parent::m_Processor != nullptr);
+
 			xassert(sizeof(uint32) >= sizeof(format_t));
 			// Strict Aliasing rules apply.
 			union
@@ -361,13 +402,13 @@ namespace mips::instructions
 			switch (parent::m_Register)
 			{
 				case 0:
-					Caster.valSrc = (uint32)parent::m_Processor.get_FIR(); break;
+					Caster.valSrc = (uint32)parent::m_Processor->get_FIR(); break;
 				case 31:
-					Caster.valSrc = (uint32)parent::m_Processor.get_FCSR(); break;
+					Caster.valSrc = (uint32)parent::m_Processor->get_FCSR(); break;
 				case 26:
-					Caster.valSrc = parent::m_Processor.get_FCSR().get_FEXR(); break;
+					Caster.valSrc = parent::m_Processor->get_FCSR().get_FEXR(); break;
 				case 28:
-					Caster.valSrc = parent::m_Processor.get_FCSR().get_FENR(); break;;
+					Caster.valSrc = parent::m_Processor->get_FCSR().get_FENR(); break;;
 				default:
 					throw CPU_Exception{ CPU_Exception::Type::RI, get_current_processor()->get_program_counter() };
 			}
@@ -377,6 +418,8 @@ namespace mips::instructions
 		template <typename format_t>
 		format_t set(format_t value)
 		{
+			xassert(parent::m_Processor != nullptr);
+
 			xassert(sizeof(uint32) >= sizeof(format_t));
 			// Strict Aliasing rules apply.
 			union
@@ -388,13 +431,13 @@ namespace mips::instructions
 			switch (parent::m_Register)
 			{
 				case 0:
-					(uint32 &)parent::m_Processor.get_FIR() = Caster.valDst; break;
+					(uint32 &)parent::m_Processor->get_FIR() = Caster.valDst; break;
 				case 31:
-					(uint32 &)parent::m_Processor.get_FCSR() = Caster.valDst; break;
+					(uint32 &)parent::m_Processor->get_FCSR() = Caster.valDst; break;
 				case 26:
-					parent::m_Processor.get_FCSR().set_FEXR(Caster.valDst); break;
+					parent::m_Processor->get_FCSR().set_FEXR(Caster.valDst); break;
 				case 28:
-					parent::m_Processor.get_FCSR().set_FENR(Caster.valDst); break;
+					parent::m_Processor->get_FCSR().set_FENR(Caster.valDst); break;
 				default:
 					throw CPU_Exception{ CPU_Exception::Type::RI, get_current_processor()->get_program_counter() };
 			}

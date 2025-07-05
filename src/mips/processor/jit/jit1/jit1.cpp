@@ -132,14 +132,13 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 			g_ex_return = uintptr(g_global_exec_data + cg.getSize());
 
 			static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
-			static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
 			static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
 			static const int8 ic_offset =  value_assert<int8>(offsetof(processor, instruction_count_) - 128);
 
 			cg.mov(cg.qword[cg.rbp + ic_offset], cg.rdi);		// save instruction count
 			cg.mov(cg.dword[cg.rbp + flags_offset], cg.ebx);
 			cg.mov(cg.dword[cg.rbp + dbt_offset], cg.esi);  // set it in the interpreter
-			cg.mov(cg.dword[cg.rbp + (int64(gp_offset) + (Jit1_CodeGen::mips_fp * 4u))], cg.r15d);
+			cg.mov(cg.dword[cg.rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], cg.r15d);
 			cg.mov(cg.rax, int64(jit1_drop_signal));
 			cg.jmp(cg.rax);
 		}
@@ -283,7 +282,6 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 	static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
 	static const int8 pc_offset =  value_assert<int8>(offsetof(processor, program_counter_) - 128);
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
 	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
 	static const int8 ic_offset =  value_assert<int8>(offsetof(processor, instruction_count_) - 128);
 
@@ -991,7 +989,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		mov(qword[rbp + ic_offset], rdi);		// save instruction count
 		mov(dword[rbp + flags_offset], ebx);
 		mov(dword[rbp + dbt_offset], esi);  // set it in the interpreter
-		mov(dword[rbp + (int64(gp_offset) + (mips_fp * 4))], r15d);
+		mov(dword[rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], r15d);
 		ret();
 
 		if (intrinsics_.save_return.used) {

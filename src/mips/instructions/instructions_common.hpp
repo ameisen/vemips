@@ -56,20 +56,28 @@ namespace mips
 			return OpFlags(uint32(a) & uint32(b));
 		}
 
-		static constexpr uint32_t Bits(uint32_t NumBits)
+		static constexpr uint32 Bits(uint32 NumBits)
 		{
 			return (1 << (NumBits)) - 1;
 		}
 
-		static constexpr uint32_t HighBits(uint32_t NumBits)
+		static constexpr uint32 HighBits(uint32 NumBits)
 		{
 			return ((1 << (NumBits)) - 1) << (32 - NumBits);
+		}
+
+		template <typename TFrom, typename TTo>
+		static constexpr bool in_range(const TFrom value)
+		{
+			return
+				value >= std::numeric_limits<TTo>::lowest() &&
+				value <= std::numeric_limits<TTo>::max();
 		}
 
 		template <size_t BitSize>
 		struct TinyInt
 		{
-			int32_t m_Value : BitSize;
+			int32 m_Value : BitSize;
 
 			template <typename T>
 			TinyInt(const T &val) : m_Value(val)
@@ -79,13 +87,15 @@ namespace mips
 			template <typename T>
 			T sextend() const
 			{
+				// todo: value range check
 				return T(m_Value);
 			}
 
 			template <typename T>
 			T zextend() const
 			{
-				return T(uint32_t(m_Value) & Bits(BitSize));
+				// todo: value range check
+				return T(uint32(m_Value) & Bits(BitSize));
 			}
 		};
 
@@ -215,18 +225,42 @@ namespace mips
 		extern StaticInitVars * __restrict StaticInitVarsPtr;
 #endif
 
+		class _RegisterBase
+		{
+		protected:
+			const uint32 m_Register;
+
+		protected:
+			_RegisterBase(const uint32 _register)
+				: m_Register(_register)
+			{}
+
+		public:
+
+			int8 get_offset_gp() const;
+			int16 get_offset_fp() const;
+		};
+
 		template <uint32 offset, uint32 size, typename T>
-		class _Register
+		class _Register : public _RegisterBase
 		{
 		protected:
 			template<uint32, uint32, typename> friend class _Register;
 			using processor_t = T;
-			const uint32 m_Register;
-			processor_t & __restrict m_Processor;
+			processor_t * __restrict m_Processor = nullptr;
+			using _RegisterBase::m_Register;
 			static uint32 _get_register(instruction_t instruction) { return (instruction >> offset) & Bits(size); }
 		public:
-			_Register(instruction_t instruction, processor_t & __restrict processor) :
-				m_Register(_get_register(instruction)), m_Processor(processor) {}
+			_Register(instruction_t instruction, processor_t& processor) :
+				_RegisterBase(_get_register(instruction)), 
+				m_Processor(&processor) {}
+
+			_Register(instruction_t instruction, processor_t* processor) :
+				_RegisterBase(_get_register(instruction)), 
+				m_Processor(processor) {}
+
+			_Register(const uint32 _register) :
+				_RegisterBase(_register) {}
 
 			template <uint32 _offset, uint32 _size>
 			bool operator == (const _Register<_offset, _size, T> & __restrict reg) const
@@ -240,32 +274,92 @@ namespace mips
 				return m_Register != reg.m_Register;
 			}
 
+			template <uint32 _offset, uint32 _size>
+			auto operator <=> (const _Register<_offset, _size, T> & __restrict reg) const
+			{
+				return m_Register <=> reg.m_Register;
+			}
+
 			uint32 get_register() const
 			{
 				return m_Register;
 			}
 
+			uint32 get_index() const
+			{
+				xassert(m_Register != 0);
+
+				return m_Register /*- 1*/;
+			}
+
 			template <typename format_t>
 			format_t value() const
 			{
-				return m_Processor.template get_register<format_t>(m_Register);
+				xassert(m_Processor != nullptr);
+
+				return m_Processor->template get_register<format_t>(m_Register);
 			}
 
 			template <typename format_t>
 			format_t set(format_t value)
 			{
+				xassert(m_Processor != nullptr);
+
 				xassert(sizeof(typename processor_t::register_type) >= sizeof(format_t));
-				m_Processor.template set_register<format_t>(m_Register, value);
+				m_Processor->template set_register<format_t>(m_Register, value);
 				return value;
 			}
 		};
 
-		template <uint32 offset, uint32 size>
+		template <uint32 offset = 0, uint32 size = 0>
 		class GPRegister : public _Register<offset, size, processor>
 		{
 		public:
-			GPRegister(instruction_t instruction, processor & __restrict _processor) :
+			GPRegister(instruction_t instruction, processor& _processor) :
 				_Register<offset, size, processor>(instruction, _processor) {}
+
+			GPRegister(instruction_t instruction, processor* _processor) :
+				_Register<offset, size, processor>(instruction, _processor)
+			{
+				xassert(_processor != nullptr);
+			}
+
+			GPRegister(const uint32 _register) :
+				_Register<offset, size, processor>(_register) {}
+
+			_forceinline bool is_zero() const
+			{
+				return _RegisterBase::m_Register == 0U;
+			}
+
+			_forceinline bool is_constant() const
+			{
+				return is_zero();
+			}
+
+			_forceinline std::optional<int32> get_constant() const
+			{
+				if (is_zero())
+				{
+					return 0;
+				}
+				else
+				{
+					xassert(!is_constant());
+
+					return {};
+				}
+			}
+
+			_forceinline int8 get_offset(const bool force = false) const
+			{
+				if (!force)
+				{
+					xassert(!is_zero());
+				}
+
+				return _RegisterBase::get_offset_gp();
+			}
 		};
 
 	}

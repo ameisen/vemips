@@ -28,7 +28,7 @@ DEBUG_FLAGS=( \
 RELEASE_FLAGS=( \
 	"${COMMON_FLAGS[@]}" \
 	-Wl,--gc-sections \
-	-Wl,--icf=safe \
+	-Wl,--icf=all \
 	-Wl,--strip-all \
 	-flto=full \
 )

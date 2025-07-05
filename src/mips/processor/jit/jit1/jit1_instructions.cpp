@@ -14,8 +14,6 @@ using namespace mips;
 void Jit1_CodeGen::insert_procedure_ecx(uint32 address, uint64 procedure, uint32 _ecx, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
 	static const int8 pc_offset =  value_assert<int8>(offsetof(processor, program_counter_) - 128);
-	static const int8 ic_offset =  value_assert<int8>(offsetof(processor, instruction_count_) - 128);
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
 
 	if (procedure <= 0xFFFFFFFF) {
 		mov(eax, uint32(procedure));
@@ -25,7 +23,7 @@ void Jit1_CodeGen::insert_procedure_ecx(uint32 address, uint64 procedure, uint32
 		mov(rdx, rbp);
 		add(rdx, -128);
 		call(rax);
-		mov(dword[rbp + gp_offset], 0); // clear zero register.
+		mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); // clear zero register.
 		mov(ebx, dword[rbp + flags_offset]);
 	}
 	else {
@@ -36,44 +34,38 @@ void Jit1_CodeGen::insert_procedure_ecx(uint32 address, uint64 procedure, uint32
 		mov(rdx, rbp);
 		add(rdx, -128);
 		call(rax);
-		mov(dword[rbp + gp_offset], 0); //clear register
+		mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 		mov(ebx, dword[rbp + flags_offset]);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
 	// [rd] = [rs] - [rt]
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		mov(eax, get_register_op32(rt));
 		neg(eax);
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rd.get_register() == rs.get_register())
+	else if (rd == rs)
 	{
 		mov(eax, get_register_op32(rt));
 		sub(get_register_op32(rd), eax);
@@ -88,27 +80,21 @@ void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
 	// [rd] = [rs] - [rt]
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		 mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		// check if 'rt' is zero or not. If it's zero, we write zero to rd.
 		// otherwise, we throw OV
@@ -116,7 +102,7 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
 		jne(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
@@ -132,29 +118,23 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs | rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0 && rt.get_register() == 0)
+	else if (rs.is_zero() && rt.is_zero())
 	{
 		// set rd to 0
 		// 89 4A EE
 		// mov dword [rdx + 0xEE], ecx ; EE = 'rd' offset
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0 || rt.get_register() == rs.get_register())
+	else if (rs.is_zero() || rt == rs)
 	{
 		// just move rt to rd
 		// 8B 42 DD 89 42 EE 
@@ -163,7 +143,7 @@ void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, ui
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// just move rs to rd
 		// 8B 42 DD 89 42 EE 
@@ -187,34 +167,28 @@ void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, ui
 
 void Jit1_CodeGen::write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rd = rs \/ rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0 && rt.get_register() == 0)
+	else if (rs.is_zero() && rt.is_zero())
 	{
 		// set rd to all ones
 		mov(get_register_op32(rd), int32(-1));
 	}
-	else if (rs.get_register() == 0 || rt.get_register() == rs.get_register())
+	else if (rs.is_zero() || rt == rs)
 	{
 		// just move ~rt to rd
 		mov(eax, get_register_op32(rt));
 		not_(eax);
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// just move ~rs to rd
 		mov(eax, get_register_op32(rs));
@@ -237,29 +211,23 @@ void Jit1_CodeGen::write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rd = rs & rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0 || rt.get_register() == 0)
+	else if (rs.is_zero() || rt.is_zero())
 	{
 		// set rd to 0
 		// 89 4A EE
 		// mov dword [rdx + 0xEE], ecx ; EE = 'rd' offset
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rt.get_register() == rs.get_register())
+	else if (rt == rs)
 	{
 		// just move rt to rd
 		// 8B 42 DD 89 42 EE 
@@ -283,31 +251,19 @@ void Jit1_CodeGen::write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rt = rs | zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const uint32 immediate = instructions::TinyInt<16>(instruction).zextend<uint32>();
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
-		// set rt to offset
-		if (immediate == 0)
-		{
-			mov(get_register_op32(rt), int8(0));
-		}
-		else
-		{
-			mov(get_register_op32(rt), int32(immediate));
-		}
+		// set rt to immediate
+		mov(get_register_op32(rt), immediate);
 	}
 	else if (immediate == 0)
 	{
@@ -318,7 +274,7 @@ void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, u
 	else
 	{
 		// actually perform OR
-		mov(eax, int32(immediate));
+		mov(eax, immediate);
 		or_(eax, get_register_op32(rs));
 		mov(get_register_op32(rt), eax);
 	}
@@ -326,27 +282,22 @@ void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rt = rs & zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const uint32 immediate = instructions::TinyInt<16>(instruction).zextend<uint32>();
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
-	 else if (rs.get_register() == 0 || immediate == 0) {
+	 else if (rs.is_zero() || immediate == 0) {
 		 mov(get_register_op32(rt), 0);
 	 }
 	else
 	{
 		// actually perform AND
-		mov(eax, int32(immediate));
+		mov(eax, immediate);
 		and_(eax, get_register_op32(rs));
 		mov(get_register_op32(rt), eax);
 	}
@@ -355,22 +306,16 @@ void Jit1_CodeGen::write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, 
 // TODO optimize
 void Jit1_CodeGen::write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rd = rt ? 0 : rs
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// select always hits.
 		mov(eax, get_register_op32(rs));
@@ -378,7 +323,7 @@ void Jit1_CodeGen::write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset
 	}
 	else
 	{
-		if (rt_offset == rs_offset)
+		if (rt == rs)
 		{
 			mov(ecx, get_register_op32(rt));
 			cmp(ecx, 1); // Set carry flag if zero
@@ -399,29 +344,23 @@ void Jit1_CodeGen::write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset
 // TODO optimize
 void Jit1_CodeGen::write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rd = rt ? rs : 0
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// select never hits.
 		mov(get_register_op32(rd), 0);
 	}
 	else
 	{
-		if (rt_offset == rs_offset)
+		if (rt == rs)
 		{
 			mov(ecx, get_register_op32(rt));
 			cmp(ecx, 1);							// Set carry flag if zero
@@ -443,19 +382,14 @@ void Jit1_CodeGen::write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset
 
 void Jit1_CodeGen::write_PROC_MOVE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0 || rt.get_register() == rs.get_register())
+	if (rt.is_zero() || rt == rs)
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		// This just sets rt to 0.
 		// 89 4A EE 
@@ -475,21 +409,16 @@ void Jit1_CodeGen::write_PROC_MOVE(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rt = rs + immediate
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const int32 immediate = instructions::TinyInt<16>(instruction).sextend<int32>();
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		if (immediate == 0)
 		{
@@ -507,7 +436,7 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 			mov(get_register_op32(rt), immediate);
 		}
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		if (immediate == 0)
 		{
@@ -532,104 +461,85 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 			// sub dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
 			sub(get_register_op32(rt), int8(-immediate));
 		}
-		else if (immediate < 0 && -immediate <= 128 )
-		{
-			// using 'add' with sub means we can go to -128
-			// 83 42 EE FF
-			// add dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
-			add(get_register_op32(rt), int8(immediate));
-		}
 		else
 		{
 			// We are just adding immediate to 'rt'.
+			// 83 42 EE FF
+			// add dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
 			// 81 42 EE FF FF FF FF 
 			// add dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
 			add(get_register_op32(rt), immediate);
 		}
 	}
-	else if (immediate == 0)
-	{
-		// We are just moving rs to rt
-		// 8B 42 DD 89 42 EE 
-		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		mov(get_register_op32(rt), eax);
-	}
-	else if (immediate == 1)
-	{
-		// increment
-		// 8B 42 DD FF C0 89 42 EE 
-		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-		// inc eax
-		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		inc(eax);
-		mov(get_register_op32(rt), eax);
-	}
-	else if (immediate == -1)
-	{
-		 // decrement
-		 // 8B 42 DD FF C8 89 42 EE  
-		 // mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-		 // dec eax
-		 // mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
-		 mov(eax, get_register_op32(rs));
-		 dec(eax);
-		 mov(get_register_op32(rt), eax);
-	}
-	else if (immediate >= 0 && immediate <= 128)
-	{
-		// using 'sub' for add means we can go to 128
-		// 8B 42 DD 83 E8 79 89 42 EE 
-		// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
-		// sub dword eax, 0x79					 ; 79 = immediate
-		// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		sub(eax, int8(-immediate));
-		mov(get_register_op32(rt), eax);
-	}
-	else if (immediate < 0 && -immediate <= 128)
-	{
-		// using 'add' with sub means we can go to -128
-		// 8B 42 DD 83 C0 79 89 42 EE 
-		// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
-		// add dword eax, 0x79					 ; 79 = immediate
-		// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		add(eax, int8(immediate));
-		mov(get_register_op32(rt), eax);
-	}
 	else
 	{
-		// this is a legitimate addiu
-		// 8B 42 DD 05 FF FF FF FF 89 42 EE 
-		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-		// add dword eax, 0xFFFFFFFF		 ; FFFF = 16-bit immediate value
-		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
-		add(eax, immediate);
+
+		if (immediate == 0)
+		{
+			// We are just moving rs to rt
+			// 8B 42 DD 89 42 EE 
+			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+		}
+		else if (immediate == 1)
+		{
+			// increment
+			// 8B 42 DD FF C0 89 42 EE 
+			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+			// inc eax
+			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+			inc(eax);
+		}
+		else if (immediate == -1)
+		{
+			// decrement
+			// 8B 42 DD FF C8 89 42 EE  
+			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+			// dec eax
+			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+			dec(eax);
+		}
+		else if (immediate >= 0 && immediate <= 128)
+		{
+			// using 'sub' for add means we can go to 128
+			// 8B 42 DD 83 E8 79 89 42 EE 
+			// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
+			// sub dword eax, 0x79					 ; 79 = immediate
+			// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
+			sub(eax, int8(-immediate));
+		}
+		else
+		{
+			// this is a legitimate addiu
+			// using 'add' with sub means we can go to -128
+			// 8B 42 DD 83 C0 79 89 42 EE 
+			// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
+			// add dword eax, 0x79					 ; 79 = immediate
+			// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
+			// 8B 42 DD 05 FF FF FF FF 89 42 EE 
+			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+			// add dword eax, 0xFFFFFFFF		 ; FFFF = 16-bit immediate value
+			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+			add(eax, immediate);
+		}
+
 		mov(get_register_op32(rt), eax);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rt = rs + immediate
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const int32 immediate = instructions::TinyInt<16>(instruction).sextend<int32>();
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		if (immediate < 0)
 		{
@@ -651,53 +561,42 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 			mov(get_register_op32(rt), immediate);
 		}
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		if (immediate == 0)
 		{
 			// nop
 		}
-		else if (immediate == 1)
-		{
-			mov(eax, get_register_op32(rt));
-			inc(eax);
-			jo(intrinsics_.ov, T_NEAR);
-			mov(get_register_op32(rt), eax);
-		}
-		else if (immediate == -1)
-		{
-			mov(eax, get_register_op32(rt));
-			dec(eax);
-			jo(intrinsics_.ov, T_NEAR);
-			mov(get_register_op32(rt), eax);
-		}
-		else if (immediate >= 0 && immediate <= 128)
-		{
-			// using 'sub' for add means we can go to 128
-			// 83 6A EE FF 
-			// sub dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
-			mov(eax, get_register_op32(rt));
-			sub(eax, int8(-immediate));
-			jo(intrinsics_.ov, T_NEAR);
-			mov(get_register_op32(rt), eax);
-		}
-		else if (immediate < 0 && -immediate <= 128 )
-		{
-			// using 'add' with sub means we can go to -128
-			// 83 42 EE FF
-			// add dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
-			mov(eax, get_register_op32(rt));
-			add(eax, int8(immediate));
-			jo(intrinsics_.ov, T_NEAR);
-			mov(get_register_op32(rt), eax);
-		}
 		else
 		{
-			// We are just adding immediate to 'rt'.
-			// 81 42 EE FF FF FF FF 
-			// add dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
 			mov(eax, get_register_op32(rt));
-			add(eax, immediate);
+
+			if (immediate == 1)
+			{
+				inc(eax);
+			}
+			else if (immediate == -1)
+			{
+				dec(eax);
+			}
+			else if (immediate >= 0 && immediate <= 128)
+			{
+				// using 'sub' for add means we can go to 128
+				// 83 6A EE FF 
+				// sub dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
+				sub(eax, int8(-immediate));
+			}
+			else
+			{
+				// using 'add' with sub means we can go to -128
+				// 83 42 EE FF
+				// add dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
+				// We are just adding immediate to 'rt'.
+				// 81 42 EE FF FF FF FF 
+				// add dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
+				add(eax, immediate);
+			}
+
 			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
 		}
@@ -711,63 +610,52 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rt), eax);
 	}
-	else if (immediate == 1)
-	{
-		// increment
-		// 8B 42 DD FF C0 89 42 EE 
-		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-		// inc eax
-		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		inc(eax);
-		jo(intrinsics_.ov, T_NEAR);
-		mov(get_register_op32(rt), eax);
-	}
-	else if (immediate == -1)
-	{
-		// decrement
-		// 8B 42 DD FF C8 89 42 EE  
-		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-		// dec eax
-		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		dec(eax);
-		jo(intrinsics_.ov, T_NEAR);
-		mov(get_register_op32(rt), eax);
-	}
-	else if (immediate >= 0 && immediate <= 128)
-	{
-		// using 'sub' for add means we can go to 128
-		// 8B 42 DD 83 E8 79 89 42 EE 
-		// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
-		// sub dword eax, 0x79					 ; 79 = immediate
-		// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		sub(eax, int8(-immediate));
-		jo(intrinsics_.ov, T_NEAR);
-		mov(get_register_op32(rt), eax);
-	}
-	else if (immediate < 0 && -immediate <= 128)
-	{
-		// using 'add' with sub means we can go to -128
-		// 8B 42 DD 83 C0 79 89 42 EE 
-		// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
-		// add dword eax, 0x79					 ; 79 = immediate
-		// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
-		mov(eax, get_register_op32(rs));
-		add(eax, int8(immediate));
-		jo(intrinsics_.ov, T_NEAR);
-		mov(get_register_op32(rt), eax);
-	}
 	else
 	{
-		// this is a legitimate addiu
-		// 8B 42 DD 05 FF FF FF FF 89 42 EE 
-		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
-		// add dword eax, 0xFFFFFFFF		 ; FFFF = 16-bit immediate value
-		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
-		add(eax, immediate);
+
+		if (immediate == 1)
+		{
+			// increment
+			// 8B 42 DD FF C0 89 42 EE 
+			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+			// inc eax
+			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+			inc(eax);
+		}
+		else if (immediate == -1)
+		{
+			// decrement
+			// 8B 42 DD FF C8 89 42 EE  
+			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+			// dec eax
+			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+			dec(eax);
+		}
+		else if (immediate >= 0 && immediate <= 128)
+		{
+			// using 'sub' for add means we can go to 128
+			// 8B 42 DD 83 E8 79 89 42 EE 
+			// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
+			// sub dword eax, 0x79					 ; 79 = immediate
+			// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
+			sub(eax, int8(-immediate));
+		}
+		else
+		{
+			// this is a legitimate addiu
+			// using 'add' with sub means we can go to -128
+			// 8B 42 DD 83 C0 79 89 42 EE 
+			// mov dword eax, [rdx + 0xDD]		  ; DD = 'rs' offset
+			// add dword eax, 0x79					 ; 79 = immediate
+			// mov dword [rdx + 0xEE], eax		  ; EE = 'rt' offset
+			// 8B 42 DD 05 FF FF FF FF 89 42 EE 
+			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
+			// add dword eax, 0xFFFFFFFF		 ; FFFF = 16-bit immediate value
+			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
+			add(eax, immediate);
+		}
+
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
 	}
@@ -775,39 +663,33 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 && rd.get_register() == 0)
+	else if (rt.is_zero() && rd.is_zero())
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// move [rs] to [rd]
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// add [rt] to [rd]
 		mov(eax, get_register_op32(rt));
@@ -817,7 +699,7 @@ void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, 
 	{
 		// add [rs] and [rt] to [rd]
 		mov(eax, get_register_op32(rs));
-		if (rs.get_register() == rt.get_register()) {
+		if (rs == rt) {
 			add(eax, eax);
 		}
 		else {
@@ -829,40 +711,34 @@ void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 && rd.get_register() == 0)
+	else if (rt.is_zero() && rd.is_zero())
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// move [rs] to [rd]
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
 	}
 	/*
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// add [rt] to [rd]
 		mov(eax, get_register_op32(rt));
@@ -874,7 +750,7 @@ void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, u
 	{
 		// add [rs] and [rt] to [rd]
 		mov(eax, get_register_op32(rs));
-		if (rs.get_register() == rt.get_register()) {
+		if (rs == rt) {
 			add(eax, eax);
 		}
 		else {
@@ -887,20 +763,18 @@ void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_AUI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs + rt
+	// rt = rs + simm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	int32 immediate = instructions::TinyInt<32>(instruction << 16).sextend<int32>();
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
+	}
+	else if (rs.is_zero())
+	{
+		mov(get_register_op32(rt), immediate);
 	}
 	else if (immediate == 0)
 	{
@@ -910,120 +784,123 @@ void Jit1_CodeGen::write_PROC_AUI(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 	else if (immediate < 0)
 	{
-		if (immediate >= -128)
-		{
-			mov(eax, get_register_op32(rs));
-			add(eax, int8(immediate));
-			mov(get_register_op32(rt), eax);
-		}
-		else
-		{
-			mov(eax, get_register_op32(rs));
-			add(eax, immediate);
-			mov(get_register_op32(rt), eax);
-		}
+		mov(eax, get_register_op32(rs));
+		add(eax, immediate);
+		mov(get_register_op32(rt), eax);
 	}
 	else
 	{
 		immediate = -immediate;
-		if (immediate >= -128)
-		{
-			mov(eax, get_register_op32(rs));
-			sub(eax, int8(immediate));
-			mov(get_register_op32(rt), eax);
-		}
-		else
-		{
-			mov(eax, get_register_op32(rs));
-			sub(eax, immediate);
-			mov(get_register_op32(rt), eax);
-		}
+		mov(eax, get_register_op32(rs));
+		sub(eax, immediate);
+		mov(get_register_op32(rt), eax);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SLT(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
+	// rd = rs < rt
 
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 || rt.get_register() == rs.get_register())
+	else if (rt == rs)
 	{
+		// rd == x < x
 		mov(get_register_op32(rd), 0);
 	}
 	else
 	{
-		mov(eax, get_register_op32(rs));
-		xor_(ecx, ecx);
-		cmp(eax, get_register_op32(rt));
-		setl(cl);
-		mov(get_register_op32(rd), ecx);
+		if (rt.is_zero())
+		{
+			// rd = rs < 0
+			xor_(ecx, ecx);
+			cmp(get_register_op32(rs), 0);
+			setl(cl);
+			mov(get_register_op32(rd), ecx);
+		}
+		else if (rs.is_zero())
+		{
+			// rd = 0 < rt
+			// rd = rt > 0
+			xor_(ecx, ecx);
+			cmp(get_register_op32(rt), 0);
+			setg(cl);
+			mov(get_register_op32(rd), ecx);
+		}
+		else
+		{
+			mov(eax, get_register_op32(rs));
+			xor_(ecx, ecx);
+			cmp(eax, get_register_op32(rt));
+			setl(cl);
+			mov(get_register_op32(rd), ecx);
+		}
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
+	// rd = rs < rt
 
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 || rt.get_register() == rs.get_register())
+	else if (rt.is_zero() || rt == rs)
 	{
+		// rd = rs < 0
+		// rd = x < x
 		mov(get_register_op32(rd), 0);
 	}
 	else
 	{
-		mov(eax, get_register_op32(rs));
-		xor_(ecx, ecx);
-		cmp(eax, get_register_op32(rt));
-		setb(cl);
-		mov(get_register_op32(rd), ecx);
+		if (rs.is_zero())
+		{
+			// rd = 0 < rt
+			// rd = rt > 0
+			// rd = rd != 0
+			xor_(ecx, ecx);
+			cmp(get_register_op32(rd), 0);
+			setz(cl);
+			mov(get_register_op32(rd), ecx);
+		}
+		else
+		{
+			mov(eax, get_register_op32(rs));
+			xor_(ecx, ecx);
+			cmp(eax, get_register_op32(rt));
+			setb(cl);
+			mov(get_register_op32(rd), ecx);
+		}
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
+	// rt = rs < simm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
 	const int32 immediate = instructions::TinyInt<16>(instruction).sextend<int32>();
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0 && immediate == 0)
+	if (rs.is_zero())
 	{
-		mov(get_register_op32(rt), 0);
-	}
-	else if (rs.get_register() == 0 && immediate > 0)
-	{
-		mov(get_register_op32(rt), 1);
+		// rt = 0 < 0|1...
+		mov(get_register_op32(rt), (immediate > 0) ? 1 : 0);
 	}
 	else
 	{
@@ -1036,27 +913,26 @@ void Jit1_CodeGen::write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
+	// rt = rs < zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
 	const uint32 immediate = uint32(instructions::TinyInt<16>(instruction).sextend<int32>()); // intended
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
 	else if (immediate == 0)
 	{
+		// rt = rs < 0
 		mov(get_register_op32(rt), 0);
 	}
-	else if (rs.get_register() == 0 && immediate > 0)
+	else if (rs.is_zero())
 	{
-		mov(get_register_op32(rt), 1);
+		// rt = 0 < imm
+		// imm > 0
+		mov(get_register_op32(rt), (immediate > 0) ? 1 : 0);
 	}
 	else
 	{
@@ -1069,15 +945,12 @@ void Jit1_CodeGen::write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset,
 
 void Jit1_CodeGen::write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
-	static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-	const instructions::FPRegister<11, 5> fs(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-	const int16 fs_offset = value_assert<int16>(fp_offset + (8 * fs.get_register()));
+	const instructions::FPRegister<11, 5> fs(instruction, *jit_.processor_.get_fpu_coprocessor());
+	const int16 fs_offset = fs.get_offset();
 
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
@@ -1090,15 +963,12 @@ void Jit1_CodeGen::write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_COP1_MTC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
-	static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-	const instructions::FPRegister<11, 5> fs(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-	const int16 fs_offset = value_assert<int16>(fp_offset + (8 * fs.get_register()));
+	const instructions::FPRegister<11, 5> fs(instruction, jit_.processor_.get_fpu_coprocessor());
+	const int16 fs_offset = fs.get_offset();
 
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// write 0 to [fs]
 		mov(dword[r12 + fs_offset], 0);
@@ -1112,15 +982,12 @@ void Jit1_CodeGen::write_COP1_MTC1(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_COP1_MFHC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
-	static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-	const instructions::FPRegister<11, 5> fs(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-	const int16 fs_offset = value_assert<int16>(fp_offset + (8 * fs.get_register()));
+	const instructions::FPRegister<11, 5> fs(instruction, jit_.processor_.get_fpu_coprocessor());
+	const int16 fs_offset = fs.get_offset();
 
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
@@ -1133,18 +1000,15 @@ void Jit1_CodeGen::write_COP1_MFHC1(jit1::ChunkOffset & __restrict chunk_offset,
 
 void Jit1_CodeGen::write_COP1_MTHC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
-	static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-	const instructions::FPRegister<11, 5> fs(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-	const int16 fs_offset = value_assert<int16>(fp_offset + (8 * fs.get_register()));
+	const instructions::FPRegister<11, 5> fs(instruction, jit_.processor_.get_fpu_coprocessor());
+	const int16 fs_offset = fs.get_offset();
 
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// write 0 to [fs]
-		mov(dword[r12 + fs_offset + 4], 0);
+		mov(dword[r12 + (fs_offset + 4)], 0);
 	}
 	else
 	{
@@ -1155,15 +1019,15 @@ void Jit1_CodeGen::write_COP1_MTHC1(jit1::ChunkOffset & __restrict chunk_offset,
 
 void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
+	auto* coprocessor = jit_.processor_.get_fpu_coprocessor();
 
-	const instructions::FPRegister<16, 5> ft{instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1)};
-	const instructions::FPRegister<11, 5> fs{instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1)};
-	const instructions::FPRegister<6, 5> fd{instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1)};
+	const instructions::FPRegister<16, 5> ft{instruction, coprocessor};
+	const instructions::FPRegister<11, 5> fs{instruction, coprocessor};
+	const instructions::FPRegister<6, 5> fd{instruction, coprocessor};
 
-	const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
-	const int16 fs_offset = value_assert<int16>(fp_offset + (8 * fs.get_register()));
-	const int16 fd_offset = value_assert<int16>(fp_offset + (8 * fd.get_register()));
+	const int16 ft_offset = ft.get_offset();
+	const int16 fs_offset = fs.get_offset();
+	const int16 fd_offset = fd.get_offset();
 
 	if (instruction_info.Type == mips::instructions::instruction_type::single_fp)
 	{
@@ -1197,34 +1061,28 @@ void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 || rd.get_register() == 0)
+	else if (rt.is_zero() || rs.is_zero()) // fixed bug
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		imul(get_register_op32(rd));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rt.get_register() == rd.get_register())
+	else if (rt == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rs));
@@ -1235,7 +1093,7 @@ void Jit1_CodeGen::write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, u
 	{
 		// mul [rs] and [rt] to [rd]
 		mov(eax, get_register_op32(rs));
-		if (rs.get_register() == rt.get_register()) {
+		if (rs == rt) {
 			imul(eax);
 		}
 		else {
@@ -1247,34 +1105,28 @@ void Jit1_CodeGen::write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 || rd.get_register() == 0)
+	else if (rt.is_zero() || rs.is_zero()) // fixed bug
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		mul(get_register_op32(rd));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rt.get_register() == rd.get_register())
+	else if (rt == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rs));
@@ -1285,7 +1137,7 @@ void Jit1_CodeGen::write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, 
 	{
 		// mul [rs] and [rt] to [rd]
 		mov(eax, get_register_op32(rs));
-		if (rs.get_register() == rt.get_register()) {
+		if (rs == rt) {
 			mul(eax);
 		}
 		else {
@@ -1297,34 +1149,28 @@ void Jit1_CodeGen::write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 || rd.get_register() == 0)
+	else if (rt.is_zero() || rs.is_zero()) // fixed bug
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		imul(get_register_op32(rd));
 		mov(get_register_op32(rd), edx);
 	}
-	else if (rt.get_register() == rd.get_register())
+	else if (rt == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rs));
@@ -1335,7 +1181,7 @@ void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, u
 	{
 		// add [rs] and [rt] to [rd]
 		mov(eax, get_register_op32(rs));
-		if (rs.get_register() == rt.get_register()) {
+		if (rs == rt) {
 			imul(eax);
 		}
 		else {
@@ -1347,34 +1193,28 @@ void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0 || rd.get_register() == 0)
+	else if (rt.is_zero() || rs.is_zero()) // fixed bug
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		mul(get_register_op32(rd));
 		mov(get_register_op32(rd), edx);
 	}
-	else if (rt.get_register() == rd.get_register())
+	else if (rt == rd)
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rs));
@@ -1385,7 +1225,7 @@ void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, 
 	{
 		// add [rs] and [rt] to [rd]
 		mov(eax, get_register_op32(rs));
-		if (rs.get_register() == rt.get_register()) {
+		if (rs == rt) {
 			mul(eax);
 		}
 		else {
@@ -1400,35 +1240,31 @@ void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
 	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
+		// TODO should we throw an exception?
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// divzero
 		// set [rd] to 0.
+		// TODO should we throw an exception?
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(ecx, get_register_op32(rt));
@@ -1441,7 +1277,7 @@ void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, u
 		L(divzero);
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		// move [rt] to [rd]
 		cmp(get_register_op32(rt), 0);
@@ -1467,35 +1303,31 @@ void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
 	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
+		// TODO should we throw an exception?
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// divzero
 		// set [rd] to 0.
+		// TODO should we throw an exception?
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(ecx, get_register_op32(rt));
@@ -1508,7 +1340,7 @@ void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, 
 		L(divzero);
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		// move [rt] to [rd]
 		cmp(get_register_op32(rt), 0);
@@ -1534,35 +1366,31 @@ void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
 	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
+		// TODO should we throw an exception?
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// divzero
 		// set [rd] to 0.
+		// TODO should we throw an exception?
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(ecx, get_register_op32(rt));
@@ -1575,7 +1403,7 @@ void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, u
 		L(divzero);
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		// move [rt] to [rd]
 		cmp(get_register_op32(rt), 0);
@@ -1601,35 +1429,31 @@ void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
 	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
+		// TODO should we throw an exception?
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// divzero
 		// set [rd] to 0.
+		// TODO should we throw an exception?
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == rd.get_register())
+	else if (rs == rd)
 	{
 		// move [rt] to [rd]
 		mov(ecx, get_register_op32(rt));
@@ -1642,7 +1466,7 @@ void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, 
 		L(divzero);
 		mov(get_register_op32(rd), edx);
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		// move [rt] to [rd]
 		cmp(get_register_op32(rt), 0);
@@ -1668,45 +1492,39 @@ void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rd = rs ^ rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		// set rd to 0
 		// 89 4A EE
 		// mov dword [rdx + 0xEE], ecx ; EE = 'rd' offset
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
 	}
 	else
 	{
-		 if (rd.get_register() == rt.get_register()) {
+		 if (rd == rt) {
 			 mov(eax, get_register_op32(rs));
 			 xor_(get_register_op32(rd), eax);
 		 }
-		 else if (rd.get_register() == rs.get_register()) {
+		 else if (rd == rs) {
 			 mov(eax, get_register_op32(rt));
 			 xor_(get_register_op32(rd), eax);
 		 }
@@ -1720,49 +1538,41 @@ void Jit1_CodeGen::write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, u
 
 void Jit1_CodeGen::write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
-	// rd = rs | rt
+	// rt = rs | zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
-	const uint32 offset = instructions::TinyInt<16>(instruction).zextend<uint32>();
+	const uint32 immediate = instructions::TinyInt<16>(instruction).zextend<uint32>();
 
-	const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-
-	if (rt.get_register() == 0)
+	if (rt.is_zero())
 	{
 		// nop
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		// set rt to offset
-		if (offset == 0)
-		{
-			mov(get_register_op32(rt), int8(0));
-		}
-		else
-		{
-			mov(get_register_op32(rt), int32(offset));
-		}
+		mov(get_register_op32(rt), immediate);
 	}
-	else if (offset == 0)
+	else if (immediate == 0)
 	{
-		 if (rs.get_register() != rt.get_register()) {
+		 if (rs != rt) {
 			 // just move rs to rt
 			 mov(eax, get_register_op32(rs));
 			 mov(get_register_op32(rt), eax);
+		 }
+		 else
+		 {
+			 // nop
 		 }
 	}
 	else
 	{
 		// actually perform OR
-		 if (rt.get_register() == rs.get_register()) {
-			 xor_(get_register_op32(rt), int32(offset));
+		 if (rt == rs) {
+			 xor_(get_register_op32(rt), immediate);
 		 }
 		 else {
 			 mov(eax, get_register_op32(rs));
-			 xor_(eax, int32(offset));
+			 xor_(eax, immediate);
 			 mov(get_register_op32(rt), eax);
 		 }
 	}
@@ -1770,74 +1580,63 @@ void Jit1_CodeGen::write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_SEB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
+	// rd = sbyte(rt)
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
-		mov(get_register_op32(rd), int8(0));
+		mov(get_register_op32(rd), 0);
 	}
 	else
 	{
-		movsx(eax, byte[rbp + rt_offset]);
+		movsx(eax, get_register_op8(rt));
 		mov(get_register_op32(rd), eax);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
-
+	// rd = sword(rt)
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
-		mov(get_register_op32(rd), int16(0));
+		mov(get_register_op32(rd), 0);
 	}
 	else
 	{
-		movsx(eax, word[rbp + rt_offset]);
+		movsx(eax, get_register_op8(rt));
 		mov(get_register_op32(rd), eax);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
+	// rd = rt <<< sa
 
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
-	const int8 sa = (int8)instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
+	const int8 sa = instructions::TinyInt<5>(instruction >> 6).zextend<int8>();
 
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
-		mov(get_register_op32(rd), int16(0));
+		mov(get_register_op32(rd), 0);
 	}
-	else if (rd.get_register() == rt.get_register())
+	else if (rd == rt)
 	{
 		if (sa == 0)
 		{
@@ -1850,41 +1649,39 @@ void Jit1_CodeGen::write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 	else
 	{
+		mov(eax, get_register_op32(rt));
+
 		if (sa == 0)
 		{
 			// move
-			mov(eax, get_register_op32(rt));
-			mov(get_register_op32(rd), eax);
+			// TODO : global func
 		}
 		else
 		{
-			mov(eax, get_register_op32(rt));
 			shl(eax, sa);
-			mov(get_register_op32(rd), eax);
 		}
+
+		mov(get_register_op32(rd), eax);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
+	// rd = rt >>> sa
 
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
-	const int8 sa = (int8)instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
+	const int8 sa = instructions::TinyInt<5>(instruction >> 6).zextend<int8>();
 
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
-		mov(get_register_op32(rd), int16(0));
+		mov(get_register_op32(rd), 0);
 	}
-	else if (rd.get_register() == rt.get_register())
+	else if (rd == rt)
 	{
 		if (sa == 0)
 		{
@@ -1897,41 +1694,38 @@ void Jit1_CodeGen::write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 	else
 	{
+		mov(eax, get_register_op32(rt));
+
 		if (sa == 0)
 		{
 			// move
-			mov(eax, get_register_op32(rt));
-			mov(get_register_op32(rd), eax);
 		}
 		else
 		{
-			mov(eax, get_register_op32(rt));
 			shr(eax, sa);
-			mov(get_register_op32(rd), eax);
 		}
+
+		mov(get_register_op32(rd), eax);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset =  value_assert<int8>(offsetof(processor, registers_) - 128);
+	// rd = rt >> sa
 
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
-	const int8 sa = (int8)instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
+	const int8 sa = instructions::TinyInt<5>(instruction >> 6).zextend<int8>();
 
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
-	const int8 rd_offset = value_assert<int8>(gp_offset + (4 * rd.get_register()));
-
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
-		mov(get_register_op32(rd), int16(0));
+		mov(get_register_op32(rd), 0);
 	}
-	else if (rd.get_register() == rt.get_register())
+	else if (rd == rt)
 	{
 		if (sa == 0)
 		{
@@ -1944,45 +1738,45 @@ void Jit1_CodeGen::write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 	else
 	{
+		mov(eax, get_register_op32(rt));
+
 		if (sa == 0)
 		{
 			// move
-			mov(eax, get_register_op32(rt));
-			mov(get_register_op32(rd), eax);
 		}
 		else
 		{
-			mov(eax, get_register_op32(rt));
 			sar(eax, sa);
-			mov(get_register_op32(rd), eax);
 		}
+
+		mov(get_register_op32(rd), eax);
 	}
 }
 
 void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
+	// rd = rt <<< rs
 
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// set rd to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		// move rt to rd
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		mov(ecx, get_register_op32(rs));
 		mov(eax, ecx);
@@ -2002,28 +1796,28 @@ void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, 
 
 void Jit1_CodeGen::write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
+	// rd = rt >>> rs
 
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-	if (rd.get_register() == 0)
+	if (rd.is_zero())
 	{
 		// nop
 	}
-	else if (rt.get_register() == 0)
+	else if (rt.is_zero())
 	{
 		// set rd to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs.get_register() == 0)
+	else if (rs.is_zero())
 	{
 		// move rt to rd
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
 	}
-	else if (rs.get_register() == rt.get_register())
+	else if (rs == rt)
 	{
 		mov(ecx, get_register_op32(rs));
 		mov(eax, ecx);
@@ -2083,7 +1877,7 @@ void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, ui
 	const uint32 msbd = instructions::TinyInt<5>(instruction >> 11).zextend<uint32>();
 	const uint32 lsb = instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
 
-	if (rt.get_register() == 0) {
+	if (rt.is_zero()) {
 		// nop
 	}
 	else {
@@ -2091,7 +1885,7 @@ void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, ui
 			// Result is unpredictable, just push -1.
 			mov(rt_reg, -1);
 		}
-		else if (rs.get_register() == 0) {
+		else if (rs.is_zero()) {
 			// The operation would just return 0.
 			mov(rt_reg, 0);
 		}

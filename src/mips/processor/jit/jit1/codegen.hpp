@@ -63,9 +63,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op8(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-		
-			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
+			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
 			static thread_local Xbyak::Address AddrOperand = byte[rbp];
@@ -81,9 +79,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op16(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-		
-			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
+			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
 			static thread_local Xbyak::Address AddrOperand = word[rbp];
@@ -99,9 +95,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op32(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-		
-			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
+			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
 			static thread_local Xbyak::Address AddrOperand = dword[rbp];
@@ -117,9 +111,7 @@ namespace mips
 
 		template <typename GPR>
 		const Xbyak::Operand & get_register_op64(const GPR &reg) {
-			static const auto gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-		
-			const auto reg_offset = value_assert<int8>(gp_offset + (4 * reg.get_register()));
+			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
 			static thread_local Xbyak::Address AddrOperand = qword[rbp];

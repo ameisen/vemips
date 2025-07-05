@@ -75,7 +75,7 @@ namespace mips {
 	private:
 		static constexpr const size_t NumRegisters = 32;
 
-		std::array<register_type, NumRegisters>	m_registers{ 0 };
+		alignas(64) std::array<register_type, NumRegisters>	m_registers{ 0 };
 		FIR													m_fir;
 		FCSR												m_fcsr;
 
@@ -97,7 +97,7 @@ namespace mips {
 		}
 
 		_nothrow coprocessor1(processor & __restrict processor) : coprocessor(processor) {}
-		virtual _nothrow ~coprocessor1() {}
+		virtual _nothrow ~coprocessor1() = default;
 
 		virtual _nothrow void clock();
 
@@ -132,5 +132,26 @@ namespace mips {
 			static_assert(sizeof(T) == sizeof(register_type) / 2, "get_register_upper is casting to invalid size");
 			((T * __restrict)&m_registers[idx])[1] = value;
 		}
+
+	public:
+#pragma region dynamic recompiler support
+		enum class offset_type
+		{
+			registers
+		};
+
+		static constexpr intptr get_address_offset_static (const offset_type type)
+		{
+			switch (type)
+			{
+				case offset_type::registers:
+					return offsetof(coprocessor1, m_registers);
+
+				default:
+					xassert(false);
+			}
+		}
+
+#pragma endregion
 	};
 }

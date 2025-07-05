@@ -11,6 +11,8 @@
 #include <memory>
 
 #include <map>
+
+#include "coprocessor/coprocessor.hpp"
 #include "mips/mmu.hpp"
 
 // TODO : doesn't handle wraparound address properly.
@@ -30,6 +32,7 @@ namespace mips {
 	class system;
 	class jit1;
 	class coprocessor;
+	class coprocessor1;
 	class processor final {
 		// remove when we have unified instructions
 		friend class CPUI;
@@ -51,25 +54,26 @@ namespace mips {
 
 	private:
 		static constexpr const size_t num_registers = 32;
+		static constexpr const size_t num_coprocessors = size_t(coprocessor::types::max);
 
 		// These are at the highest point to be easier on the JIT. < 127 B addresses are grand.
-		std::array<register_type, num_registers>	registers_{ 0 };
+		alignas(64) std::array<register_type, num_registers /*- 1*/>	registers_{ 0 };
 		flag													flags_ = flag::none;
 
 		uint32												branch_target_ = 0;
 		uint32												program_counter_ = 0;
+	public:
+		uint32												user_value_ = 0; // TODO REPLACE WITH COP0
+	private:
 		uint64												instruction_count_ = 0;
 		uint64												target_instructions_ = std::numeric_limits<uint64>::max();
 		const uintptr									memory_ptr_ = 0;
 		const uint32									memory_size_ = 0;
 		const uint32									stack_size_ = 0;
 
-	public:
-		uint32												user_value_ = 0; // TODO REPLACE WITH COP0
-
 	private:
 
-		const std::array<coprocessor* __restrict, 4> coprocessors_ = { nullptr };
+		const std::array<coprocessor* __restrict, num_coprocessors> coprocessors_ = { nullptr };
 		memory_source  * const __restrict memory_source_ = nullptr;
 
 	public: // TODO : clean up later, though not using std::variant most likely (exception overhead)
@@ -78,7 +82,6 @@ namespace mips {
 			jit1 * __restrict								jit1_;
 			jit2 * __restrict								jit2_;
 		};
-		bool in_jit = false;
 	private:
 		const JitType											  jit_type_;
 
@@ -94,11 +97,34 @@ namespace mips {
 		const bool collect_stats_ : 1;
 		const bool disable_cti_ : 1;
 		const bool debugging_ : 1 = false;
+	public:
+		bool in_jit : 1 = false;
+	private:
 		bool from_exception_ : 1 = false;
 
 		void ExecuteInstruction(bool branch_delay);
 		void ExecuteInstructionExplicit(const instructions::InstructionInfo* instruction_info, instruction_t instruction, bool branch_delay);
 
+	public:
+#pragma region dynamic recompiler support
+		enum class offset_type
+		{
+			registers 
+		};
+
+		static constexpr intptr get_address_offset_static (const offset_type type)
+		{
+			switch (type)
+			{
+				case offset_type::registers:
+					return offsetof(processor, registers_);
+
+				default:
+					xassert(false);
+			}
+		}
+
+#pragma endregion
 	public:
 		void compare(const processor& __restrict other, uint32 /*previous_pc*/) const;
 
@@ -153,9 +179,61 @@ namespace mips {
 		processor(const options & __restrict options);
 		~processor();
 
+		template <typename Self>
 		[[nodiscard]]
-		coprocessor * get_coprocessor(const uint32 idx) const {
-			return coprocessors_[idx];
+		auto get_coprocessor(this Self&& self, const uint32 idx) ->
+			copy_qualifiers_ptr<decltype(self), coprocessor>
+		{
+			xassert(idx < self.coprocessors_.size());
+			return self.coprocessors_[idx];
+		}
+
+		template <typename Self>
+		[[nodiscard]]
+		auto get_coprocessor(this Self&& self, const coprocessor::types type) ->
+			copy_qualifiers_ptr<decltype(self), coprocessor>
+		{
+			xassert(coprocessor::is_valid(type));
+			return self.get_coprocessor(std::to_underlying(type));
+		}
+
+		template <coprocessor::types Type>
+		[[nodiscard]]
+		auto get_coprocessor(this auto&& self) requires(
+			coprocessor::is_valid(Type)
+		)
+		{
+			return self.template get_coprocessor<std::to_underlying(Type)>();
+		}
+
+		template <uint32 Index>
+		[[nodiscard]]
+		auto get_coprocessor(this auto&& self) -> std::conditional_t<
+			Index == std::to_underlying(coprocessor::types::floating_point),
+			_make_qual(coprocessor1 *),
+			_make_qual(coprocessor *)
+		>
+		requires (
+			Index < std::tuple_size_v<decltype(coprocessors_)>
+		)
+		{
+			_make_qual(coprocessor*) coprocessor = self.coprocessors_[Index];
+
+			if constexpr (Index == std::to_underlying(coprocessor::types::floating_point))
+			{
+				return reinterpret_cast<_make_qual(coprocessor1 *)>(coprocessor);
+			}
+			else
+			{
+				return coprocessor;
+			}
+		}
+
+		template <typename Self>
+		[[nodiscard]]
+		auto get_fpu_coprocessor(this Self&& self)
+		{
+			return self.template get_coprocessor<coprocessor::types::floating_point>();
 		}
 
 		// Sets the program counter. This is meant to be used as an external function to set up the CPU
@@ -175,18 +253,18 @@ namespace mips {
 		template <typename T>
 		[[nodiscard]]
 		T get_register(const uint32 idx) const {
-			if constexpr (_constant_p(idx) && idx == 0) {
+			if (idx == 0) {
 				return {};
 			}
 
 			// Strict-aliasing rules apply
 			if constexpr (std::is_same_v<T, register_type>) {
-				return registers_[idx];
+				return registers_[idx /*- 1*/];
 			}
 			else {
 				static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
 				T result;
-				memcpy(&result, &registers_[idx], sizeof(result));
+				memcpy(&result, &registers_[idx /*- 1*/], sizeof(result));
 				return result;
 			}
 		}
@@ -194,13 +272,13 @@ namespace mips {
 		// Set the register from a given type
 		template <typename T>
 		void set_register(const uint32 idx, T value) {
-			if constexpr (_constant_p(idx) && idx == 0) {
+			if (idx == 0) {
 				return;
 			}
 
 			// Strict-aliasing rules apply
 			if constexpr (std::is_same_v<T, register_type>) {
-				registers_[idx] = value;
+				registers_[idx /*- 1*/] = value;
 			}
 			else {
 				static_assert(sizeof(T) <= sizeof(register_type), "get_register is casting to invalid size");
@@ -210,7 +288,7 @@ namespace mips {
 				} caster{
 					.src = value
 				};
-				registers_[idx] = caster.dst;
+				registers_[idx /*- 1*/] = caster.dst;
 			}
 		}
 
@@ -606,7 +684,7 @@ namespace mips {
 	}
 
 	inline void processor::compare(const processor& __restrict other, uint32 /*previous_pc*/) const {
-		for (size_t i = 1; i < num_registers; ++i) { // don't check $zero
+		for (size_t i = 1/*0*/; i < num_registers /*- 1*/; ++i) { // don't check $zero
 			if _unlikely(registers_[i] != other.registers_[i]) [[unlikely]] {
 				__debugbreak();
 			}

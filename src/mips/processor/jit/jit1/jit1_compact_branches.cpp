@@ -25,13 +25,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
 	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
 	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
-	static const int8 r31 = gp_offset + (31 * 4);
+	const instructions::GPRegister<> r31 = {31U};
 
 	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
-		// Start with a set of nops so that we have somewhere to write patch code.
+		// Start with a set of no-ops so that we have somewhere to write patch code.
 		const auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
 		chunk.m_patches.push_back({ uint32(getSize()), 0 });
 		auto &patch_pair = chunk.m_patches.back();
@@ -109,7 +108,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + immediate;
 		const uint32 link_address = address + 4;
-		mov(dword[rbp + r31], link_address);	// set link
+		mov(get_register_op32(r31), link_address);	// set link
 
 		// destination is in this chunk. This is far easier to handle.
 		if (target_address >= chunk_begin && target_address <= chunk_last)
@@ -131,7 +130,6 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	{
 		const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + immediate;
-		const uint32 link_address = address + 4;
 
 		// destination is in this chunk. This is far easier to handle.
 		if (target_address >= chunk_begin && target_address <= chunk_last)
@@ -155,10 +153,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 		const uint32 link_address = address + 4;
-		mov(dword[rbp + r31], link_address);	// set link
+		mov(get_register_op32(r31), link_address);	// set link
 
 		// instruction only valid if rt != 0
-		if (rt.get_register() != 0)
+		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
@@ -201,10 +199,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		const uint32 target_address = address + 4 + offset;
 
-		if (rs == rt && rs.get_register() != 0) // BGEZALC - branch rt >= 0 and link
+		if (rs == rt && !rs.is_zero()) // BGEZALC - branch rt >= 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(dword[rbp + r31], link_address);	// set link
+			mov(get_register_op32(r31), link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
@@ -232,7 +230,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BGEUC - branch rs >= rt
+		else if (rs != rt && !rs.is_zero() && !rt.is_zero()) // BGEUC - branch rs >= rt
 		{
 			const Xbyak::Label no_jump;
 
@@ -274,10 +272,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 		const uint32 link_address = address + 4;
-		mov(dword[rbp + r31], link_address);	// set link
+		mov(get_register_op32(r31), link_address);	// set link
 
 		// instruction only valid if rt != 0
-		if (rt.get_register() != 0)
+		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
@@ -320,10 +318,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		const uint32 target_address = address + 4 + offset;
 
-		if (rs == rt && rs.get_register() != 0) // BLTZALC - branch rt < 0 and link
+		if (rs == rt && !rs.is_zero()) // BLTZALC - branch rt < 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(dword[rbp + r31], link_address);	// set link
+			mov(get_register_op32(r31), link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
@@ -351,7 +349,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs != rt && rs.get_register() != 0 && rt.get_register() != 0) // BLTUC - branch rs < rt
+		else if (rs != rt && !rs.is_zero() && !rt.is_zero()) // BLTUC - branch rs < rt
 		{
 			const Xbyak::Label no_jump;
 
@@ -395,10 +393,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		const uint32 target_address = address + 4 + offset;
 
-		if (rs.get_register() == 0 && rs.get_register() < rt.get_register()) // BEQZALC - branch rt == 0 and link
+		if (rs.is_zero() && rs < rt) // BEQZALC - branch rt == 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(dword[rbp + r31], link_address);	// set link
+			mov(get_register_op32(r31), link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
@@ -426,7 +424,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BEQC - branch rt == rs
+		else if (!rs.is_zero() && !rt.is_zero() && rs < rt) // BEQC - branch rt == rs
 		{
 			const Xbyak::Label no_jump;
 
@@ -455,7 +453,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs.get_register() >= rt.get_register()) // BOVC - branch if rs + rt overflows (signed)
+		else if (rs >= rt) // BOVC - branch if rs + rt overflows (signed)
 		{
 			const Xbyak::Label no_jump;
 
@@ -499,10 +497,10 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		const uint32 target_address = address + 4 + offset;
 
-		if (rs.get_register() == 0 && rs.get_register() < rt.get_register()) // BNEZALC - branch rt != 0 and link
+		if (rs.is_zero() && rs < rt) // BNEZALC - branch rt != 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(dword[rbp + r31], link_address);	// set link
+			mov(get_register_op32(r31), link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
@@ -530,7 +528,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() < rt.get_register()) // BNEC - branch rt != rs
+		else if (!rs.is_zero() && !rt.is_zero() && rs < rt) // BNEC - branch rt != rs
 		{
 			const Xbyak::Label no_jump;
 
@@ -559,7 +557,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs.get_register() >= rt.get_register()) // BNVC - branch if rs + rt not overflows (signed)
+		else if (rs >= rt) // BNVC - branch if rs + rt not overflows (signed)
 		{
 			const Xbyak::Label no_jump;
 
@@ -602,7 +600,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
-		if (rt.get_register() != 0)
+		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
@@ -645,7 +643,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		const uint32 target_address = address + 4 + offset;
 
-		if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() == rt.get_register()) // BGEZC - branch [rt] >= 0
+		if (!rs.is_zero() && !rt.is_zero() && rs == rt) // BGEZC - branch [rt] >= 0
 		{
 			const Xbyak::Label no_jump;
 
@@ -673,7 +671,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BGEC / BLEC - branch [rs] >= [rt]
+		else if (!rs.is_zero() && !rt.is_zero() && rs != rt) // BGEC / BLEC - branch [rs] >= [rt]
 		{
 			const Xbyak::Label no_jump;
 
@@ -716,7 +714,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
-		if (rt.get_register() != 0)
+		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
@@ -759,7 +757,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 		const uint32 target_address = address + 4 + offset;
 
-		if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() == rt.get_register()) // BLTZC - branch [rt] < 0
+		if (!rs.is_zero() && !rt.is_zero() && rs == rt) // BLTZC - branch [rt] < 0
 		{
 			const Xbyak::Label no_jump;
 
@@ -787,7 +785,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 				or_(ebx, processor::flag::no_cti);
 			}
 		}
-		else if (rs.get_register() != 0 && rt.get_register() != 0 && rs.get_register() != rt.get_register()) // BLTC / BGTC - branch [rs] < [rt]
+		else if (!rs.is_zero() && !rt.is_zero() && rs != rt) // BLTC / BGTC - branch [rs] < [rt]
 		{
 			const Xbyak::Label no_jump;
 
@@ -830,7 +828,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
-		if (rs.get_register() != 0)
+		if (!rs.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
@@ -872,7 +870,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const uint32 target_address = address + 4 + offset;
 
 		// instruction only valid if rt != 0
-		if (rs.get_register() != 0)
+		if (!rs.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
@@ -946,7 +944,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
 		const uint32 link_address = address + 4;
-		mov(dword[rbp + r31], link_address);	// set link
+		mov(get_register_op32(r31), link_address);	// set link
 
 		const Xbyak::Label not_within;
 

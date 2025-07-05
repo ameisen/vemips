@@ -25,14 +25,11 @@ uint32 memory_touched_jit(processor * __restrict proc, uint32 address) {
 }
 
 bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 	static const int8 memp_offset = value_assert<int8>(offsetof(processor, memory_ptr_) - 128);
 	static const int8 mems_offset = value_assert<int8>(offsetof(processor, memory_size_) - 128);
 
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
-
-	const int8 base_offset = value_assert<int8>(gp_offset + (4 * base.get_register()));
 
 	uint32 store_size = 0;
 	bool fpu = false;
@@ -87,7 +84,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 
 	const auto mmu_type = jit_.processor_.mmu_type_;
 	
-	int32 offset = 0;
+	int32 offset;
 	if (!e) {
 		offset = instructions::TinyInt<16>(instruction).sextend<int32>();
 	}
@@ -103,28 +100,18 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		add(rcx, int8(-128));
 		// 'rcx' is the first parameter (processor ptr)
 
-		if (base.get_register() != 0) {
+		if (!base.is_zero()) {
 			// The effective address is '[base] + offset'
 			mov(edx, get_register_op32(base));
 			if (offset != 0) {
-				if (offset >= -128 && offset < 127) {
-					add(edx, int8(offset));
-				}
-				else {
-					add(edx, int32(offset));
-				}
+				add(edx, offset);
 			}
 		}
 		else {
 			if (offset == 0) {
 				xor_(edx, edx);
 			}
-			else if (offset >= -128 && offset < 127) {
-				mov(edx, int8(offset));
-			}
-			else {
-				mov(edx, int32(offset));
-			}
+			mov(edx, offset);
 		}
 		// 'edx' is the second parameter (address)
 		mov(r8d, int8(store_size));
@@ -143,7 +130,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 	else {
 		// This would be far faster if we could easily memory map. Then we could just wrap the address range around.
 		// So ist das Leben.
-		if (base.get_register() == 0) {
+		if (base.is_zero()) {
 			// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 			// Check for basic range things.
 			const uint32 start_address = uint32(offset);
@@ -154,9 +141,9 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				// this cheks if it is in range, or if it overflows and thus overwrites '0'
 				if (
 					(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
-					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x100000000ull)
+					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x1'0000'0000ull)
 				{
-					mov(eax, int32(address));
+					mov(eax, address);
 					jmp(intrinsics_.ades, T_NEAR);
 					return false;
 				}
@@ -165,13 +152,13 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				// I'm going to do this the dumb way.
 				for (uint64 addr = start_address; addr < end_address; ++addr) {
 					if (addr == 0) {
-						mov(eax, int32(address));
+						mov(eax, address);
 						jmp(intrinsics_.ades, T_NEAR);
 						return false;
 					}
 					if (jit_.processor_.stack_size_) {
-						if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
-							mov(eax, int32(address));
+						if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x1'0000'0000ull - jit_.processor_.stack_size_)) {
+							mov(eax, address);
 							jmp(intrinsics_.ades, T_NEAR);
 							return false;
 						}
@@ -180,7 +167,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 			}
 
 			mov(rdx, qword[rbp + memp_offset]);
-			mov(eax, uint32(offset));
+			mov(eax, offset);
 		}
 		else {
 			mov(eax, get_register_op32(base));
@@ -221,10 +208,9 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 	// perform the actual store.
 	if (!fpu) {
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
-		//const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
 		if (mmu_type != mmu::emulated) {
-			if (rt.get_register() == 0) {
+			if (rt.is_zero()) {
 				xor_(ecx, ecx);
 				switch (store_size) {
 				case 1:
@@ -295,7 +281,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 			}
 		}
 		else {
-			if (rt.get_register() == 0) {
+			if (rt.is_zero()) {
 				xor_(ecx, ecx);
 				switch (store_size) {
 				case 1:
@@ -369,9 +355,8 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 	else
 	{
 		// TODO fix offsets.
-		static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-		const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-		const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
+		const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
+		const int16 ft_offset = ft.get_offset();
 
 		if (mmu_type != mmu::emulated) {
 			switch (store_size) {
@@ -425,7 +410,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		//je(no_flush);
 		test(eax, eax);
 		jz(no_flush);
-		mov(eax, int32(address));
+		mov(eax, address);
 		jmp(intrinsics_.save_return, T_NEAR);
 		L(no_flush);
 	}
@@ -434,7 +419,6 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 }
 
 bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
-	static const int8 gp_offset = value_assert<int8>(offsetof(processor, registers_) - 128);
 	static const int8 memp_offset = value_assert<int8>(offsetof(processor, memory_ptr_) - 128);
 	static const int8 mems_offset = value_assert<int8>(offsetof(processor, memory_size_) - 128);
 
@@ -442,13 +426,10 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
-	if (rt.get_register() == 0) {
+	if (rt.is_zero()) {
 		// nop
 		return false;
 	}
-
-	const int8 base_offset = value_assert<int8>(gp_offset + (4 * base.get_register()));
-	const int8 rt_offset = value_assert<int8>(gp_offset + (4 * rt.get_register()));
 
 	const auto mmu_type = jit_.processor_.mmu_type_;
 
@@ -463,12 +444,12 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			add(rcx, int8(-128));
 			// 'rcx' is the first parameter (processor ptr)
 
-			if (base.get_register() != 0) {
+			if (!base.is_zero()) {
 				// The effective address is '[base] + offset'
 				mov(edx, get_register_op32(base));
 
 				if (offset != 0) {
-					add(edx, int32(offset));
+					add(edx, offset);
 				}
 			}
 			else {
@@ -476,7 +457,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					xor_(edx, edx);
 				}
 				else {
-					mov(edx, int32(offset));
+					mov(edx, offset);
 				}
 			}
 
@@ -499,7 +480,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 		else {
 			// This would be far faster if we could easily memory map. Then we could just wrap the address range around.
 			// So ist das Leben.
-			if (base.get_register() == 0) {
+			if (base.is_zero()) {
 				// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 				// Check for basic range things.
 				const uint32 start_address = uint32(offset);
@@ -512,7 +493,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 						(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
 						(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(load_size)) > 0x100000000ull)
 					{
-						mov(eax, int32(address));
+						mov(eax, address);
 						jmp(intrinsics_.adel, T_NEAR);
 						return false;
 					}
@@ -521,13 +502,13 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					// I'm going to do this the dumb way.
 					for (uint64 addr = start_address; addr < end_address; ++addr) {
 						if (addr == 0) {
-							mov(eax, int32(address));
+							mov(eax, address);
 							jmp(intrinsics_.adel, T_NEAR);
 							return false;
 						}
 						if (jit_.processor_.stack_size_) {
 							if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
-								mov(eax, int32(address));
+								mov(eax, address);
 								jmp(intrinsics_.adel, T_NEAR);
 								return false;
 							}
@@ -536,7 +517,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				}
 
 				mov(rdx, qword[rbp + memp_offset]);
-				mov(eax, uint32(offset));
+				mov(eax, offset);
 			}
 			else {
 				mov(eax, get_register_op32(base));
@@ -668,9 +649,8 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					return false;
 				}
 
-				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
+				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
+				const int16 ft_offset = ft.get_offset();
 
 				mov(rax, qword[r13]);
 				mov(qword[r12 + ft_offset], rax);
@@ -680,9 +660,8 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					return false;
 				}
 
-				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
+				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
+				const int16 ft_offset = ft.get_offset();
 
 				mov(eax, dword[r13]);
 				mov(dword[r12 + ft_offset], eax);
@@ -692,9 +671,9 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
 
-				const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
+				const int8 rs_offset = rs.get_offset();
 
-				if (!get_address(address + offset, 4)) {
+				if (!get_address(uint32(address) + offset, 4)) {
 					return false;
 				}
 
@@ -808,9 +787,8 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					return false;
 				}
 
-				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
+				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
+				const int16 ft_offset = ft.get_offset();
 
 				mov(rax, qword[rdx + rax]);
 				mov(qword[r12 + ft_offset], rax);
@@ -820,9 +798,8 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					return false;
 				}
 
-				static const int16 fp_offset = value_assert<int16>(offsetof(coprocessor1, m_registers) - 128);
-				const instructions::FPRegister<16, 5> ft(instruction, (mips::coprocessor1 & __restrict)*jit_.processor_.get_coprocessor(1));
-				const int16 ft_offset = value_assert<int16>(fp_offset + (8 * ft.get_register()));
+				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
+				const int16 ft_offset = ft.get_offset();
 
 				mov(eax, dword[rdx + rax]);
 				mov(dword[r12 + ft_offset], eax);
@@ -832,9 +809,9 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
 
-				const int8 rs_offset = value_assert<int8>(gp_offset + (4 * rs.get_register()));
+				const int8 rs_offset = rs.get_offset();
 
-				if (!get_address(address + offset, 4)) {
+				if (!get_address(uint32(address) + offset, 4)) {
 					return false;
 				}
 
