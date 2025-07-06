@@ -54,7 +54,7 @@ namespace mips {
 
 	private:
 		static constexpr const size_t num_registers = 32;
-		static constexpr const size_t num_coprocessors = size_t(coprocessor::types::max);
+		static constexpr const size_t num_coprocessors = coprocessor::max;
 
 		// These are at the highest point to be easier on the JIT. < 127 B addresses are grand.
 		alignas(64) std::array<register_type, num_registers /*- 1*/>	registers_{ 0 };
@@ -196,19 +196,10 @@ namespace mips {
 			xassert(coprocessor::is_valid(type));
 			return self.get_coprocessor(std::to_underlying(type));
 		}
-
-		template <coprocessor::types Type>
+	private:
+		template <std::underlying_type_t<coprocessor::types> Index>
 		[[nodiscard]]
-		auto get_coprocessor(this auto&& self) requires(
-			coprocessor::is_valid(Type)
-		)
-		{
-			return self.template get_coprocessor<std::to_underlying(Type)>();
-		}
-
-		template <uint32 Index>
-		[[nodiscard]]
-		auto get_coprocessor(this auto&& self) -> std::conditional_t<
+		auto get_coprocessor_impl(this auto&& self) -> std::conditional_t<
 			Index == std::to_underlying(coprocessor::types::floating_point),
 			_make_qual(coprocessor1 *),
 			_make_qual(coprocessor *)
@@ -227,6 +218,32 @@ namespace mips {
 			{
 				return coprocessor;
 			}
+		}
+
+	public:
+		template <std::underlying_type_t<coprocessor::types> Index>
+		[[nodiscard]]
+		auto get_coprocessor(this auto&& self) -> std::conditional_t<
+			Index == std::to_underlying(coprocessor::types::floating_point),
+			_make_qual(coprocessor1 *),
+			_make_qual(coprocessor *)
+		>
+		requires (
+			Index < std::tuple_size_v<decltype(coprocessors_)>
+		)
+		{
+			return self.template get_coprocessor_impl<Index>();
+		}
+
+		template <coprocessor::types Type>
+		[[nodiscard]]
+		auto get_coprocessor(this auto&& self) requires(
+			coprocessor::is_valid(Type)
+		)
+		{
+			static constexpr const auto Index = std::to_underlying(Type);
+
+			return self.template get_coprocessor_impl<Index>();
 		}
 
 		template <typename Self>

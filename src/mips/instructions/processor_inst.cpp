@@ -62,13 +62,9 @@ namespace mips::instructions
 		_instruction_initializer(const char *name, uint32 instructionMask, uint32 instructionRef, instructionexec_t exec, uint32 OpFlags, bool control)
 		{
 #if !USE_STATIC_INSTRUCTION_SEARCH
-			if (!instructions::StaticInitVarsPtr)
-			{
-				instructions::StaticInitVarsPtr = new instructions::StaticInitVars;
-			}
 			const InstructionInfo Procs{ name, 1, exec, OpFlags, { .control = control } };
 			FullProcInfo FullProc = { instructionMask, instructionRef, Procs };
-			instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
+			instructions::GetStaticInitVars().g_ProcInfos.push_back(FullProc);
 #else
 			(void)name;
 			(void)instructionMask;

@@ -15,4 +15,9 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>D:\Projects\vemips\vemips_sdk\MIPS_SDK</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-ASan|x64'">
+    <LocalDebuggerCommandArguments>/sdk=D:\Projects\vemips\vemips_sdk\MipsTest\..\MIPS_SDK D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.vcxproj Release Win32 build MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerWorkingDirectory>D:\Projects\vemips\vemips_sdk\MIPS_SDK</LocalDebuggerWorkingDirectory>
+  </PropertyGroup>
 </Project>

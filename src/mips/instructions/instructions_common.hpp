@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "coprocessor/coprocessor.hpp"
+
 namespace mips
 {
 	class processor;
@@ -108,43 +110,48 @@ namespace mips
 			word_fp = 3,
 			long_fp = 4,
 			void_fp = 5,
+
+			_max,
+			_bits = log2_ceil(_max)
 		};
 
 		struct instruction_flags final {
 			bool control : 1;
+
+			static constexpr const size_t Bits = 1;
 		};
 
-		struct InstructionInfo
+		//_Pragma("pack(push, 8)")
+		struct InstructionInfo final
 		{
-			const char * Name;
+			const char* Name;
 			instructionexec_t Proc;
 			uint32 OpFlags;
-			uint8 CoprocessorIdx;
-			struct {
-				instruction_type Type : 3;
-				instruction_flags Flags;
-			};
+			uint8 CoprocessorIdx : log2_ceil(coprocessor::max);
+			instruction_type Type : instruction_type::_bits;
+			instruction_flags Flags/* : instruction_flags::Bits*/;
 
 			InstructionInfo(
-				const char* __restrict name,
-				uint8 coprocessor,
-				instructionexec_t proc,
-				uint32 op_flags,
-				instruction_flags flags ,
-				instruction_type type = instruction_type::normal
-			) :
+				const char* const __restrict name,
+				const uint8 coprocessor,
+				const instructionexec_t proc,
+				const uint32 op_flags,
+				const instruction_flags flags,
+				const instruction_type type = instruction_type::normal
+			) noexcept :
 				Name(name),
 				Proc(proc),
 				OpFlags(op_flags),
 				CoprocessorIdx(coprocessor),
 				Type(type),
 				Flags(flags)
-			{}
+			{
+				xassert(coprocessor::is_valid(coprocessor));
+			}
 
 			InstructionInfo(const InstructionInfo&) = default;
 		};
-
-		static constexpr const size_t foo = sizeof(InstructionInfo);
+		//_Pragma("pack(pop)")
 
 #if !USE_STATIC_INSTRUCTION_SEARCH
 
@@ -163,15 +170,18 @@ namespace mips
 		template <typename T> using identity_map = google::sparse_hash_map<uint32, T>;
 #elif USE_HASH_MAP
 		template <typename T> using identity_map = std::unordered_map<uint32, T, identity_hash>;
+		template <typename T> using identity_set_t = std::unordered_set<T>;
 #else
 		template <typename T> using identity_map = std::map<uint32, T>;
+		template <typename T> using identity_set_t = std::set<T>;
 #endif
-		using identity_set = std::unordered_set<uint32>;
+		using identity_set = identity_set_t<uint32>;
 
 		struct MapOrInfo
 		{
-			bool IsMap;
-			uint32 Mask;
+			bool IsMap = false;
+			uint32 Mask = 0U;
+			// TODO : use std::variant
 			union
 			{
 				InstructionInfo Info;
@@ -185,7 +195,7 @@ namespace mips
 			void init_map()
 			{
 				IsMap = true;
-				new (&Map) identity_map<MapOrInfo *>;
+				std::construct_at(&Map);
 #if USE_GOOGLE_SPARSE_HASH_MAP
 				Map.set_deleted_key(uint32(-1));
 #elif USE_GOOGLE_DENSE_HASH_MAP
@@ -204,7 +214,7 @@ namespace mips
 					{
 						delete map.second;
 					}
-					Map.~identity_map<MapOrInfo *>();
+					std::destroy_at(&Map);
 					delete Default;
 				}
 			}
@@ -222,7 +232,7 @@ namespace mips
 			std::unordered_set<uint32, identity_hash> g_InstructionMasks;
 			std::vector<FullProcInfo> g_ProcInfos;
 		};
-		extern StaticInitVars * __restrict StaticInitVarsPtr;
+		extern StaticInitVars& GetStaticInitVars();
 #endif
 
 		class _RegisterBase

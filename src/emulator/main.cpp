@@ -115,7 +115,7 @@ namespace {
 #ifndef EMSCRIPTEN
 	struct option final {
 		std::vector<tstring_view> option_str;
-		std::string description;
+		tstring_view description;
 		std::function<void(argument_data & __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i)> procedure;
 	};
 #endif
@@ -143,181 +143,184 @@ namespace {
 	}
 
 #ifndef EMSCRIPTEN
-	static const std::vector<option> options = {
-		{
-			{TSTR("-m"), TSTR("--memory")},
-			"Specify how much memory to which the CPU shall have access [default: 1048576]",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
-				if (i == args.size() - 1) [[unlikely]] {
-					fmt::println(stderr, "Error: No quantity following -m option");
-					std::exit(1);
+	static std::array<option, 15> get_options ()
+	{
+		return {
+			option{
+				{TSTR("-m"), TSTR("--memory")},
+				TSTR("Specify how much memory to which the CPU shall have access [default: 1048576]"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+					if (i == args.size() - 1) [[unlikely]] {
+						fmt::println(stderr, "Error: No quantity following -m option");
+						std::exit(1);
+					}
+					++i;
+					const auto memory = string_to_ll(args[i], 0);
+					if (memory < 4096) [[unlikely]] {
+						fmt::println(stderr, "Error: You cannot specify < 4096 bytes of memory");
+						std::exit(1);
+					}
+					if (memory > std::numeric_limits<uint32>::max()) [[unlikely]] {
+						fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of memory");
+						std::exit(1);
+					}
+					argument_data.available_memory = uint32(memory);
 				}
-				++i;
-				const auto memory = string_to_ll(args[i], 0);
-				if (memory < 4096) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify < 4096 bytes of memory");
-					std::exit(1);
+			},
+			{
+				{TSTR("-s"), TSTR("--stack")},
+				TSTR("Specify how much memory will be reserved for the stack [default: memory / 2]"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+					if (i == args.size() - 1) [[unlikely]] {
+						fmt::println(stderr, "Error: No quantity following -s option");
+						std::exit(1);
+					}
+					++i;
+					const auto memory = string_to_ll(args[i], 0);
+					if (memory < 0) [[unlikely]] {
+						fmt::println(stderr, "Error: You cannot specify < 0 bytes of stack memory");
+						std::exit(1);
+					}
+					if (memory > std::numeric_limits<uint32>::max()) [[unlikely]] {
+						fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of stack memory");
+						std::exit(1);
+					}
+					argument_data.stack_memory = uint32(memory);
 				}
-				if (memory > std::numeric_limits<uint32>::max()) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of memory");
-					std::exit(1);
+			},
+			{
+				{TSTR("--debug")},
+				TSTR("Enable the debugger. GDB Port must follow."),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+					if (i == args.size() - 1) [[unlikely]] {
+						fmt::println(stderr, "Error: No port following ---debug option");
+						std::exit(1);
+					}
+					++i;
+					const auto port = string_to_ll(args[i], 0);
+					if (!mips::within(port, std::numeric_limits<uint16>{})) [[unlikely]] {
+						fmt::println(stderr, "Error: Provided debugger port number is out of range.");
+						std::exit(1);
+					}
+					argument_data.debug = { uint16(port), true };
 				}
-				argument_data.available_memory = uint32(memory);
-			}
-		},
-		{
-			{TSTR("-s"), TSTR("--stack")},
-			"Specify how much memory will be reserved for the stack [default: memory / 2]",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
-				if (i == args.size() - 1) [[unlikely]] {
-					fmt::println(stderr, "Error: No quantity following -s option");
-					std::exit(1);
+			},
+			{
+				{TSTR("-h"), TSTR("--help")},
+				TSTR("Displays tool help information [you are viewing this]"),
+				[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
+					print_help();
+					std::exit(0);
 				}
-				++i;
-				const auto memory = string_to_ll(args[i], 0);
-				if (memory < 0) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify < 0 bytes of stack memory");
-					std::exit(1);
+			},
+			{
+				{TSTR("-v"), TSTR("--version")},
+				TSTR("Displays tool version information"),
+				[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
+					print_version();
+					std::exit(0);
 				}
-				if (memory > std::numeric_limits<uint32>::max()) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify greater than or equal to 2^32 bytes of stack memory");
-					std::exit(1);
+			},
+			{
+				{TSTR("--changes")},
+				TSTR("Displays most recent changes to build"),
+				[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
+					print_changes();
+					std::exit(0);
 				}
-				argument_data.stack_memory = uint32(memory);
-			}
-		},
-		{
-			{TSTR("--debug")},
-			"Enable the debugger. GDB Port must follow.",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
-				if (i == args.size() - 1) [[unlikely]] {
-					fmt::println(stderr, "Error: No port following ---debug option");
-					std::exit(1);
+			},
+			{
+				{TSTR("--rox")},
+				TSTR("Makes executable memory read-only. [cannot be combined with --nommu]"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
+					argument_data.use_rox = true;
 				}
-				++i;
-				const auto port = string_to_ll(args[i], 0);
-				if (!mips::within(port, std::numeric_limits<uint16>{})) [[unlikely]] {
-					fmt::println(stderr, "Error: Provided debugger port number is out of range.");
-					std::exit(1);
+			},
+			{
+				{TSTR("--no-cti")},
+				TSTR("Disable CTI flag checking"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
+					argument_data.disable_cti = true;
 				}
-				argument_data.debug = { uint16(port), true };
-			}
-		},
-		{
-			{TSTR("-h"), TSTR("--help")},
-			"Displays tool help information [you are viewing this]",
-			[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
-				print_help();
-				std::exit(0);
-			}
-		},
-		{
-			{TSTR("-v"), TSTR("--version")},
-			"Displays tool version information",
-			[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
-				print_version();
-				std::exit(0);
-			}
-		},
-		{
-			{TSTR("--changes")},
-			"Displays most recent changes to build",
-			[](argument_data& __restrict, const std::span<const tchar*>, std::size_t& __restrict) {
-				print_changes();
-				std::exit(0);
-			}
-		},
-		{
-			{TSTR("--rox")},
-			"Makes executable memory read-only. [cannot be combined with --nommu]",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-				argument_data.use_rox = true;
-			}
-		},
-		{
-			{TSTR("--no-cti")},
-			"Disable CTI flag checking",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-				argument_data.disable_cti = true;
-			}
-		},
-		{
-			{TSTR("--mmu")},
-			"Specifies which MMU to use [emulated, none, host] [default: emulated].",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
-				if (i == args.size() - 1) [[unlikely]] {
-					fmt::println(stderr, "Error: No MMU following --mmu option");
-					std::exit(1);
+			},
+			{
+				{TSTR("--mmu")},
+				TSTR("Specifies which MMU to use [emulated, none, host] [default: emulated]."),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+					if (i == args.size() - 1) [[unlikely]] {
+						fmt::println(stderr, "Error: No MMU following --mmu option");
+						std::exit(1);
+					}
+					++i;
+					const auto mmu_v = args[i];
+					if (tstrcmp(mmu_v, "emulated") == 0) {
+						argument_data.mmu_type = mips::mmu::emulated;
+					}
+					else if (tstrcmp(mmu_v, "none") == 0) {
+						argument_data.mmu_type = mips::mmu::none;
+					}
+					else if (tstrcmp(mmu_v, "host") == 0) {
+						argument_data.mmu_type = mips::mmu::host;
+					}
+					else [[unlikely]] {
+						fmt::println(stderr, TSTR("Error: The provided MMU (\'{}\') is not a valid MMU type"), mmu_v);
+						std::exit(1);
+					}
 				}
-				++i;
-				const auto mmu_v = args[i];
-				if (tstrcmp(mmu_v, "emulated") == 0) {
-					argument_data.mmu_type = mips::mmu::emulated;
+			},
+			{
+				{TSTR("--icache")},
+				TSTR("Enables instruction cache."),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
+					argument_data.instruction_cache = true;
 				}
-				else if (tstrcmp(mmu_v, "none") == 0) {
-					argument_data.mmu_type = mips::mmu::none;
+			},
+			{
+				{TSTR("--jit0")},
+				TSTR("Disable JIT usage in emulator"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
+					argument_data.jit = mips::JitType::None;
 				}
-				else if (tstrcmp(mmu_v, "host") == 0) {
-					argument_data.mmu_type = mips::mmu::host;
+			},
+			{
+				{TSTR("--jit1")},
+				TSTR("Enable JIT in emulator (ticked mode not yet implemented) [default]"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
+					argument_data.jit = mips::JitType::Jit;
 				}
-				else [[unlikely]] {
-					fmt::println(stderr, TSTR("Error: The provided MMU (\'{}\') is not a valid MMU type"), mmu_v);
-					std::exit(1);
+			},
+			{
+				{TSTR("--jit2")},
+				TSTR("Enable function table in emulator (ticked mode not yet implemented)"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
+					argument_data.jit = mips::JitType::FunctionTable;
 				}
-			}
-		},
-		{
-			{TSTR("--icache")},
-			"Enables instruction cache.",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-				argument_data.instruction_cache = true;
-			}
-		},
-		{
-			{TSTR("--jit0")},
-			"Disable JIT usage in emulator",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-				argument_data.jit = mips::JitType::None;
-			}
-		},
-		{
-			{TSTR("--jit1")},
-			"Enable JIT in emulator (ticked mode not yet implemented) [default]",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-				argument_data.jit = mips::JitType::Jit;
-			}
-		},
-		{
-			{TSTR("--jit2")},
-			"Enable function table in emulator (ticked mode not yet implemented)",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-				argument_data.jit = mips::JitType::FunctionTable;
-			}
-		},
-		{
-			{TSTR("--stats")},
-			"Enable capturing of instruction stats",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-				argument_data.instruction_stats = true;
-			}
-		},
-		{
-			{TSTR("-t"), TSTR("--ticks")},
-			"Enables ticked execution of emulator and increments by provided ticks",
-			[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
-				if (i == args.size() - 1) [[unlikely]] {
-					fmt::println(stderr, "Error: No quantity following --ticks option");
-					std::exit(1);
+			},
+			{
+				{TSTR("--stats")},
+				TSTR("Enable capturing of instruction stats"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
+					argument_data.instruction_stats = true;
 				}
-				++i;
-				argument_data.ticks = string_to_ull(args[i], 0);
-				if (argument_data.ticks == 0) [[unlikely]] {
-					fmt::println(stderr, "Error: You cannot specify 0 ticks");
-					std::exit(1);
+			},
+			{
+				{TSTR("-t"), TSTR("--ticks")},
+				TSTR("Enables ticked execution of emulator and increments by provided ticks"),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*> args, std::size_t& __restrict i) {
+					if (i == args.size() - 1) [[unlikely]] {
+						fmt::println(stderr, "Error: No quantity following --ticks option");
+						std::exit(1);
+					}
+					++i;
+					argument_data.ticks = string_to_ull(args[i], 0);
+					if (argument_data.ticks == 0) [[unlikely]] {
+						fmt::println(stderr, "Error: You cannot specify 0 ticks");
+						std::exit(1);
+					}
 				}
-			}
-		},
-	};
+			},
+		};
+	}
 #endif
 
 	static void print_changes() {
@@ -388,7 +391,7 @@ namespace {
 			"USAGE: emulator.exe [options] <binary>\n\n"
 			"OPTIONS:"
 		);
-		for (const auto& option : options) {
+		for (const auto& option : get_options()) {
 			bool first = true;
 			for (const auto opt : option.option_str) {
 				if (first) {
@@ -399,7 +402,7 @@ namespace {
 				}
 				first = false;
 			}
-			fmt::println("\n		{}", option.description.c_str());
+			fmt::println(TSTR("\n		{}"), option.description);
 		}
 	}
 #endif
@@ -426,7 +429,7 @@ namespace {
 #ifndef EMSCRIPTEN
 		for (std::size_t i = 1; i < args.size(); ++i) {
 			bool option_found = false;
-			for (const auto& option : options) {
+			for (const auto& option : get_options()) {
 				bool matches_any = false;
 				for (const auto& str : option.option_str) {
 					if (str == args[i]) {

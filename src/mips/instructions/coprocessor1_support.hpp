@@ -288,27 +288,28 @@ namespace mips::instructions
 			const char *name,
 			uint32 instructionMask,
 			uint32 instructionRef,
-			std::initializer_list<MaskType> referenceMasks,
+			std::span<const MaskType>&& referenceMasks,
 			instructionexec_t exec_f, instructionexec_t exec_d, instructionexec_t exec_w, instructionexec_t exec_l,
 			uint32 OpFlags,
 			bool control
 		)
 		{
 #if !USE_STATIC_INSTRUCTION_SEARCH
-			if (!instructions::StaticInitVarsPtr)
-			{
-				instructions::StaticInitVarsPtr = new instructions::StaticInitVars;
-			}
-			instructions::StaticInitVarsPtr->g_InstructionMasks.insert(instructionMask);
+			auto& staticInitVars = GetStaticInitVars();
+			staticInitVars.g_InstructionMasks.insert(instructionMask);
 			for (const MaskType reference_mask : referenceMasks)
 			{
 				uint32 referenceMask = uint32(reference_mask.Mask) | instructionRef;
 
 				const auto instruction_data = get_instruction_type(reference_mask.Type, exec_f, exec_d, exec_w, exec_l);
 
-				const InstructionInfo Procs{ name, 1, instruction_data.executor, OpFlags, { .control = control }, instruction_data.type };
-				FullProcInfo FullProc = { instructionMask, referenceMask, Procs };
-				instructions::StaticInitVarsPtr->g_ProcInfos.push_back(FullProc);
+				InstructionInfo Procs{ name, 1, instruction_data.executor, OpFlags, { .control = control }, instruction_data.type };
+				FullProcInfo FullProc {
+					.InstructionMask = instructionMask,
+					.RefMask = referenceMask,
+					.ProcInfo = std::move(Procs)
+				};
+				staticInitVars.g_ProcInfos.push_back(std::move(FullProc));
 			}
 #endif
 		}
@@ -819,10 +820,10 @@ struct COP1_ ## InsInstruction																																																		
 {																																																																						\
 	COP1_ ## InsInstruction() = delete;																																																				\
 	static_assert(std::is_same<decltype(InsOperFlags), OpFlags>::value, "Operation Flags field must be of type 'OpFlags'");										\
-	static constexpr uint32 OpMask = InsOpMask;																																																\
-	static constexpr OpFlags Flags = InsOperFlags | OpFlags::COP1;																																						\
-	static constexpr MaskType ExtMasks[] = {__VA_ARGS__};																																											\
-	static constexpr FormatBits Formats = GetFormatBitsFromExtMask(ExtMasks);																																	\
+	static constexpr const uint32 OpMask = InsOpMask;																																																\
+	static constexpr const OpFlags Flags = InsOperFlags | OpFlags::COP1;																																						\
+	static constexpr const MaskType ExtMasks[] = {__VA_ARGS__};																																											\
+	static constexpr const FormatBits Formats = GetFormatBitsFromExtMask(ExtMasks);																																	\
 																																																																						\
 	template <typename format_t>																																				  																		\
 	static _forceinline bool SubExecute(instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor);	\
@@ -865,13 +866,14 @@ namespace COP1_ ## InsInstruction ## _NS																																								
 		{																																												  																							\
 			static constexpr auto _functor = nullptr;																																															\
 		};																																																																			\
+		\
 	public:																																																																		\
 		_StaticInit() :																																																													\
 			_instruction_initializer(																																																							\
 				"COP1_" #InsInstruction,																																																						\
 				COP1_ ## InsInstruction::OpMask,																																																		\
 				InsOpRef,																																																														\
-				{__VA_ARGS__},																																																											\
+				COP1_ ## InsInstruction::ExtMasks, \
 				functor<float, false, uint32(COP1_ ## InsInstruction::Formats & FormatBits::Single) != 0>::_functor,																\
 				functor<double, false, uint32(COP1_ ## InsInstruction::Formats & FormatBits::Double) != 0>::_functor,																\
 				functor<int32,																																																											\

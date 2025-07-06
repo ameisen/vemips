@@ -11,6 +11,11 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#if !USE_STATIC_INSTRUCTION_SEARCH
+#	include <mutex>
+#endif
+
+#include "instructions_table.hpp"
 
 using namespace mips;
 
@@ -18,7 +23,12 @@ namespace mips::instructions
 {
 	// A significant amount of logic used to do lookups on instructions.
 #if !USE_STATIC_INSTRUCTION_SEARCH
-	StaticInitVars * __restrict StaticInitVarsPtr = nullptr;
+	StaticInitVars& GetStaticInitVars()
+	{
+		static StaticInitVars* const InitVarsPtr = new StaticInitVars;
+		xassert(InitVarsPtr != nullptr);
+		return *InitVarsPtr;
+	}
 
 	void populate_map(MapOrInfo &current_map, std::vector<FullProcInfo> &proc_infos)
 	{
@@ -232,16 +242,22 @@ namespace mips::instructions
 
 	void finish_map_build()
 	{
-		static bool AlreadyBuilt = false;
-		if (AlreadyBuilt)
+		static volatile bool AlreadyBuilt = false;
+		static std::mutex AlreadyBuiltLock;
 		{
-			return;
-		}
-		AlreadyBuilt = true;
+			std::unique_lock lock{AlreadyBuiltLock};
 
-		std::vector<FullProcInfo> procInfos = instructions::StaticInitVarsPtr->g_ProcInfos;
-		instructions::StaticInitVarsPtr->g_LookupMap.init_map();
-		populate_map(instructions::StaticInitVarsPtr->g_LookupMap, procInfos);
+			if (AlreadyBuilt)
+			{
+				return;
+			}
+			AlreadyBuilt = true;
+		}
+
+		auto& staticInitVars = GetStaticInitVars();
+		std::vector<FullProcInfo> procInfos = staticInitVars.g_ProcInfos;
+		staticInitVars.g_LookupMap.init_map();
+		populate_map(staticInitVars.g_LookupMap, procInfos);
 	}
 #endif
 }
@@ -254,7 +270,7 @@ namespace mips
 #if USE_STATIC_INSTRUCTION_SEARCH
 		return instructions::get_instruction(instruction);
 #else
-		const auto * __restrict current_map = &instructions::StaticInitVarsPtr->g_LookupMap;
+		const auto * __restrict current_map = &instructions::GetStaticInitVars().g_LookupMap;
 		while (current_map)
 		{
 			if (current_map->IsMap)

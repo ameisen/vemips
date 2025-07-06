@@ -271,14 +271,14 @@ namespace vemips::tablegen::writers {
 		indented_print(indent, "namespace mips::instructions {{");
 		_INDENTED{
 			indented_print(indent, "const InstructionInfo * get_instruction (instruction_t i) {{");
-			traverse_map("nullptr", nullptr, &mips::instructions::StaticInitVarsPtr->g_LookupMap, static_proc, indent + 1);
+			traverse_map("nullptr", nullptr, &mips::instructions::GetStaticInitVars().g_LookupMap, static_proc, indent + 1);
 			_INDENTED indented_print(indent, "return nullptr;");
 			indented_print(indent, "}}");
 
 			newline();
 
 			indented_print(indent, "bool execute_instruction (instruction_t i, mips::processor & __restrict p) {{");
-			traverse_map("false", nullptr, &mips::instructions::StaticInitVarsPtr->g_LookupMap, proc_call, indent + 1);
+			traverse_map("false", nullptr, &mips::instructions::GetStaticInitVars().g_LookupMap, proc_call, indent + 1);
 			_INDENTED indented_print(indent, "return false;");
 			indented_print(indent, "}}");
 		}

@@ -44,23 +44,19 @@ namespace mips {
 	class jit1 final {
 		friend class Jit1_CodeGen;
 
-		template <size_t X>
-		struct log2 { enum { value = 1 + log2<X/2>::value }; };
-  
-		template <> struct log2<1> { enum { value = 1 }; };
-		template <> struct log2<0> { enum { value = 0 }; };
-
 		static constexpr const uint32 ChunkSize = 0x100; // ChunkSize represents the size for MIPS memory.
+	public:
 		static constexpr const size_t MaxChunkRealSize = (ChunkSize / 0x100) * 8192;
-		static constexpr const size_t ChunkSizeLog2 = log2<ChunkSize - 1>::value;
+	private:
+		static constexpr const size_t ChunkSizeLog2 = log2_ceil(ChunkSize);
 		static constexpr const size_t RemainingLog2 = 32 - ChunkSizeLog2 - 8 - 8;
 		static constexpr const size_t NumInstructionsChunk = ChunkSize / 4;
 		using ChunkOffset = std::array<uint32, NumInstructionsChunk>;
 		struct Chunk final {
-			ChunkOffset * __restrict m_chunk_offset;
-			const uint8 * __restrict m_data;
-			uint32 m_offset;
-			uint32 m_datasize;
+			ChunkOffset * __restrict m_chunk_offset = nullptr;
+			uint8 * __restrict m_data = nullptr;
+			uint32 m_offset = 0;
+			uint32 m_datasize = 0;
 			// TODO there are better ways to handle this that don't require reconfiguring the entire chunk.
 			bool m_has_fixups = false;
 			struct patch final {
@@ -76,8 +72,6 @@ namespace mips {
 				return v;
 			}
 		};
-
-		static _nothrow void free_executable(void*);
 
 		struct chunk_data;
 		static void initialize_chunk(chunk_data& __restrict chunk);
@@ -105,19 +99,13 @@ namespace mips {
 				return *this;
 			}
 
-			_nothrow ~chunk_data() noexcept {
-				m_chunkoffset_allocator.release(offset);
-			}
+			_nothrow ~chunk_data() noexcept;
 
-			_forceinline _nothrow void initialize() {
+			_forceinline _nothrow void initialize() noexcept {
 				initialize_chunk(*this);
 			}
 
-			_forceinline _nothrow void release() const {
-				if (chunk) {
-					free_executable(chunk);
-				}
-			}
+			_nothrow void release() noexcept;
 
 			_forceinline _nothrow bool contained() const __restrict {
 				return chunk != nullptr;
@@ -186,10 +174,11 @@ namespace mips {
 	private:
 
 #if USE_LEVELED_MAP
-		directory_table<chunk_data, true, 1 << RemainingLog2, 256, 256> jit_map_;
+		using jit_map_t = directory_table<chunk_data, true, 1 << RemainingLog2, 256, 256>;
 #else
-		MapLevel3 jit_map;
+		using jit_map_t = MapLevel3;
 #endif
+		std::unique_ptr<jit_map_t> jit_map_ = std::make_unique<jit_map_t>();
 		std::vector<Chunk*> chunks_;
 		using instruction_cache_t = sentinel_associate_cache<uint32, jit1::jit_instructionexec_t, 0, uintptr(-1)>;
 		_no_unique
@@ -197,11 +186,12 @@ namespace mips {
 		processor& __restrict processor_;
 		Chunk * __restrict last_chunk_ = nullptr;
 		ChunkOffset * __restrict last_chunk_offset_ = nullptr;
-		Chunk* __restrict flush_chunk_;
+		Chunk* __restrict flush_chunk_ = nullptr;
 		size_t largest_instruction_ = 0;
+		std::shared_ptr<char[]> global_exec_data;
 		uint32 last_chunk_address_ = uint32(-1);
-		uint32 current_executing_chunk_address_;
-		uint32 flush_address_;
+		uint32 current_executing_chunk_address_ = 0;
+		uint32 flush_address_ = 0;
 
 		void populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, uint32 start_address, bool update);
 	public:

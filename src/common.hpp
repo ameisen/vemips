@@ -46,7 +46,7 @@
 # define _allocator __declspec(allocator)
 # define _used
 # define _no_unique [[no_unique_address, msvc::no_unique_address]]
-#	define _clear_cache(start, end)
+#	define _clear_cache(start, end) FlushInstructionCache(GetCurrentProcess(), (start), static_cast<size_t>((end) - (start)))
 #	define _constant_p(expression) (false)
 
 #elif defined(__clang__)
@@ -318,6 +318,20 @@ namespace mips {
 				>
 			>
 		>;
+
+	template <typename T>
+	requires std::is_integral_v<T>
+	static constexpr unsigned log2_floor(const T value)
+	{
+	    return value == 1 ? 0 : 1+log2_floor(value >> 1);
+	}
+
+	template <typename T>
+	requires std::is_integral_v<T>
+	static constexpr unsigned log2_ceil(const T value)
+	{
+	    return value == 1 ? 0 : log2_floor(value - 1) + 1;
+	}
 }
 
 #define _make_qual(type) copy_qualifiers<decltype(self), type>

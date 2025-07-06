@@ -25,7 +25,8 @@ using namespace mips;
 // this can and should be global to all JITs.
 namespace {
 	static constinit size_t global_exec_data_size = 0x1000;
-	static char * g_global_exec_data = nullptr;
+	static std::mutex g_global_exec_data_lock;
+	static std::shared_ptr<char[]> g_global_exec_data;
 	static uintptr g_ex_return = 0;
 }
 
@@ -33,37 +34,66 @@ extern "C" uintptr jit1_springboard(uintptr instruction, uintptr processor, uint
 extern "C" void jit1_drop_signal();
 
 namespace {
-	_forceinline __declspec(restrict, nothrow) void* allocate_executable(size_t size) {
+	static std::mutex free_chunks_lock;
+	static std::vector<void*> free_chunks;
+	static const size_t allocation_granularity = []
+	{
+		SYSTEM_INFO info = {};
+		GetSystemInfo(&info);
+		return info.dwAllocationGranularity;
+	}();
+
+	_forceinline __declspec(restrict, nothrow) void* allocate_executable(const size_t size) {
 		return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	}
 
-	template <typename T>
-	_forceinline __declspec(restrict, nothrow) T* allocate_executable() {
-		return (T*)allocate_executable(sizeof(T));
+	template <size_t ChunkSize>
+	_forceinline __declspec(restrict, nothrow) void* allocate_executable_chunk() {
+		{
+			std::unique_lock lock{free_chunks_lock};
+			if (!free_chunks.empty())
+			{
+				auto result = free_chunks.back();
+				free_chunks.pop_back();
+				return result;
+			}
+		}
+
+		const size_t alloc_size = std::max(
+			allocation_granularity,
+			ChunkSize
+		);
+
+		void* new_ptr = VirtualAlloc(nullptr, alloc_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+
+		const size_t num_chunks = alloc_size / ChunkSize;
+
+		uintptr ptr = uintptr(new_ptr);
+		{
+			std::unique_lock lock{free_chunks_lock};
+			for (size_t i = 1; i < num_chunks; ++i)
+			{
+				ptr += ChunkSize;
+				free_chunks.push_back(reinterpret_cast<void*>(ptr));
+			}
+		}
+
+		return new_ptr;
 	}
 
-	_forceinline __declspec(restrict, nothrow) void* allocate(size_t size) {
-		return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-	}
-
-	template <typename T>
-	_forceinline __declspec(restrict, nothrow) T* allocate() {
-		return (T*)allocate(sizeof(T));
-	}
-
-	_forceinline __declspec(nothrow) void free_executable(void *ptr) {
+	_forceinline __declspec(nothrow) void free_executable(void * const ptr) {
 		VirtualFree(ptr, 0, MEM_RELEASE);
 	}
-}
 
-_nothrow void jit1::free_executable(void *ptr) {
-	::free_executable(ptr);
+	_forceinline __declspec(nothrow) void free_executable_chunk(void * const ptr) {
+		std::unique_lock lock{free_chunks_lock};
+		free_chunks.push_back(ptr);
+	}
 }
 
 void jit1::initialize_chunk(chunk_data& __restrict chunk) {
 	if (!chunk.chunk) {
-		chunk.chunk = allocate_executable<Chunk>();
-		new (chunk.chunk) Chunk;
+		chunk.chunk = new Chunk;
 
 		chunk.offset = m_chunkoffset_allocator.allocate();
 		memset(chunk.offset->data(), 0, chunk.offset->size() * sizeof(uint32));
@@ -123,13 +153,21 @@ namespace {
 
 jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 {
-	if (!g_global_exec_data)
-	{
-		g_global_exec_data = (char *)allocate_executable(global_exec_data_size);
+	// todo : not thread safe
+	std::unique_lock lock{g_global_exec_data_lock};
 
-		Jit1_CodeGen cg{ *this, (uint8 *)g_global_exec_data, global_exec_data_size };
+	if (g_global_exec_data.get() == nullptr)
+	{
+		char* const exec_data = static_cast<char *>(allocate_executable(global_exec_data_size));
+
+		g_global_exec_data = global_exec_data = {
+			exec_data,
+			&free_executable
+		};
+
+		Jit1_CodeGen cg{ *this, reinterpret_cast<uint8 *>(exec_data), global_exec_data_size };
 		{
-			g_ex_return = uintptr(g_global_exec_data + cg.getSize());
+			g_ex_return = uintptr(exec_data + cg.getSize());
 
 			static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
 			static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
@@ -145,7 +183,7 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 
 		cg.ready();
 
-		_clear_cache(g_global_exec_data, g_global_exec_data + cg.getSize());
+		_clear_cache(exec_data, exec_data + cg.getSize());
 	}
 }
 
@@ -1040,7 +1078,7 @@ void jit1::populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restr
 	if (!chunk.m_data)
 	{
 		chunk.m_datasize = MaxChunkRealSize;
-		chunk.m_data = (uint8 *)allocate_executable(MaxChunkRealSize);
+		chunk.m_data = (uint8 *)allocate_executable_chunk<MaxChunkRealSize>();
 	}
 	Jit1_CodeGen cg{ *this, (uint8 *)chunk.m_data, jit1::MaxChunkRealSize };
 	cg.write_chunk(chunk_offset, chunk, start_address, update);
@@ -1206,7 +1244,7 @@ jit1::jit_instructionexec_t jit1::get_instruction(const uint32 address)
 
 		// Traverse the map to end up at the proper chunk.
 		/* This is only hit once ever in the current benchmark because the chunks are huge */
-		auto & __restrict cml2 = jit_map_[address >> (32 - RemainingLog2)];
+		auto & __restrict cml2 = (*jit_map_)[address >> (32 - RemainingLog2)];
 		auto & __restrict cml1 = cml2[(address >> (32 - RemainingLog2 - 8)) & 0xFF];
 
 		const bool chunk_exists = cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF);
@@ -1251,7 +1289,7 @@ jit1::jit_instructionexec_t jit1::fetch_instruction(const uint32 address)
 	{
 		// Traverse the map to end up at the proper chunk.
 		/* This is only hit once ever in the current benchmark because the chunks are huge */
-		auto& __restrict cml2 = jit_map_[address >> (32 - RemainingLog2)];
+		auto& __restrict cml2 = (*jit_map_)[address >> (32 - RemainingLog2)];
 		auto& __restrict cml1 = cml2[(address >> (32 - RemainingLog2 - 8)) & 0xFF];
 
 		if (!cml1.contains((address >> (32 - RemainingLog2 - 16)) & 0xFF)) {
@@ -1287,11 +1325,11 @@ jit1::Chunk * jit1::get_chunk(uint32 address)
 		/* This is only hit once ever in the current benchmark because the chunks are huge */
 
 		const uint32 jitmap_idx = address >> (32 - RemainingLog2);
-		if (!jit_map_.contains(jitmap_idx))
+		if (!jit_map_->contains(jitmap_idx))
 		{
 			return nullptr;
 		}
-		auto & __restrict cml2 = jit_map_[jitmap_idx];
+		auto & __restrict cml2 = (*jit_map_)[jitmap_idx];
 
 		const uint32 cml2_idx = (address >> (32 - RemainingLog2 - 8)) & 0xFF;
 		if (!cml2.contains(cml2_idx))
@@ -1305,5 +1343,22 @@ jit1::Chunk * jit1::get_chunk(uint32 address)
 		return cml1.contains(cml1_idx) ?
 			cml1[cml1_idx].chunk :
 			nullptr;
+	}
+}
+
+_nothrow jit1::chunk_data::~chunk_data() noexcept {
+	m_chunkoffset_allocator.release(offset);
+
+	release();
+}
+
+_nothrow void jit1::chunk_data::release() noexcept {
+	if (chunk) {
+		if (chunk->m_data)
+		{
+			free_executable_chunk(chunk->m_data);
+		}
+		delete chunk;
+		chunk = nullptr;
 	}
 }

@@ -4,6 +4,7 @@
 #include "writers.hpp"
 
 #include "instructions/instructions.hpp"
+#include "instructions/instructions_common.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -12,10 +13,17 @@
 #include <queue>
 #include <span>
 #include <optional>
+#include <mutex>
+
+#if USE_STATIC_INSTRUCTION_SEARCH
+#	error TableGen requires 'USE_STATIC_INSTRUCTION_SEARCH' to be unset
+#endif
 
 namespace mips::instructions {
 	extern void finish_map_build();
-	extern StaticInitVars* __restrict StaticInitVarsPtr;
+#if !USE_STATIC_INSTRUCTION_SEARCH
+	extern StaticInitVars& GetStaticInitVars();
+#endif
 }
 
 namespace vemips::tablegen {
@@ -155,7 +163,7 @@ int main(const int argc, char* const* const argv) {
 
 	mips::instructions::finish_map_build();
 
-	auto&& proc_infos = populate_proc_infos(&mips::instructions::StaticInitVarsPtr->g_LookupMap);
+	auto&& proc_infos = populate_proc_infos(&mips::instructions::GetStaticInitVars().g_LookupMap);
 
 	std::stable_sort(proc_infos.begin(), proc_infos.end(), instruction_compare{});
 

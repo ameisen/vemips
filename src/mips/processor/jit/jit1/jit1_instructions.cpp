@@ -947,7 +947,7 @@ void Jit1_CodeGen::write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, 
 {
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
-	const instructions::FPRegister<11, 5> fs(instruction, *jit_.processor_.get_fpu_coprocessor());
+	const instructions::FPRegister<11, 5> fs(instruction, jit_.processor_.get_fpu_coprocessor());
 	const int16 fs_offset = fs.get_offset();
 
 	if (rt.is_zero())

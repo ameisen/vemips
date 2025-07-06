@@ -75,7 +75,7 @@ namespace mips {
 
 		_forceinline _nothrow ~directory_table() {
 			if constexpr (Own) {
-				for (const auto& element : data_) {
+				for (auto& element : data_) {
 					element.release();
 				}
 			}
