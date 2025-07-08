@@ -1,58 +1,22 @@
 #include "pch.hpp"
 
-#include "elf/elf.hpp"
-#include "mips/mips.hpp"
-#include "system_vemix.hpp"
-
+#include <cassert>
 #include <chrono>
+#include <cstdio>
+
 #include <functional>
+#include <span>
 #include <string>
 #include <vector>
 
-#include <cassert>
-
-#include "platform/platform.hpp"
-#include <PowrProf.h>
-
-#include <cstdio>
-#include <span>
+#include "platform.hpp"
+#include "system_vemix.hpp"
+#include "elf/elf.hpp"
+#include "mips/mips.hpp"
 
 
 namespace {
 	using namespace mips;
-
-	static uint64 get_host_frequency() {
-		struct PROCESSOR_POWER_INFORMATION final {
-			ULONG Number;
-			ULONG MaxMhz;
-			ULONG CurrentMhz;
-			ULONG MhzLimit;
-			ULONG MaxIdleState;
-			ULONG CurrentIdleState;
-		};
-
-		SYSTEM_INFO sysInfo;
-		GetSystemInfo(&sysInfo);
-
-		const auto power_info = std::make_unique<PROCESSOR_POWER_INFORMATION[]>(sysInfo.dwNumberOfProcessors);
-
-		const size_t out_buffer_length = sysInfo.dwNumberOfProcessors * sizeof(PROCESSOR_POWER_INFORMATION);
-		xassert(out_buffer_length <= std::numeric_limits<ULONG>::max());
-
-		if (const NTSTATUS status = CallNtPowerInformation(
-			ProcessorInformation,
-			nullptr,
-			0,
-			power_info.get(),
-			ULONG(out_buffer_length)
-		); status != 0) {
-			return 1;
-		}
-
-		// TODO : Also set the max performance state temporarily.
-
-		return power_info[0].MaxMhz;
-	}
 
 #ifdef EMSCRIPTEN
 #	include "base64.hpp"
@@ -640,7 +604,7 @@ namespace {
 		const double ips = double(instructions) / seconds;
 		const uint64 ips_rounded = size_t(round(ips));
 
-		if (const uint64 cpu_frequency = get_host_frequency(); cpu_frequency == 1) {
+		if (const uint64 cpu_frequency = mips::platform::get_host_frequency(); cpu_frequency == 1) {
 			fmt::println("** Execution Duration: {} ms ({} ips)", ns / 1'000'000, ips_rounded);
 		}
 		else {

@@ -27,37 +27,16 @@
 #endif
 
 // ReSharper disable IdentifierTypo CppInconsistentNaming
-#if defined(_MSC_VER) && !defined(__clang__)
-#	define _unpredictable(expr) (expr)
-#	define _likely(expr) (expr)
-#	define _unlikely(expr) (expr)
-#	define _expect(expr, value) (expr)
-#	define _nothrow __declspec(nothrow)
-#	define _assume(expr) __assume(expr)
-#	define _forceinline __forceinline
-# define _empty_bases __declspec(empty_bases)
-# define _msabi
-#	define _vectorcall __vectorcall
-# define _trivial
-#	define _no_vtable __declspec(novtable)
-#	define _flag_enum
-#	define _define_segment(name, ...) __pragma(section(#name, __VA_ARGS__))
-#	define _segment(name) __declspec(allocate(#name))
-# define _allocator __declspec(allocator)
-# define _used
-# define _no_unique [[no_unique_address, msvc::no_unique_address]]
-#	define _clear_cache(start, end) FlushInstructionCache(GetCurrentProcess(), (start), static_cast<size_t>((end) - (start)))
-#	define _constant_p(expression) (false)
-
-#elif defined(__clang__)
+#if defined(__clang__)
 #	define _unpredictable(expr) (__builtin_unpredictable(expr))
 #	define _likely(expr) (__builtin_expect(!!(expr), 1))
 #	define _unlikely(expr) (__builtin_expect((expr), 0))
 #	define _expect(expr, value) (__builtin_expect((expr), (value)))
 #	define _nothrow __declspec(nothrow)
 #	define _assume(expr) __builtin_assume(expr)
-#	define _forceinline __attribute__((always_inline))
-# define _empty_bases __declspec(empty_bases)
+#	define _forceinline __attribute__((__always_inline__))
+#	define _noinline __attribute__((__noinline__))
+#	define _empty_bases __declspec(empty_bases)
 #	define _msabi __attribute__((ms_abi))
 #	define _vectorcall __vectorcall
 #	define _trivial __attribute__((trivial_abi))
@@ -65,8 +44,8 @@
 #	define _flag_enum __attribute__((flag_enum))
 #	define _define_segment(name, ...) __pragma(section(#name, __VA_ARGS__))
 #	define _segment(name) __declspec(allocate(#name))
-# define _allocator __attribute__((malloc))
-# define _used __attribute__((__used__))
+#	define _allocator __attribute__((__malloc__))
+#	define _used __attribute__((__used__))
 #	if __has_cpp_attribute(no_unique_address)
 #		define _no_unique [[no_unique_address, msvc::no_unique_address]]
 #	else
@@ -74,6 +53,41 @@
 #	endif
 #	define _clear_cache(start, end) __builtin___clear_cache((char*)(start), (char*)(end))
 #	define _constant_p(expression) __builtin_constant_p(expression)
+#	define _pragma_small_code _Pragma("optimize(\"s\", on)") __attribute__((__minsize__))
+#	define _pragma_default_code _Pragma("optimize(\"\", on)")
+#	define _hot __attribute__((__hot__))
+#	define _cold __attribute__((__cold__))
+#	define _flatten __attribute__((__flatten__))
+#	define _result_noalias __declspec(restrict)
+
+#elif defined(_MSC_VER)
+#	define _unpredictable(expr) (expr)
+#	define _likely(expr) (expr)
+#	define _unlikely(expr) (expr)
+#	define _expect(expr, value) (expr)
+#	define _nothrow __declspec(nothrow)
+#	define _assume(expr) __assume(expr)
+#	define _forceinline __forceinline
+#	define _noinline __declspec(noinline)
+#	define _empty_bases __declspec(empty_bases)
+#	define _msabi
+#	define _vectorcall __vectorcall
+#	define _trivial
+#	define _no_vtable __declspec(novtable)
+#	define _flag_enum
+#	define _define_segment(name, ...) __pragma(section(#name, __VA_ARGS__))
+#	define _segment(name) __declspec(allocate(#name))
+#	define _allocator __declspec(allocator)
+#	define _used
+#	define _no_unique [[no_unique_address, msvc::no_unique_address]]
+#	define _clear_cache(start, end) FlushInstructionCache(GetCurrentProcess(), (start), static_cast<size_t>((end) - (start)))
+#	define _constant_p(expression) (false)
+#	define _pragma_small_code _Pragma("optimize(\"s\", on)")
+#	define _pragma_default_code _Pragma("optimize(\"\", on)")
+#	define _hot
+#	define _cold
+#	define _flatten
+#	define _result_noalias __declspec(restrict)
 
 #elif defined(__GNUC__)
 # error GCC unimplemented
@@ -279,9 +293,9 @@ namespace mips {
 		copy_restrict<
 			TFrom,
 			copy_const<
-				TFrom,
+				std::remove_pointer_t<TFrom>,
 				copy_volatile<
-					TFrom,
+					std::remove_pointer_t<TFrom>,
 					TTo
 				>
 			>*
@@ -293,9 +307,9 @@ namespace mips {
 		copy_restrict<
 			TFrom,
 			copy_const<
-				TFrom,
+				std::remove_reference_t<TFrom>,
 				copy_volatile<
-					TFrom,
+					std::remove_reference_t<TFrom>,
 					TTo
 				>
 			>&
@@ -307,13 +321,13 @@ namespace mips {
 	using copy_qualifiers =
 		std::conditional_t<
 			std::is_pointer_v<TTo>,
-			copy_qualifiers_ptr<TFrom, std::remove_pointer_t<TTo>>,
+			copy_qualifiers_ptr<TFrom, std::remove_reference_t<std::remove_pointer_t<TTo>>>,
 			std::conditional_t<
 				std::is_rvalue_reference_v<TTo>,
-				std::remove_reference_t<copy_qualifiers_ptr<TFrom, std::remove_reference_t<TTo>>>&&,
+				std::remove_reference_t<copy_qualifiers_ref<TFrom, std::remove_reference_t<TTo>>>&&,
 				std::conditional_t<
 					std::is_lvalue_reference_v<TTo>,
-					std::remove_reference_t<copy_qualifiers_ptr<TFrom, std::remove_reference_t<TTo>>>&,
+					std::remove_reference_t<copy_qualifiers_ref<TFrom, std::remove_reference_t<TTo>>>&,
 					copy_qualifiers_cv<TFrom, TTo>
 				>
 			>
@@ -331,6 +345,265 @@ namespace mips {
 	static constexpr unsigned log2_ceil(const T value)
 	{
 	    return value == 1 ? 0 : log2_floor(value - 1) + 1;
+	}
+
+	enum class ptr_qual
+	{
+		none = 0,
+		restrict
+	};
+
+	static constexpr ptr_qual operator&(const ptr_qual a, const ptr_qual b)
+	{
+		return static_cast<ptr_qual>(std::to_underlying(a) & std::to_underlying(b));
+	}
+
+	static constexpr ptr_qual operator|(const ptr_qual a, const ptr_qual b)
+	{
+		return static_cast<ptr_qual>(std::to_underlying(a) | std::to_underlying(b));
+	}
+
+	template <typename T, ptr_qual Qualifiers>
+	class held_ptr
+	{
+	private:
+		template <ptr_qual Q>
+		static constexpr bool has_qualifiers = (Qualifiers & Q) == Q;
+
+	public:
+		using value_type = T;
+		using pointer_type = std::conditional_t<
+			has_qualifiers<ptr_qual::restrict>,
+			T* __restrict,
+			T*
+		>;
+		using reference_type = std::conditional_t<
+			has_qualifiers<ptr_qual::restrict>,
+			T& __restrict,
+			T&
+		>;
+
+	private:
+		pointer_type value_ = nullptr;
+
+	public:
+		_nothrow held_ptr() noexcept = default;
+		_nothrow held_ptr(const held_ptr&) noexcept = default;
+		_nothrow held_ptr(held_ptr&& other) noexcept
+			: held_ptr(other.value_)
+		{
+			other.value_ = nullptr;
+		}
+		_nothrow explicit held_ptr(T* const value) noexcept
+			: value_(value) {}
+		_nothrow explicit held_ptr(nullptr_t) noexcept
+			: held_ptr(nullptr) {}
+		template <typename U, ptr_qual UQualifiers>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow explicit held_ptr(const held_ptr<U, UQualifiers>& other) noexcept
+			: held_ptr(other.value_) {}
+		template <typename U, ptr_qual UQualifiers>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow explicit held_ptr(held_ptr<U, UQualifiers>&& other) noexcept //NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved)
+			: held_ptr(other.value_)
+		{
+			other.value_ = nullptr;
+		}
+
+		_nothrow ~held_ptr() noexcept
+#if !defined(_DEBUG)
+			= default;
+#else
+		{
+			value_ = std::bit_cast<pointer_type>(uintptr(0xFEEFFEEFFEEFFEEFULL));
+		}
+#endif
+
+
+		_nothrow held_ptr& operator=(const held_ptr&) noexcept = default;
+		_nothrow held_ptr& operator=(held_ptr&& other) noexcept
+		{
+			value_ = other.value_;
+			other.value_ = nullptr;
+			return *this;
+		}
+		_nothrow held_ptr& operator=(T* const value) noexcept
+		{
+			value_ = value;
+			return *this;
+		}
+		_nothrow held_ptr& operator=(nullptr_t) noexcept
+		{
+			value_ = nullptr;
+			return *this;
+		}
+		template <typename U, ptr_qual UQualifiers>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow held_ptr& operator=(const held_ptr<U, UQualifiers>& other) noexcept
+		{
+			value_ = other.value_;
+			return *this;
+		}
+		template <typename U, ptr_qual UQualifiers>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow held_ptr& operator=(held_ptr<U, UQualifiers>&& other) noexcept //NOLINT(cppcoreguidelines-rvalue-reference-param-not-moved)
+		{
+			value_ = other.value_;
+			other.value_ = nullptr;
+			return *this;
+		}
+
+		_nothrow bool operator==(nullptr_t) const noexcept
+		{
+			return get() == nullptr;
+		}
+
+		_nothrow bool operator==(const T* other) const noexcept
+		{
+			return get() == other;
+		}
+
+		template <typename U>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow bool operator==(const U* other) const noexcept
+		{
+			return get() == static_cast<T*>(other);
+		}
+
+		_nothrow bool operator==(const held_ptr& other) const noexcept
+		{
+			return get() == other.get();
+		}
+
+		template <typename U, ptr_qual UQualifiers>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow bool operator==(const held_ptr<U, UQualifiers>& other) const noexcept
+		{
+			return get() == static_cast<T*>(other);
+		}
+
+		_nothrow bool operator!=(nullptr_t) const noexcept
+		{
+			return get() != nullptr;
+		}
+
+		_nothrow bool operator!=(const T* other) const noexcept
+		{
+			return get() != other;
+		}
+
+		template <typename U>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow bool operator!=(const U* other) const noexcept
+		{
+			return get() != static_cast<T*>(other);
+		}
+
+		_nothrow bool operator!=(const held_ptr& other) const noexcept
+		{
+			return get() != other.get();
+		}
+
+		template <typename U, ptr_qual UQualifiers>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow bool operator!=(const held_ptr<U, UQualifiers>& other) const noexcept
+		{
+			return get() != static_cast<T*>(other);
+		}
+
+		_nothrow explicit operator bool() const noexcept
+		{
+			return value_ != nullptr;
+		}
+
+		_nothrow bool is_valid() const noexcept
+		{
+			return static_cast<bool>(*this);
+		}
+
+		template <typename Self>
+		_nothrow copy_qualifiers<Self, pointer_type> operator->(this Self&& self) noexcept //NOLINT(cppcoreguidelines-missing-std-forward)
+		{
+			return *std::forward<Self>(self);
+		}
+
+		template <typename Self>
+		_nothrow copy_qualifiers<Self, pointer_type> get(this Self&& self) noexcept //NOLINT(cppcoreguidelines-missing-std-forward)
+		{
+			T* const result = std::forward<Self>(self).value_;
+			return result;
+		}
+
+		template <typename Self>
+		_nothrow copy_qualifiers<Self, pointer_type> operator*(this Self&& self) noexcept //NOLINT(cppcoreguidelines-missing-std-forward)
+		{
+			T* const result = std::forward<Self>(self).value_;
+			xassert(result != nullptr);
+			return result;
+		}
+
+		_nothrow void swap(held_ptr& other) noexcept
+		{
+			xassert(this != &other);
+
+			std::swap(value_, other.value_);
+		}
+
+		template <typename U, ptr_qual UQualifiers>
+		requires (std::is_assignable_v<T*, U*> && std::is_assignable_v<U*, T*>)
+		_nothrow void swap(held_ptr<U, UQualifiers>& other) noexcept
+		{
+			xassert(this != &other);
+
+			U* const temp = static_cast<U*>(value_);
+			value_ = static_cast<T*>(other.value_);
+			other.value_ = temp;
+		}
+
+		_nothrow void reset() noexcept
+		{
+			reset(nullptr);
+		}
+
+		_nothrow void reset(nullptr_t) noexcept
+		{
+			value_ = nullptr;
+		}
+
+		_nothrow void reset(T* const value) noexcept
+		{
+			value_ = value;
+		}
+
+		template <typename U>
+		requires (std::is_assignable_v<T*, U*>)
+		_nothrow void reset(U* const value) noexcept
+		{
+			value_ = static_cast<T*>(value);
+		}
+	};
+
+	template <typename T, typename... Tt>
+	static T* make_unique_inline(std::unique_ptr<T>& ptr, Tt&&... args)
+	{
+		ptr = std::make_unique<T>(std::forward<Tt>(args)...);
+		return ptr.get();
+	}
+
+	// .second == true if created 
+	template <typename T, typename... Tt>
+	static std::tuple<T*, bool> get_or_make_unique_inline(std::unique_ptr<T>& ptr, Tt&&... args)
+	{
+
+		if (T* const result = ptr.get())
+		{
+			return { result, false };
+		}
+		
+		return {
+			make_unique_inline(ptr, std::forward<Tt>(args)...),
+			true
+		};
 	}
 }
 

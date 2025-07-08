@@ -5,11 +5,13 @@
     <ClInclude Include="..\..\src\emulator\base64.hpp" />
     <ClInclude Include="..\..\src\emulator\pch.hpp" />
     <ClInclude Include="..\..\src\emulator\system_vemix.hpp" />
+    <ClInclude Include="..\..\src\emulator\platform.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\emulator\main.cpp" />
     <ClCompile Include="..\..\src\emulator\pch.cpp" />
     <ClCompile Include="..\..\src\emulator\base64.cpp" />
     <ClCompile Include="..\..\src\emulator\system_vemix.cpp" />
+    <ClCompile Include="..\..\src\emulator\platform.cpp" />
   </ItemGroup>
 </Project>

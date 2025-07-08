@@ -43,7 +43,7 @@ namespace mips
 	public:
 
 		Jit1_CodeGen(jit1 & __restrict jit, uint8 *userptr, size_t usersz) : Xbyak::CodeGenerator(usersz, userptr), jit_(jit), address_(userptr) {}
-		virtual ~Jit1_CodeGen() = default;
+		virtual ~Jit1_CodeGen() override = default;
 
 		uint8* get_address() const {
 			return address_;

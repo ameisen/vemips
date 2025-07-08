@@ -128,7 +128,7 @@ namespace mips
 			instructionexec_t Proc;
 			uint32 OpFlags;
 			uint8 CoprocessorIdx : log2_ceil(coprocessor::max);
-			instruction_type Type : instruction_type::_bits;
+			instruction_type Type : std::to_underlying(instruction_type::_bits);
 			instruction_flags Flags/* : instruction_flags::Bits*/;
 
 			InstructionInfo(

@@ -3,18 +3,17 @@
 #include "processor.hpp"
 #include "mips/coprocessor/coprocessor1/coprocessor1.hpp"
 #include "mips/instructions/instructions.hpp"
+#if !VEMIPS_TABLEGEN
 #include "mips/processor/jit/jit1/jit1.hpp"
 #include "mips/processor/jit/jit2/jit2.hpp"
+#endif
 #include "mips/system.hpp"
 
 #if !VEMIPS_TABLEGEN
 #include "instructions/instructions_table.hpp"
 #endif
 
-#if _WIN32
-#	define WIN32_LEAN_AND_MEAN  // NOLINT(clang-diagnostic-unused-macros)
-#	include <Windows.h>
-#endif
+#include "platform/platform.hpp"
 
 
 using namespace mips;
@@ -46,7 +45,7 @@ namespace mips::instructions {
 
 processor::processor(const options & __restrict options) :
 	// if there is no MMU, we need to set up some basic pointers.
-	memory_ptr_(options.mmu_type != mmu::emulated ? uintptr(options.mem_ptr) : 0),
+	memory_ptr_(options.mmu_type != mmu::emulated ? options.mem_ptr : nullptr),
 	memory_size_(options.mmu_type != mmu::emulated ? options.mem_size : 0),
 	stack_size_(options.stack),
 	coprocessors_{
@@ -125,8 +124,8 @@ void processor::set_link(const uint32 pointer) {
 }
 
 instruction_t processor::get_instruction() const __restrict {
-	if ((program_counter_ % 4) != 0) {
-		throw CPU_Exception{ CPU_Exception::Type::RI, program_counter_ };
+	if ((program_counter_ % 4) != 0) [[unlikely]] {
+		CPU_Exception::throw_helper(CPU_Exception::Type::RI, program_counter_);
 	}
 	const instruction_t instruction_ptr = mem_fetch<const instruction_t>(program_counter_);
 
@@ -191,17 +190,17 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 				info->Proc(instruction, *this);
 			}
 			else {
-				throw trapped_exception_;
+				trapped_exception_.rethrow_helper();
 			}
 		}
 		else {
 			if _unlikely(!instructions::execute_instruction(instruction, *this)) [[unlikely]] {
-				throw CPU_Exception{ CPU_Exception::Type::RI, this->get_program_counter() };
+				CPU_Exception::throw_helper(CPU_Exception::Type::RI, this->get_program_counter());
 			}
 		}
 		if (jit_type_ != JitType::None) {
-			if (get_flags(flag::trapped_exception)) {
-				throw trapped_exception_;
+			if (get_flags(flag::trapped_exception)) [[unlikely]] {
+				trapped_exception_.rethrow_helper();
 			}
 		}
 	}
@@ -389,13 +388,23 @@ void processor::memory_touched(const uint32 pointer, uint32 size) const __restri
 void processor::memory_touched_jit(uint32 pointer, uint32 size) const __restrict {
 }
 
+namespace
+{
+	static uint32 get_address_offset(const void* const address, const char* const base)
+	{
+		const intptr diff = static_cast<const char* const>(address) - base;
+		xassert(diff >= 0 && diff <= std::numeric_limits<uint32>::max());
+		return static_cast<uint32>(diff);
+	}
+}
+
 std::optional<uint32> processor::mem_poke_host(const uint32 address, const uint32 size) const __restrict
 {
 	xassert(mmu_type_ == mmu::host);
 
 	LPEXCEPTION_POINTERS exception_info = {};
 	__try {
-		const volatile char* source = reinterpret_cast<const volatile char * __restrict>(memory_ptr_);
+		const volatile char* source = memory_ptr_;
 		for (uint32 i = 0; i < size; ++i)
 		{
 			[[maybe_unused]] char temp = source[uint32(address + i)];
@@ -416,8 +425,8 @@ std::optional<uint32> processor::mem_poke_host(const uint32 address, const uint3
 		}
 	}(exception_info = GetExceptionInformation()))
 	{
-		const uintptr_t exception_address = reinterpret_cast<uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress);
-		const uint32 exception_offset = exception_address - memory_ptr_;
+		const void* const exception_address = exception_info->ExceptionRecord->ExceptionAddress;
+		const uint32 exception_offset = get_address_offset(exception_address, memory_ptr_);
 
 		return exception_offset;
 	}
@@ -432,7 +441,7 @@ std::optional<uint32> processor::mem_fetch_host(void* const dst, const uint32 ad
 	__try {
 		memcpy(
 			dst,
-			reinterpret_cast<const void * __restrict>(memory_ptr_ + address),
+			memory_ptr_ + address,
 			size
 		);
 
@@ -450,8 +459,8 @@ std::optional<uint32> processor::mem_fetch_host(void* const dst, const uint32 ad
 		}
 	}(exception_info = GetExceptionInformation()))
 	{
-		const uintptr_t exception_address = reinterpret_cast<uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress);
-		const uint32 exception_offset = exception_address - memory_ptr_;
+		const void* const exception_address = exception_info->ExceptionRecord->ExceptionAddress;
+		const uint32 exception_offset = get_address_offset(exception_address, memory_ptr_);
 
 		return exception_offset;
 	}
@@ -465,7 +474,7 @@ std::optional<uint32> processor::mem_write_host(const void* const src, const uin
 	// TODO : handle literal edge case - overflows 32-bit address space
 	__try {
 		memcpy(
-			reinterpret_cast<void * __restrict>(memory_ptr_ + address),
+			memory_ptr_ + address,
 			src,
 			size
 		);
@@ -485,8 +494,8 @@ std::optional<uint32> processor::mem_write_host(const void* const src, const uin
 		}
 	}(exception_info = GetExceptionInformation()))
 	{
-		const uintptr_t exception_address = reinterpret_cast<uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress);
-		const uint32 exception_offset = exception_address - memory_ptr_;
+		const void* const exception_address = exception_info->ExceptionRecord->ExceptionAddress;
+		const uint32 exception_offset = get_address_offset(exception_address, memory_ptr_);
 
 		memory_touched(address, exception_offset - address);
 
@@ -495,6 +504,7 @@ std::optional<uint32> processor::mem_write_host(const void* const src, const uin
 }
 
 size_t processor::get_jit_max_instruction_size() const __restrict {
+#if !VEMIPS_TABLEGEN
 	switch (jit_type_) {
 		case JitType::Jit:
 			return jit1_->get_max_instruction_size();
@@ -504,5 +514,6 @@ size_t processor::get_jit_max_instruction_size() const __restrict {
 			// do nothing
 			break;
 	}
+#endif
 	return 0;
 }

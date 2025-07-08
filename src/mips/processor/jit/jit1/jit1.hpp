@@ -1,6 +1,7 @@
 #pragma once
 
 #define USE_LEVELED_MAP 1
+#define USE_CACHE 1
 
 #include "common.hpp"
 
@@ -10,6 +11,7 @@
 #include <cassert>
 #include <list>
 #include <limits>
+
 #include "runtime/basic_allocator.hpp"
 #include "runtime/directory_table.hpp"
 #include "runtime/associate_cache.hpp"
@@ -53,17 +55,21 @@ namespace mips {
 		static constexpr const size_t NumInstructionsChunk = ChunkSize / 4;
 		using ChunkOffset = std::array<uint32, NumInstructionsChunk>;
 		struct Chunk final {
-			ChunkOffset * __restrict m_chunk_offset = nullptr;
-			uint8 * __restrict m_data = nullptr;
-			uint32 m_offset = 0;
-			uint32 m_datasize = 0;
-			// TODO there are better ways to handle this that don't require reconfiguring the entire chunk.
-			bool m_has_fixups = false;
 			struct patch final {
 				uint32 offset;
 				uint32 target;
 			};
-			std::vector<patch> m_patches;
+
+			ChunkOffset * __restrict m_chunk_offset = nullptr;
+			uint8 * __restrict m_data = nullptr;
+			std::unique_ptr<std::vector<patch>> m_patches;
+			uint32 m_offset = 0;
+			uint32 m_datasize = 0;
+			// TODO there are better ways to handle this that don't require reconfiguring the entire chunk.
+			bool m_has_fixups = false;
+
+			// TODO : destructor
+			_nothrow void release() noexcept;
 		};
 
 		template <typename T>
@@ -79,22 +85,30 @@ namespace mips {
 		static inline basic_allocator<ChunkOffset> m_chunkoffset_allocator;
 
 		struct chunk_data final {
-			Chunk* __restrict chunk = nullptr;
-			ChunkOffset* __restrict offset = nullptr;
+		private:
+			struct chunk_deleter final
+			{
+				static void operator()(Chunk* __restrict chunk)
+				{
+					chunk->release();
+					delete chunk;
+				}
+			};
 
+		public:
+			std::unique_ptr<Chunk, chunk_deleter> chunk;
+			ChunkOffset* __restrict offset = nullptr;
 			
 			_nothrow chunk_data() noexcept = default;
 			chunk_data(const chunk_data&) = delete;
-			_nothrow chunk_data(chunk_data && data) noexcept : chunk(data.chunk), offset(data.offset) {
-				data.chunk = nullptr;
+			_nothrow chunk_data(chunk_data && data) noexcept : chunk(std::move(data.chunk)), offset(data.offset) {
 				data.offset = nullptr;
 			}
 
 			chunk_data& operator = (const chunk_data &) = delete;
 			_nothrow chunk_data& operator = (chunk_data&& data) noexcept {
-				chunk = data.chunk;
+				chunk = std::move(data.chunk);
 				offset = data.offset;
-				data.chunk = nullptr;
 				data.offset = nullptr;
 				return *this;
 			}
@@ -108,7 +122,7 @@ namespace mips {
 			_nothrow void release() noexcept;
 
 			_forceinline _nothrow bool contained() const __restrict {
-				return chunk != nullptr;
+				return static_cast<bool>(chunk);
 			}
 		};
 
@@ -169,12 +183,12 @@ namespace mips {
 #endif
 
 	public:
-		using jit_instructionexec_t = uint64(*)  (uint64 instruction, uint64 processor, uint32 pc_runner, uint64, uint64, uint64);
+		using jit_instructionexec_t = uint64(*) (uint64 instruction, uint64 processor, uint32 pc_runner, uint64, uint64, uint64);
 
 	private:
 
 #if USE_LEVELED_MAP
-		using jit_map_t = directory_table<chunk_data, true, 1 << RemainingLog2, 256, 256>;
+		using jit_map_t = directory_map<chunk_data, 1 << RemainingLog2, 256, 256>;
 #else
 		using jit_map_t = MapLevel3;
 #endif
@@ -184,12 +198,16 @@ namespace mips {
 		_no_unique
 		instruction_cache_t lookup_cache_;
 		processor& __restrict processor_;
+		#if USE_CACHE
 		Chunk * __restrict last_chunk_ = nullptr;
 		ChunkOffset * __restrict last_chunk_offset_ = nullptr;
+		#endif
 		Chunk* __restrict flush_chunk_ = nullptr;
 		size_t largest_instruction_ = 0;
 		std::shared_ptr<char[]> global_exec_data;
+		#if USE_CACHE
 		uint32 last_chunk_address_ = uint32(-1);
+		#endif
 		uint32 current_executing_chunk_address_ = 0;
 		uint32 flush_address_ = 0;
 
@@ -201,12 +219,15 @@ namespace mips {
 		void execute_instruction(uint32 address);
 		jit_instructionexec_t get_instruction(uint32 address);
 		jit_instructionexec_t fetch_instruction(uint32 address);
-		Chunk * get_chunk(uint32 address);
+		Chunk * get_chunk(uint32 address) const;
 		bool memory_touched(uint32 address);
 
 		[[nodiscard]]
 		size_t get_max_instruction_size() const __restrict {
 			return largest_instruction_;
 		}
+
+	private:
+
 	};
 }

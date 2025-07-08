@@ -10,8 +10,6 @@
 
 using namespace mips;
 
-extern jit1::jit_instructionexec_t jit1_get_instruction(jit1 * __restrict _this, uint32 address);
-extern jit1::jit_instructionexec_t jit1_fetch_instruction(jit1* __restrict _this, uint32 address);
 static constexpr uint32 MaxShortJumpLookAhead = 2;
 
 bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &terminate_instruction, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
@@ -32,13 +30,12 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		// If execution gets past the chunk, we jump to the next chunk.
 		// Start with a set of no-ops so that we have somewhere to write patch code.
 		const auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
-		chunk.m_patches.push_back({ uint32(getSize()), 0 });
-		auto &patch_pair = chunk.m_patches.back();
+		auto &patch_pair = chunk.m_patches->emplace_back(uint32(getSize()), 0);
 		uint32 &patch_target = patch_pair.target;
 
 		// patch no-op
 		if (address == nullptr) {
-			db(0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00);
+			nop(12, true);
 		}
 		else {
 			static constexpr uint16 patch_prefix = 0xB848;
@@ -56,7 +53,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 	const auto patch_prolog = [&]()
 	{
-		auto &patch_pair = chunk.m_patches.back();
+		auto &patch_pair = chunk.m_patches->back();
 		uint32 &patch_target = patch_pair.target;
 		mov(rcx, int64(&patch_target));
 		mov(dword[rcx], edx);
@@ -96,7 +93,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		patch_prolog();
 		mov(dword[rbp + pc_offset], eax);
 		mov(edx, eax);
-		mov(rax, uint64(jit1_get_instruction));
+		mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
 		mov(rcx, uint64(&jit_));
 		call(rax);
 		patch_epilog(patch);
@@ -933,7 +930,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		L(not_within);
 
 		mov(rdx, rax);
-		mov(rax, uint64(jit1_get_instruction));
+		mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
 		mov(rcx, uint64(&jit_));
 		call(rax);
 		
@@ -967,7 +964,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		L(not_within);
 
 		mov(rdx, rax);
-		mov(rax, uint64(jit1_get_instruction));
+		mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
 		mov(rcx, uint64(&jit_));
 		call(rax);
 		

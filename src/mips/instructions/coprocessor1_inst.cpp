@@ -871,18 +871,18 @@ namespace mips::instructions
 
 			if (negated)
 			{
-				if ((condition & 0b111) == 0 || (condition & 0b100) != 0)
+				if ((condition & 0b111) == 0 || (condition & 0b100) != 0) [[unlikely]]
 				{
-					throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+					CPU_Exception::throw_helper(CPU_Exception::Type::RI, processor.get_program_counter());
 				}
 			}
 
 			if (is_signalling_nan(fs_val) || is_signalling_nan(ft_val) || (throws && (isnan(fs_val) || isnan(ft_val))))
 			{
-				if (coprocessor.get_FCSR().set_flag(uint32_t(ExceptBits::InvalidOp)))
+				if (coprocessor.get_FCSR().set_flag(uint32_t(ExceptBits::InvalidOp))) [[unlikely]]
 				{
 					// TODO update cause?
-					throw CPU_Exception{ CPU_Exception::Type::FPE, processor.get_program_counter(), uint32_t(ExceptBits::InvalidOp) };
+					CPU_Exception::throw_helper(CPU_Exception::Type::FPE, processor.get_program_counter(), uint32_t(ExceptBits::InvalidOp));
 				}
 			}
 

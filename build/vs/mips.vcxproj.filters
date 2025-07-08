@@ -125,6 +125,9 @@
     <ClCompile Include="..\..\src\mips\instructions\instructions_common.cpp">
       <Filter>instructions</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\mips\platform\win32\platform_win32.cpp">
+      <Filter>platform\win32</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="coprocessor">

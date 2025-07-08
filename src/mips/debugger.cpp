@@ -1,19 +1,19 @@
 // Copyright 2016-2017 Digital Carbide / Michael Kuklinski. All Rights Reserved.
 
 #include "pch.hpp"
-
 #include "debugger.hpp"
+
+#include <cassert>
+
+#include <bit>
+
 #include "elf/elf.hpp"
 #include "mips/system.hpp"
 #include "mips/coprocessor/coprocessor1/coprocessor1.hpp"
+#include "platform/platform.hpp"
 
-#include <cassert>
-#include <bit>
-
-#define WIN32_LEAN_AND_MEAN  // NOLINT(clang-diagnostic-unused-macros)
-#include <Windows.h>
-#include <WinSock2.h>
 #include <WS2tcpip.h>
+#include <WinSock2.h>
 
 using namespace mips;
 

@@ -52,6 +52,14 @@ namespace mips {
 			jit_mem_flush = 1u << 4,
 		};
 
+		struct named_registers final
+		{
+			named_registers() = delete;
+
+			static constexpr const uint32 zero = 0U;
+			static constexpr const uint32 frame_pointer = 30U; 
+		};
+
 	private:
 		static constexpr const size_t num_registers = 32;
 		static constexpr const size_t num_coprocessors = coprocessor::max;
@@ -67,7 +75,7 @@ namespace mips {
 	private:
 		uint64												instruction_count_ = 0;
 		uint64												target_instructions_ = std::numeric_limits<uint64>::max();
-		const uintptr									memory_ptr_ = 0;
+		char*									memory_ptr_ = nullptr;
 		const uint32									memory_size_ = 0;
 		const uint32									stack_size_ = 0;
 
@@ -267,7 +275,7 @@ namespace mips {
 		bool execute_explicit(const instructions::InstructionInfo* instruction_info, instruction_t instruction);
 
 		// Get the register as a specific type
-		template <typename T>
+		template <typename T = register_type>
 		[[nodiscard]]
 		T get_register(const uint32 idx) const {
 			if (idx == 0) {
@@ -287,7 +295,7 @@ namespace mips {
 		}
 
 		// Set the register from a given type
-		template <typename T>
+		template <typename T = register_type>
 		void set_register(const uint32 idx, T value) {
 			if (idx == 0) {
 				return;
@@ -345,14 +353,14 @@ namespace mips {
 				// TODO : handle literal edge case - overflows 32-bit address space
 				if (const auto result = mem_poke_host(address, sizeof(T)); result.has_value()) [[unlikely]]
 				{
-					throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, result.value() };
+					CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, result.value() );
 				}
 				
 				return;
 			}
 			else {
 				if _unlikely(address == 0) [[unlikely]] {
-					throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
+					CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, address );
 				}
 
 				address += stack_size_;
@@ -368,14 +376,14 @@ namespace mips {
 			}
 
 			// error path
-			[&] __declspec(noinline) {
+			[&] _noinline {
 				if (mmu_type_ == mmu::emulated)
 				{
 					const std::optional<uint32> invalid_address = memory_source_->get_first_unreadable(address, sizeof(T));
 
 					if (invalid_address.has_value())
 					{
-						throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, invalid_address.value() };
+						CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, invalid_address.value() );
 					}
 				}
 				else
@@ -384,12 +392,12 @@ namespace mips {
 					{
 						if (address >= memory_size_ || address == 0U)
 						{
-							throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
+							CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, address );
 						}
 					}
 				}
 
-				throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, address };
+				CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, address );
 			}();
 		}
 
@@ -423,12 +431,12 @@ namespace mips {
 					}
 				}
 				else if _likely(address < memory_size_) [[likely]] {
-					return *reinterpret_cast<const T * __restrict>(uintptr_t(memory_ptr_) + address);
+					return *reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
 				}
 			}
 
 			// error path
-			return [&] __declspec(noinline) {
+			return [&] _noinline {
 				if (mmu_type_ == mmu::emulated)
 				{
 					const std::optional<uint32> invalid_address = memory_source_->get_first_unreadable(address, sizeof(T));
@@ -475,13 +483,13 @@ namespace mips {
 			if (
 				const auto result = try_mem_fetch_except<T>(address);
 				result.has_value()
-			)
+			) [[likely]]
 			{
 				return result.value();
 			}
 			else
 			{
-				throw CPU_Exception{ CPU_Exception::Type::AdEL, program_counter_, result.error() };
+				CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, result.error() );
 			}
 		}
 
@@ -499,7 +507,7 @@ namespace mips {
 					return nullptr;
 				}
 
-				return reinterpret_cast<const T * __restrict>(uintptr_t(memory_ptr_) + address);
+				return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
 			}
 			else {
 				if _unlikely(address == 0) [[unlikely]] {
@@ -509,13 +517,13 @@ namespace mips {
 				address += stack_size_;
 
 				if (mmu_type_ == mmu::emulated) {
-					const T* __restrict val_ptr = (const T * __restrict)memory_source_->at(address, sizeof(T));
+					const T* __restrict val_ptr = static_cast<const T * __restrict>(memory_source_->at(address, sizeof(T)));
 					if _likely(val_ptr) [[likely]] {
 						return val_ptr;
 					}
 				}
 				else if _likely(address < memory_size_) [[likely]] {
-					return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
+					return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
 				}
 			}
 			return nullptr;
@@ -534,7 +542,7 @@ namespace mips {
 					return nullptr;
 				}
 
-				return reinterpret_cast<const T * __restrict>(uintptr_t(memory_ptr_) + address);
+				return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
 			}
 			else {
 				if _unlikely(address == 0) [[unlikely]] {
@@ -544,13 +552,13 @@ namespace mips {
 				address += stack_size_;
 
 				if (mmu_type_ == mmu::emulated) {
-					const T* __restrict val_ptr = (const T * __restrict)memory_source_->at_exec(address, sizeof(T));
+					const T* __restrict val_ptr = static_cast<const T * __restrict>(memory_source_->at_exec(address, sizeof(T)));
 					if _likely(val_ptr) [[likely]] {
 						return val_ptr;
 					}
 				}
 				else if _likely(address < memory_size_) [[likely]] {
-					return (const T * __restrict)(uintptr_t(memory_ptr_) + address);
+					return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
 				}
 			}
 
@@ -585,14 +593,14 @@ namespace mips {
 					return {};
 				}
 				else if _likely(address < memory_size_) [[likely]] {
-					*reinterpret_cast<T * __restrict>(uintptr_t(memory_ptr_) + address) = value;
+					*reinterpret_cast<T * __restrict>(memory_ptr_ + address) = value;
 					memory_touched(address, sizeof(T));
 					return {};
 				}
 			}
 
 			// error path
-			return [&] __declspec(noinline) {
+			return [&] _noinline {
 				if (mmu_type_ == mmu::emulated)
 				{
 					const std::optional<uint32> invalid_address = memory_source_->get_first_unreadable(address, sizeof(T));
@@ -622,7 +630,7 @@ namespace mips {
 			const auto result = try_mem_write_except(address, value);
 			if (result.has_value()) [[unlikely]]
 			{
-				throw CPU_Exception{ CPU_Exception::Type::AdES, program_counter_, result.value() };
+				CPU_Exception::throw_helper( CPU_Exception::Type::AdES, program_counter_, result.value() );
 			}
 		}
 

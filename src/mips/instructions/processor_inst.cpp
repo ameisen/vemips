@@ -90,7 +90,7 @@ namespace mips::instructions
 			{
 				if _unlikely(uint32(InsT::Flags & OpFlags::ControlInstruction) && processor.get_no_cti()) [[unlikely]]
 				{
-					throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+					CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 				}
 
 				//if (uint32(InsT::Flags & OpFlags::ClearsCause))
@@ -102,7 +102,7 @@ namespace mips::instructions
 			}
 			catch (const CPU_Exception &ex)
 			{
-				if (processor.get_jit_type() == JitType::Jit)
+				if (processor.get_jit_type() == JitType::Jit) [[likely]]
 				{
 					processor.set_trapped_exception(ex);
 				}
@@ -135,7 +135,7 @@ namespace mips::instructions
 		const int64 result = int64(rs.value<int32>()) + rt.value<int32>();
 		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Ov, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
 
 		return write_result(rd, int32(result));
@@ -157,7 +157,7 @@ namespace mips::instructions
 		const int64 result = int64(rs.value<int32>()) + immediate;
 		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Ov, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
 
 		return write_result(rt, int32(result));
@@ -444,7 +444,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -489,7 +489,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -521,7 +521,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -566,7 +566,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -626,7 +626,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -686,7 +686,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -717,7 +717,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -761,7 +761,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -792,7 +792,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -836,7 +836,7 @@ namespace mips::instructions
 		}
 		else
 		{
-			throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
 
 		return true;
@@ -1065,7 +1065,7 @@ namespace mips::instructions
 	{
 		const uint32 code = TinyInt<20>(instruction >> 6).zextend<uint32>();
 
-		throw CPU_Exception{ CPU_Exception::Type::Bp, processor.get_program_counter(), code };
+		CPU_Exception::throw_helper( CPU_Exception::Type::Bp, processor.get_program_counter(), code );
 	}
 
 	ProcInstructionDef(
@@ -1868,7 +1868,7 @@ namespace mips::instructions
 		}
 
 #pragma message("Implement when COP0 is finished")
-		throw CPU_Exception{ CPU_Exception::Type::Impl1, processor.get_program_counter() };
+		CPU_Exception::throw_helper( CPU_Exception::Type::Impl1, processor.get_program_counter() );
 	}
 
 	ProcInstructionDef(
@@ -2047,7 +2047,7 @@ namespace mips::instructions
 
 #pragma message("should do special things with SRBI bit in COP0, or Debug bit")
 
-		throw CPU_Exception{ CPU_Exception::Type::Bp, processor.get_program_counter(), code };
+		CPU_Exception::throw_helper( CPU_Exception::Type::Bp, processor.get_program_counter(), code );
 	}
 
 	ProcInstructionDef(
@@ -2161,7 +2161,7 @@ namespace mips::instructions
 	{
 		const uint32 code = TinyInt<16>(instruction).zextend<uint32>();
 
-		throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter(), code };
+		CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter(), code );
 	}
 
 	ProcInstructionDef(
@@ -2357,7 +2357,7 @@ namespace mips::instructions
 		const int64 result = int64(rs.value<int32>()) - rt.value<int32>();
 		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Ov, processor.get_program_counter() };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
 
 		return write_result(rd, int32(result));
@@ -2456,7 +2456,7 @@ namespace mips::instructions
 		const uint32 code = TinyInt<20>(instruction >> 6).zextend<uint32>();
 
 #pragma message("We should make syscalls not use exceptions underneath as they're somewhat common and not an error-state")
-		throw CPU_Exception{ CPU_Exception::Type::Sys, processor.get_program_counter(), code };
+		CPU_Exception::throw_helper( CPU_Exception::Type::Sys, processor.get_program_counter(), code );
 	}
 
 	ProcInstructionDef(
@@ -2472,7 +2472,7 @@ namespace mips::instructions
 
 		if (rs.value<int32>() == rt.value<int32>())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Tr, processor.get_program_counter(), code };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
 
 		return true;
@@ -2491,7 +2491,7 @@ namespace mips::instructions
 
 		if (rs.value<int32>() >= rt.value<int32>())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Tr, processor.get_program_counter(), code };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
 
 		return true;
@@ -2510,7 +2510,7 @@ namespace mips::instructions
 
 		if (rs.value<uint32>() >= rt.value<uint32>())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Tr, processor.get_program_counter(), code };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
 
 		return true;
@@ -2529,7 +2529,7 @@ namespace mips::instructions
 
 		if (rs.value<int32>() < rt.value<int32>())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Tr, processor.get_program_counter(), code };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
 
 		return true;
@@ -2548,7 +2548,7 @@ namespace mips::instructions
 
 		if (rs.value<uint32>() < rt.value<uint32>())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Tr, processor.get_program_counter(), code };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
 
 		return true;
@@ -2567,7 +2567,7 @@ namespace mips::instructions
 
 		if (rs.value<int32>() != rt.value<int32>())
 		{
-			throw CPU_Exception{ CPU_Exception::Type::Tr, processor.get_program_counter(), code };
+			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
 
 		return true;

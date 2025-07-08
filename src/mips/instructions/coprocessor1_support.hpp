@@ -410,8 +410,8 @@ namespace mips::instructions
 					Caster.valSrc = parent::m_Processor->get_FCSR().get_FEXR(); break;
 				case 28:
 					Caster.valSrc = parent::m_Processor->get_FCSR().get_FENR(); break;;
-				default:
-					throw CPU_Exception{ CPU_Exception::Type::RI, get_current_processor()->get_program_counter() };
+				default: [[unlikely]]
+					CPU_Exception::throw_helper(CPU_Exception::Type::RI, get_current_processor()->get_program_counter());
 			}
 			return Caster.valDst;
 		}
@@ -439,8 +439,8 @@ namespace mips::instructions
 					parent::m_Processor->get_FCSR().set_FEXR(Caster.valDst); break;
 				case 28:
 					parent::m_Processor->get_FCSR().set_FENR(Caster.valDst); break;
-				default:
-					throw CPU_Exception{ CPU_Exception::Type::RI, get_current_processor()->get_program_counter() };
+				default: [[unlikely]]
+					CPU_Exception::throw_helper(CPU_Exception::Type::RI, get_current_processor()->get_program_counter());
 			}
 			return value;
 		}
@@ -635,37 +635,37 @@ namespace mips::instructions
 			if (fpu->get_FCSR().Enables) {
 				if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
 				{
-					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Inexact))
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Inexact)) [[unlikely]]
 					{
-						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 				if (exStatus & _SW_UNDERFLOW && uint32(Flags & OpFlags::Signals_Underflow))
 				{
-					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Underflow))
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Underflow)) [[unlikely]]
 					{
-						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 				if (exStatus & _SW_OVERFLOW && uint32(Flags & OpFlags::Signals_Overflow))
 				{
-					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Overflow))
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Overflow)) [[unlikely]]
 					{
-						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 				if (exStatus & _SW_ZERODIVIDE && uint32(Flags & OpFlags::Signals_DivZero))
 				{
-					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::DivZero))
+					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::DivZero)) [[unlikely]]
 					{
-						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
-				if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp))
+				if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp)) [[unlikely]]
 				{
 					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp))
 					{
-						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause) };
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 			}
@@ -677,7 +677,7 @@ namespace mips::instructions
 	{
 		if _unlikely((get_current_coprocessor<coprocessor1>())->get_FCSR().Enables & uint32_t(exception)) [[unlikely]]
 		{
-			throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(exception) };
+			CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(exception));
 		}
 	}
 
@@ -690,13 +690,13 @@ namespace mips::instructions
 			if _unlikely(fpu->get_FCSR().Enables) [[unlikely]] {
 				for (auto ex : { ExceptBits::Inexact, ExceptBits::Underflow, ExceptBits::Overflow, ExceptBits::DivZero, ExceptBits::InvalidOp }) {
 					if ((fpu->get_FCSR().Enables & uint32_t(ex)) && (fpu->get_FCSR().Cause & uint32_t(ex))) {
-						throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ex) };
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ex));
 					}
 				}
 			}
-			if ((fpu->get_FCSR().Cause & uint32_t(ExceptBits::UnsupportedOp)))
+			if ((fpu->get_FCSR().Cause & uint32_t(ExceptBits::UnsupportedOp))) [[unlikely]]
 			{
-				throw CPU_Exception{ CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::UnsupportedOp) };
+				CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::UnsupportedOp));
 			}
 	}
 
@@ -760,12 +760,15 @@ namespace mips::instructions
 			{
 				set_current_coprocessor(processor.get_coprocessor(1));
 
-				if _unlikely(uint32(InsT::Flags & OpFlags::ControlInstruction) && processor.get_no_cti()) [[unlikely]]
+				if constexpr (uint32(InsT::Flags & OpFlags::ControlInstruction))
 				{
-					throw CPU_Exception{ CPU_Exception::Type::RI, processor.get_program_counter() };
+					if _unlikely(processor.get_no_cti()) [[unlikely]]
+					{
+						CPU_Exception::throw_helper(CPU_Exception::Type::RI, processor.get_program_counter());
+					}
 				}
 
-				if (uint32(InsT::Flags & OpFlags::ClearsCause))
+				if constexpr (uint32(InsT::Flags & OpFlags::ClearsCause))
 				{
 					coprocessor.get_FCSR().Cause = 0;
 				}
@@ -796,7 +799,7 @@ namespace mips::instructions
 			}
 			catch (const CPU_Exception &ex)
 			{
-				if (processor.get_jit_type() == JitType::Jit)
+				if (processor.get_jit_type() == JitType::Jit) [[likely]]
 				{
 					processor.set_trapped_exception(ex);
 				}

@@ -2,10 +2,38 @@
 
 #include <common.hpp>
 
+
 namespace mips {
 	// TODO refactor
 
-	struct CPU_Exception final {
+	struct base_exception
+	{
+	protected:
+		_pragma_small_code
+		_cold _nothrow base_exception() noexcept = default;
+		_pragma_default_code
+	};
+
+	template <typename TException>
+	struct base_exception_templated : base_exception
+	{
+	protected:
+		_pragma_small_code
+		_cold _nothrow base_exception_templated() noexcept = default;
+		_pragma_default_code
+
+	public:
+		_pragma_small_code [[noreturn]]
+		static _cold _noinline void throw_helper()
+		{
+			static_assert(std::is_base_of_v<base_exception, TException>);
+
+			throw TException();
+		}
+		_pragma_default_code
+	};
+
+	struct CPU_Exception final : public base_exception_templated<CPU_Exception> {
 	public:
 		enum class Type : uint32 {
 			Interrupt = 0,
@@ -36,11 +64,62 @@ namespace mips {
 			GE = 27,
 			Prot = 29,
 			CacheErr = 30,
-		} m_ExceptionType;
-		uint32 m_InstructionAddress;
+		} m_ExceptionType = {};
+		uint32 m_InstructionAddress = 0;
 		uint32 m_Code = 0;
+
+		_pragma_small_code
+		_cold _nothrow CPU_Exception() noexcept = default;
+		_pragma_default_code
+
+		_pragma_small_code
+		_cold _nothrow CPU_Exception(const Type type, const uint32 address, const uint32 code = 0) noexcept
+			: m_ExceptionType(type)
+			, m_InstructionAddress(address)
+			, m_Code(code)
+		{}
+		_pragma_default_code
+
+		_pragma_small_code [[noreturn]]
+		_cold _noinline void rethrow_helper()
+		{
+			throw *this;
+		}
+		_pragma_default_code
+
+		_pragma_small_code [[noreturn]]
+		static _cold _noinline void throw_helper(const Type type, const uint32 address, const uint32 code = 0)
+		{
+			throw CPU_Exception(type, address, code);
+		}
+		_pragma_default_code
 	};
 
-	struct ExecutionCompleteException {};
-	struct ExecutionFailException {};
+	struct ExecutionCompleteException final : base_exception_templated<ExecutionCompleteException>
+	{};
+	struct ExecutionFailException final : base_exception_templated<ExecutionFailException>
+	{};
+
+	namespace exceptions
+	{
+		_pragma_small_code
+		template <typename TException, typename... Tt>
+		[[noreturn]]
+		static _cold _noinline void throw_helper(Tt&&... args)
+		{
+			throw TException(std::forward<Tt>(args)...);
+		}
+		_pragma_default_code
+
+		_pragma_small_code
+		template <typename TException, typename... Tt>
+		[[noreturn]]
+		static _cold _noinline void throw_assert(Tt&&... args)
+		{
+			xassert(false);
+			// ReSharper disable once CppUnreachableCode
+			throw TException(std::forward<Tt>(args)...);
+		}
+		_pragma_default_code
+	}
 }
