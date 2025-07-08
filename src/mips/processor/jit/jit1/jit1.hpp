@@ -62,7 +62,8 @@ namespace mips {
 
 			ChunkOffset * __restrict m_chunk_offset = nullptr;
 			uint8 * __restrict m_data = nullptr;
-			std::unique_ptr<std::vector<patch>> m_patches;
+			// TODO : replace with a chunked vector
+			std::unique_ptr<std::list<patch>> m_patches;
 			uint32 m_offset = 0;
 			uint32 m_datasize = 0;
 			// TODO there are better ways to handle this that don't require reconfiguring the entire chunk.
