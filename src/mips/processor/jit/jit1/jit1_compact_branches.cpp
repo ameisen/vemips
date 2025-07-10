@@ -100,6 +100,27 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		jmp(rax);
 	};
 
+	const auto emit_near_far_jump = [&](const uint32 target_address)
+	{
+		// near branch
+		// destination is in this chunk. This is far easier to handle.
+		if (target_address >= chunk_begin && target_address <= chunk_last)
+		{
+			const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
+			const auto& target_label = get_instruction_offset_label(instruction_offset);
+			mov(dword[rbp + pc_offset], target_address);
+			inc(rdi);
+			safejmp(target_label, instruction_offset);
+		}
+		// far
+		// destination is outside of this chunk. This is more difficult to handle.
+		else
+		{
+			// In this case, we need to find the address in order to jump to it.
+			patch_jump(target_address);
+		}
+	};
+
 	 if (IS_INSTRUCTION(instruction_info, PROC_BALC))
 	{
 		const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
@@ -107,42 +128,14 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		const uint32 link_address = address + 4;
 		mov(get_register_op32(r31), link_address);	// set link
 
-		// destination is in this chunk. This is far easier to handle.
-		if (target_address >= chunk_begin && target_address <= chunk_last)
-		{
-			const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-			const auto& target_label = get_instruction_offset_label(instruction_offset);
-			mov(dword[rbp + pc_offset], target_address);
-			inc(rdi);
-			safejmp(target_label, instruction_offset);
-		}
-		// destination is outside of this chunk. This is more difficult to handle.
-		else
-		{
-			// In this case, we need to find the address in order to jump to it.
-			patch_jump(target_address);
-		}
+		emit_near_far_jump(target_address);
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BC))
 	{
 		const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + immediate;
 
-		// destination is in this chunk. This is far easier to handle.
-		if (target_address >= chunk_begin && target_address <= chunk_last)
-		{
-			const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-			const auto& target_label = get_instruction_offset_label(instruction_offset);
-			mov(dword[rbp + pc_offset], target_address);
-			inc(rdi);
-			safejmp(target_label, instruction_offset);
-		}
-		// destination is outside of this chunk. This is more difficult to handle.
-		else
-		{
-			// In this case, we need to find the address in order to jump to it.
-			patch_jump(target_address);
-		}
+		emit_near_far_jump(target_address);
 	}
 	 else if (IS_INSTRUCTION(instruction_info, PROC_BLEZALC)) // branch rt <= 0 and link
 	{
@@ -158,23 +151,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jg(no_jump);															 // jump past branch
+			jg(no_jump, T_SHORT);															 // jump past branch
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -184,7 +163,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -204,23 +183,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jl(no_jump);															 // jump past branch if < 0
+			jl(no_jump, T_SHORT);															 // jump past branch if < 0
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -233,23 +198,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
-			jl(no_jump);															 // jump past branch if < 0
+			jl(no_jump, T_SHORT);															 // jump past branch if < 0
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -259,7 +210,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -277,23 +228,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jle(no_jump);															 // jump past branch
+			jle(no_jump, T_SHORT);															 // jump past branch
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -303,7 +240,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -323,23 +260,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jge(no_jump);															
+			jge(no_jump, T_SHORT);															
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -352,23 +275,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
-			jge(no_jump);															 
+			jge(no_jump, T_SHORT);															 
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -378,7 +287,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -398,23 +307,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0);
-			jne(no_jump);															 
+			jne(no_jump, T_SHORT);															 
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -427,23 +322,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
-			jne(no_jump);															 
+			jne(no_jump, T_SHORT);															 
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -456,23 +337,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			add(eax, get_register_op32(rt)); // add [rs] and [rt]
-			jno(no_jump);															 
+			jno(no_jump, T_SHORT);															 
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -482,7 +349,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -502,23 +369,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			je(no_jump);															 
+			je(no_jump, T_SHORT);															 
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -531,23 +384,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rt)); // get [rt]
 			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
-			je(no_jump);															 
+			je(no_jump, T_SHORT);															 
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -560,23 +399,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			add(eax, get_register_op32(rt)); // add [rs] and [rt]
-			jo(no_jump);															 
+			jo(no_jump, T_SHORT);															 
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -586,7 +411,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -602,23 +427,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jg(no_jump);															 // jump past branch
+			jg(no_jump, T_SHORT);															 // jump past branch
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -628,7 +439,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -645,23 +456,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jl(no_jump);
+			jl(no_jump, T_SHORT);
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -674,23 +471,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			cmp(eax, get_register_op32(rt)); // compare [rs] and [rt]
-			jl(no_jump);
+			jl(no_jump, T_SHORT);
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -700,7 +483,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -716,23 +499,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jle(no_jump);															// jump past branch
+			jle(no_jump, T_SHORT);															// jump past branch
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -742,7 +511,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -759,23 +528,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rt), 0); // compare [rt] to 0
-			jge(no_jump);
+			jge(no_jump, T_SHORT);
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -788,23 +543,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 
 			mov(eax, get_register_op32(rs)); // get [rs]
 			cmp(eax, get_register_op32(rt)); // compare [rs] and [rt]
-			jge(no_jump);
+			jge(no_jump, T_SHORT);
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -814,7 +555,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -830,23 +571,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rs), 0); // compare [rs] to 0
-			jne(no_jump);															// jump past branch
+			jne(no_jump, T_SHORT);															// jump past branch
 
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -856,7 +583,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -872,25 +599,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 			const Xbyak::Label no_jump;
 
 			cmp(get_register_op32(rs), 0); // compare [rs] to 0
-			je(no_jump);															 // jump past branch
+			je(no_jump, T_SHORT);															 // jump past branch
 
-			// near branch
-			// destination is in this chunk. This is far easier to handle.
-			if (target_address >= chunk_begin && target_address <= chunk_last)
-			{
-				const uint32 instruction_offset = (target_address - chunk_begin) / 4u;
-				const auto& target_label = get_instruction_offset_label(instruction_offset);
-				mov(dword[rbp + pc_offset], target_address);
-				inc(rdi);
-				safejmp(target_label, instruction_offset);
-			}
-			// far
-			// destination is outside of this chunk. This is more difficult to handle.
-			else
-			{
-				// In this case, we need to find the address in order to jump to it.
-				patch_jump(target_address);
-			}
+			emit_near_far_jump(target_address);
 
 			L(no_jump);
 			if (!jit_.processor_.disable_cti_) {
@@ -900,7 +611,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		else
 		{
 			terminate_instruction = true;
-			mov(eax, int32(address));
+			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 		}
 	}
@@ -918,7 +629,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		mov(ecx, eax);
 		and_(ecx, ~(jit1::ChunkSize - 1));
 		cmp(ecx, chunk_begin);
-		jne(not_within);
+		jne(not_within, T_SHORT);
 		and_(eax, (jit1::ChunkSize - 1));
 
 		mov(rcx, uint64(chunk_offset.data()));
@@ -952,7 +663,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		mov(ecx, eax);
 		and_(ecx, ~(jit1::ChunkSize - 1));
 		cmp(ecx, chunk_begin);
-		jne(not_within);
+		jne(not_within, T_SHORT);
 		and_(eax, (jit1::ChunkSize - 1));
 
 		mov(rcx, uint64(chunk_offset.data()));

@@ -1335,7 +1335,7 @@ public:
 	Label() : mgr(0), id(0) {}
 	Label(const Label& rhs);
 #ifndef VEMIPS_XBYAK_EXTENSION
-	Label(Label&& rhs);
+	Label(Label&& rhs) noexcept;
 #endif
 	Label& operator=(const Label& rhs);
 #ifndef VEMIPS_XBYAK_EXTENSION
@@ -1454,6 +1454,41 @@ class LabelManager {
 			--i->second.refCount;
 		}
 	}
+
+#ifndef VEMIPS_XBYAK_EXTENSION
+public:
+	bool isReferenced(const Label& label) const
+	{
+		if (label.getAddress())
+		{
+			return true;
+		}
+
+		if (labelPtrList_.contains(const_cast<Label*>(&label)))
+		{
+			return true;
+		}
+
+		{
+			const auto iter = clabelDefList_.find(label.getId());
+			if (iter != clabelDefList_.end() && iter->second.refCount > 0)
+			{
+				return true;
+			}
+		}
+		{
+			const auto iter = clabelUndefList_.find(label.getId());
+			if (iter != clabelUndefList_.end())
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+private:
+#endif
+
 	template<class T>
 	bool hasUndefinedLabel_inner(const T& list) const
 	{
@@ -1587,7 +1622,7 @@ inline Label::Label(const Label& rhs)
 }
 
 #ifndef VEMIPS_XBYAK_EXTENSION
-inline Label::Label(Label&& rhs) :
+inline Label::Label(Label&& rhs) noexcept :
 	mgr(rhs.mgr),
 	id(rhs.id)
 {
@@ -2550,7 +2585,7 @@ private:
 public:
 	void L(const std::string& label) { labelMgr_.defineSlabel(label); }
 	void L(Label& label) { labelMgr_.defineClabel(label); }
-#ifndef VEMIPS_XBYAK_EXTENSION // because we actually want things to be `const` to prevent accidently overwriting, but this actually mutates it
+#ifndef VEMIPS_XBYAK_EXTENSION // because we actually want things to be `const` to prevent accidentally overwriting, but this actually mutates it
 	void L(const Label& label) { L(const_cast<Label&>(label)); }
 #endif
 	Label L() { Label label; L(label); return label; }
@@ -2569,6 +2604,18 @@ public:
 	*/
 	void putL(std::string label) { putL_inner(label); }
 	void putL(const Label& label) { putL_inner(label); }
+
+#ifndef VEMIPS_XBYAK_EXTENSION
+	bool isReferenced(const Label& label) const
+	{
+		if (label.getAddress())
+		{
+			return true;
+		}
+
+		return labelMgr_.isReferenced(label);
+	}
+#endif
 
 	// set default type of `jmp` of undefined label to T_NEAR
 	void setDefaultJmpNEAR(bool isNear) { isDefaultJmpNEAR_ = isNear; }
@@ -2841,6 +2888,14 @@ public:
 		labelMgr_.set(this);
 	}
 	bool hasUndefinedLabel() const { return labelMgr_.hasUndefSlabel() || labelMgr_.hasUndefClabel(); }
+
+#ifndef VEMIPS_XBYAK_EXTENSION
+	const LabelManager& getLabelManager() const
+	{
+		return labelMgr_;
+	}
+#endif
+
 	/*
 		MUST call ready() to complete generating code if you use AutoGrow mode.
 		It is not necessary for the other mode if hasUndefinedLabel() is true.

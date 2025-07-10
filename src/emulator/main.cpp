@@ -70,7 +70,7 @@ namespace {
 			uint16 port = 0;
 			bool enabled = false;
 		} debug;
-		bool instruction_stats = false;
+		bool collect_statistics = false;
 		bool disable_cti = false;
 		bool instruction_cache = true;
 		bool use_rox = false;
@@ -262,9 +262,9 @@ namespace {
 			},
 			{
 				{TSTR("--stats")},
-				TSTR("Enable capturing of instruction stats"),
+				TSTR("Enable capturing of statistics"),
 				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict) {
-					argument_data.instruction_stats = true;
+					argument_data.collect_statistics = true;
 				}
 			},
 			{
@@ -471,7 +471,7 @@ namespace {
 		case mips::mmu::host:
 			fmt::println("\tMemory Management Unit: host"); break;
 		}
-		fmt::println("\tInstruction statistics {}", argument_data.instruction_stats ? "enabled" : "disabled");
+		fmt::println("\tCollect Statistics {}", argument_data.collect_statistics ? "enabled" : "disabled");
 		fmt::println("\tInstruction cache {}", argument_data.instruction_cache ? "enabled" : "disabled");
 		if (argument_data.ticks == 0) {
 			fmt::println("\tRealtime-mode enabled");
@@ -528,9 +528,7 @@ namespace {
 		auto start_time = std::chrono::high_resolution_clock::now();
 		uint64 instructions = 0;
 
-		using statistic = std::pair<const char *, size_t>;
-
-		std::vector<statistic> statistics;
+		processor::statistics statistics;
 		size_t largest_jit_instruction = 0;
 
 		try {
@@ -547,7 +545,7 @@ namespace {
 				.mmu_type = argument_data.mmu_type,
 				.debug_port = argument_data.debug.port,
 				.read_only_exec = argument_data.use_rox,
-				.record_instruction_stats = argument_data.instruction_stats,
+				.collect_statistics = argument_data.collect_statistics,
 				.disable_cti = argument_data.disable_cti,
 				.ticked = argument_data.ticks != 0,
 				.instruction_cache = argument_data.instruction_cache,
@@ -576,8 +574,8 @@ namespace {
 			}
 			catch (...) {
 				instructions = system->get_instruction_count();
-				if (argument_data.instruction_stats) {
-					statistics.append_range(system->get_stats_map());
+				if (argument_data.collect_statistics) {
+					statistics.append(*system->get_statistics());
 					largest_jit_instruction = system->get_jit_max_instruction_size();
 				}
 				throw;
@@ -614,21 +612,30 @@ namespace {
 		}
 		fmt::println("** Instructions Executed: {}", instructions);
 
-		if (argument_data.instruction_stats) {
-			fmt::println("** Collected Instruction Stats:");
+		if (argument_data.collect_statistics) {
+			fmt::println("** Collected Statistics:");
 
 			if (largest_jit_instruction) {
-				fmt::println("\tLargest JIT Instruction: {} bytes\n", largest_jit_instruction);
+				fmt::println("\tLargest JIT Instruction: {} bytes", largest_jit_instruction);
+			}
+			fmt::println("\tJIT Transitions: {}", statistics.jit_transitions);
+			std::puts("");
+
+			std::vector<std::pair<const char *, size_t>> instruction_stats;
+			instruction_stats.reserve(statistics.instructions.size());
+			for (const auto& item : statistics.instructions)
+			{
+				instruction_stats.push_back(item);
 			}
 
 			struct final {
-				bool operator()(const statistic & __restrict a, const statistic & __restrict b) const __restrict {
+				bool operator()(const std::pair<const char *, size_t> & __restrict a, const std::pair<const char *, size_t> & __restrict b) const __restrict {
 					return a.second > b.second;
 				}	
 			} constexpr custom_comparator;
 
-			std::stable_sort(statistics.begin(), statistics.end(), custom_comparator);
-			for (const statistic &stat_pair : statistics) {
+			std::ranges::stable_sort(instruction_stats, custom_comparator);
+			for (const auto &stat_pair : instruction_stats) {
 				fmt::println("\t{} - {}", stat_pair.first, stat_pair.second);
 			}
 		}

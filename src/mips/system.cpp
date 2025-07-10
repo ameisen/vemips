@@ -322,8 +322,9 @@ void system::initialize(const elf::binary & __restrict binary) {
 	processor_->set_register<uint32>(29, uint32(stack_start));
 }
 
-
-system::system(const options & __restrict init_options, const elf::binary & __restrict binary) : options_(init_options)
+system::system(capabilities&& capabilities, const options & __restrict init_options, const elf::binary & __restrict binary)
+	: options_(init_options)
+	, capabilities_(std::move(capabilities))
 {
 	mips::processor::options cpu_options = {
 		.guest_system = this,
@@ -331,7 +332,7 @@ system::system(const options & __restrict init_options, const elf::binary & __re
 		.mmu_type = init_options.mmu_type,
 		.stack = init_options.stack_memory,
 		.rox = init_options.read_only_exec,
-		.collect_stats = init_options.record_instruction_stats,
+		.collect_stats = init_options.collect_statistics,
 		.disable_cti = init_options.disable_cti,
 		.ticked = init_options.ticked,
 		.icache = init_options.instruction_cache,
@@ -369,6 +370,11 @@ system::system(const options & __restrict init_options, const elf::binary & __re
 	}
 }
 
+system::system(const options & __restrict init_options, const elf::binary & __restrict binary)
+	: system({}, init_options, binary)
+{
+}
+
 system::~system() {
 	delete debugger_;
 	delete processor_;
@@ -398,12 +404,8 @@ uint64 system::get_instruction_count() const __restrict {
 	return processor_->get_instruction_count();
 }
 
-const std::unordered_map<const char *, size_t> & system::get_stats_map() const __restrict {
-	return processor_->get_stats_map();
-}
-
-std::unordered_map<const char *, size_t> & system::get_stats_map() __restrict {
-	return processor_->get_stats_map();
+const processor::statistics* system::get_statistics() const __restrict {
+	return processor_->get_statistics();
 }
 
 size_t system::get_jit_max_instruction_size() const __restrict {

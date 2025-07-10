@@ -81,7 +81,7 @@ namespace mips {
 		_pragma_default_code
 
 		_pragma_small_code [[noreturn]]
-		_cold _noinline void rethrow_helper()
+		_cold _noinline void rethrow_helper() const
 		{
 			throw *this;
 		}

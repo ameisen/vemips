@@ -48,7 +48,7 @@ namespace mips {
 
 		static constexpr const uint32 ChunkSize = 0x100; // ChunkSize represents the size for MIPS memory.
 	public:
-		static constexpr const size_t MaxChunkRealSize = (ChunkSize / 0x100) * 8192;
+		static constexpr const size_t MaxChunkRealSize = std::max(ChunkSize / 0x100, 1U) * 8192;
 	private:
 		static constexpr const size_t ChunkSizeLog2 = log2_ceil(ChunkSize);
 		static constexpr const size_t RemainingLog2 = 32 - ChunkSizeLog2 - 8 - 8;

@@ -78,7 +78,7 @@ void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -89,23 +89,26 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
 	if (rd.is_zero())
 	{
 		// nop
+		return except_result::no_except;
 	}
 	else if (rs == rt)
 	{
-		 mov(get_register_op32(rd), 0);
+		mov(get_register_op32(rd), 0);
+		return except_result::no_except;
 	}
 	else if (rs.is_zero())
 	{
-		// check if 'rt' is zero or not. If it's zero, we write zero to rd.
-		// otherwise, we throw OV
-		cmp(get_register_op32(rt), 0);
-		jne(intrinsics_.ov, T_NEAR);
-		mov(get_register_op32(rd), 0);
+		mov(eax, get_register_op32(rt));
+		neg(eax);
+		jo(intrinsics_.ov, T_NEAR);
+		mov(get_register_op32(rd), eax);
+		return except_result::can_except;
 	}
 	else if (rt.is_zero())
 	{
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
+		return except_result::no_except;
 	}
 	else
 	{
@@ -113,6 +116,7 @@ void Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, u
 		sub(eax, get_register_op32(rt));
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), eax);
+		return except_result::can_except;
 	}
 }
 
@@ -528,7 +532,7 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 	}
 }
 
-void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs + immediate
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -538,19 +542,26 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 	if (rt.is_zero())
 	{
 		// nop
+		return except_result::no_except;
 	}
 	else if (rs.is_zero())
 	{
+		#if 0
 		if (immediate < 0)
 		{
+			// TODO: this is incorrect.
 			jmp(intrinsics_.ov, T_NEAR);
+			return except_result::forced_except;
 		}
-		else if (immediate == 0)
+		else
+		#endif
+		if (immediate == 0)
 		{
 			// This just sets rt to 0.
 			// 89 4A EE 
 			// mov dword [rdx + 0xEE], ecx ; EE = 'rt' offset
 			mov(get_register_op32(rt), 0);
+			return except_result::no_except;
 		}
 		// // // // // // TODO 128/-128
 		else
@@ -559,6 +570,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 			// C7 42 EE FF FF FF FF 
 			// mov dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
 			mov(get_register_op32(rt), immediate);
+			return except_result::no_except;
 		}
 	}
 	else if (rs == rt)
@@ -566,6 +578,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		if (immediate == 0)
 		{
 			// nop
+			return except_result::no_except;
 		}
 		else
 		{
@@ -599,6 +612,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 
 			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
+			return except_result::can_except;
 		}
 	}
 	else if (immediate == 0)
@@ -609,6 +623,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rt), eax);
+		return except_result::no_except;
 	}
 	else
 	{
@@ -658,6 +673,7 @@ void Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, 
 
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
+		return except_result::can_except;
 	}
 }
 
@@ -695,6 +711,12 @@ void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, 
 		mov(eax, get_register_op32(rt));
 		add(get_register_op32(rd), eax);
 	}
+	else if (rt == rd)
+	{
+		// add [rs] to [rd]
+		mov(eax, get_register_op32(rs));
+		add(get_register_op32(rd), eax);
+	}
 	else
 	{
 		// add [rs] and [rt] to [rd]
@@ -709,7 +731,7 @@ void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -719,33 +741,41 @@ void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, u
 	if (rd.is_zero())
 	{
 		// nop
+		return except_result::no_except;
 	}
 	else if (rt.is_zero() && rd.is_zero())
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
+		return except_result::no_except;
 	}
 	else if (rt.is_zero())
 	{
 		// move [rs] to [rd]
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
+		return except_result::no_except;
 	}
 	else if (rs.is_zero())
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
+		return except_result::no_except;
 	}
-	/*
 	else if (rs == rd)
 	{
+		const Xbyak::Label no_overflow;
+
 		// add [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		add(get_register_op32(rd), eax);
-		jo(intrinsics_.ov, T_NEAR);
+		jno(no_overflow, T_SHORT);
+		sub(get_register_op32(rd), eax);
+		jmp(intrinsics_.ov, T_NEAR);
+		L(no_overflow);
+		return except_result::can_except;
 	}
-	*/
 	else
 	{
 		// add [rs] and [rt] to [rd]
@@ -758,6 +788,7 @@ void Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, u
 		}
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), eax);
+		return except_result::can_except;
 	}
 }
 
@@ -1862,7 +1893,7 @@ void Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset,
 		}
 	}
 	terminate_instruction = true;
-	mov(eax, int32(address));
+	mov(ecx, int32(address));
 	jmp(intrinsics_.ri, T_NEAR);
 }
 

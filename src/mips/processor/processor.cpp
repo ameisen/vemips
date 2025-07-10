@@ -56,7 +56,7 @@ processor::processor(const options & __restrict options) :
 	},
 	memory_source_(options.mem_src),
 	jit_type_(options.jit_type),
-	instruction_stats_(options.collect_stats ? std::make_unique<decltype(instruction_stats_)::element_type>() : nullptr),
+	statistics_(options.collect_stats ? std::make_unique<decltype(statistics_)::element_type>() : nullptr),
 	mmu_type_(options.mmu_type),
 	guest_system_(options.guest_system),
 	readonly_exec_(options.rox),
@@ -186,7 +186,7 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 		const instruction_t instruction = get_instruction();
 		if _unlikely(collect_stats_) [[unlikely]] {
 			if (const auto * __restrict info = instructions::get_instruction(instruction)) [[likely]] {
-				++(*instruction_stats_)[info->Name];
+				increment_instruction_statistic(info->Name);
 				info->Proc(instruction, *this);
 			}
 			else {
@@ -217,7 +217,7 @@ void processor::ExecuteInstructionExplicit(const instructions::InstructionInfo* 
 		g_currentprocessor = this;
 
 		if _unlikely(collect_stats_) [[unlikely]] {
-			++(*instruction_stats_)[instruction_info->Name];
+			increment_instruction_statistic(instruction_info->Name);
 		}
 		instruction_info->Proc(instruction, *this);
 	}

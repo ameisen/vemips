@@ -60,6 +60,22 @@ namespace mips {
 			static constexpr const uint32 frame_pointer = 30U; 
 		};
 
+		struct statistics final
+		{
+			std::unordered_map<const char *, size_t> instructions;
+			usize jit_transitions = 0;
+
+			void append(const statistics& other)
+			{
+				for (const auto&[name, count] : other.instructions)
+				{
+					instructions[name] += count;
+				}
+
+				jit_transitions = other.jit_transitions;
+			}
+		};
+
 	private:
 		static constexpr const size_t num_registers = 32;
 		static constexpr const size_t num_coprocessors = coprocessor::max;
@@ -95,7 +111,7 @@ namespace mips {
 
 		CPU_Exception									  trapped_exception_ = {};
 
-		const std::unique_ptr<std::unordered_map<const char *, size_t>>  instruction_stats_;
+		const std::unique_ptr<statistics>  statistics_;
 
 		const mips::mmu											mmu_type_;
 		system												* const guest_system_ = nullptr;
@@ -136,18 +152,24 @@ namespace mips {
 	public:
 		void compare(const processor& __restrict other, uint32 /*previous_pc*/) const;
 
-		void add_stat(const char *name) {
-			++(*instruction_stats_)[name];
+		void increment_instruction_statistic(const char *name) {
+			if (collect_stats_)
+			{
+				++(statistics_->instructions[name]);
+			}
+		}
+
+		void increment_jit_transition_statistic()
+		{
+			if (collect_stats_)
+			{
+				++(statistics_->jit_transitions);
+			}
 		}
 
 		[[nodiscard]]
-		const std::unordered_map<const char *, size_t> & get_stats_map() const {
-			return (*instruction_stats_);
-		}
-
-		[[nodiscard]]
-		std::unordered_map<const char *, size_t> & get_stats_map() {
-			return (*instruction_stats_);
+		const statistics* get_statistics() const {
+			return collect_stats_ ? &*statistics_ : nullptr;
 		}
 
 		[[nodiscard]]

@@ -121,7 +121,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		// rax now has our destination pointer.
 		mov(r13, rax); // save the pointer off to non-volatile r13.
 		test(rax, rax);
-		jnz(valid_ptr);
+		jnz(valid_ptr, T_SHORT);
 		mov(eax, ecx);
 		mov(ecx, r13d);
 		jmp(intrinsics_.ades, T_NEAR);
@@ -138,12 +138,13 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 
 			// quick error checking
 			if (mmu_type == mmu::none) {
-				// this cheks if it is in range, or if it overflows and thus overwrites '0'
+				// this checks if it is in range, or if it overflows and thus overwrites '0'
 				if (
 					(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
 					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x1'0000'0000ull)
 				{
 					mov(eax, address);
+					mov(ecx, start_address);
 					jmp(intrinsics_.ades, T_NEAR);
 					return false;
 				}
@@ -153,12 +154,14 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				for (uint64 addr = start_address; addr < end_address; ++addr) {
 					if (addr == 0) {
 						mov(eax, address);
+						mov(ecx, addr);
 						jmp(intrinsics_.ades, T_NEAR);
 						return false;
 					}
 					if (jit_.processor_.stack_size_) {
 						if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x1'0000'0000ull - jit_.processor_.stack_size_)) {
 							mov(eax, address);
+							mov(ecx, addr);
 							jmp(intrinsics_.ades, T_NEAR);
 							return false;
 						}
@@ -176,10 +179,13 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 			}
 			// error checking
 			if (mmu_type == mmu::none) {
+				const Xbyak::Label ades;
+				mov(edx, eax);
+
 				// zero test
 				lea(ecx, dword[eax - 1]);
 				add(ecx, store_size);
-				jo(intrinsics_.ades, T_NEAR);
+				jo(ades, T_SHORT);
 
 				// Offset for stack
 				if (jit_.processor_.stack_size_) {
@@ -188,7 +194,13 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 
 				// check for range
 				cmp(eax, uint32((jit_.processor_.memory_size_ - store_size) - offset));
-				ja(intrinsics_.ades, T_NEAR);
+				const Xbyak::Label no_ades;
+				jbe(no_ades, T_SHORT);
+				L(ades);
+				mov(eax, address);
+				mov(ecx, ebx);
+				jmp(intrinsics_.ades, T_NEAR);
+				L(no_ades);
 			}
 
 			mov(rdx, qword[rbp + memp_offset]);
@@ -409,7 +421,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		//cmp(eax, 0);
 		//je(no_flush);
 		test(eax, eax);
-		jz(no_flush);
+		jz(no_flush, T_SHORT);
 		mov(eax, address);
 		jmp(intrinsics_.save_return, T_NEAR);
 		L(no_flush);
@@ -471,7 +483,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			//cmp(rax, 0);
 			//jne(valid_ptr);
 			test(rax, rax);
-			jnz(valid_ptr);
+			jnz(valid_ptr, T_SHORT);
 			mov(eax, ecx);
 			mov(ecx, r13d);
 			jmp(intrinsics_.adel, T_NEAR);
@@ -488,12 +500,13 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 
 				// quick error checking
 				if (mmu_type == mmu::none) {
-					// this cheks if it is in range, or if it overflows and thus overwrites '0'
+					// this checks if it is in range, or if it overflows and thus overwrites '0'
 					if (
 						(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
 						(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(load_size)) > 0x100000000ull)
 					{
 						mov(eax, address);
+						mov(ecx, start_address);
 						jmp(intrinsics_.adel, T_NEAR);
 						return false;
 					}
@@ -503,12 +516,14 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					for (uint64 addr = start_address; addr < end_address; ++addr) {
 						if (addr == 0) {
 							mov(eax, address);
+							mov(ecx, addr);
 							jmp(intrinsics_.adel, T_NEAR);
 							return false;
 						}
 						if (jit_.processor_.stack_size_) {
 							if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
 								mov(eax, address);
+								mov(ecx, addr);
 								jmp(intrinsics_.adel, T_NEAR);
 								return false;
 							}
@@ -526,10 +541,14 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				}
 				// error checking
 				if (mmu_type == mmu::none) {
+					const Xbyak::Label adel;
+
+					mov(edx, eax);
+
 					// zero test
 					lea(ecx, dword[eax - 1]);
 					add(ecx, load_size);
-					jo(intrinsics_.adel, T_NEAR);
+					jo(adel, T_SHORT);
 
 					// Offset for stack
 					if (jit_.processor_.stack_size_) {
@@ -538,7 +557,13 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 
 					// check for range
 					cmp(eax, uint32((jit_.processor_.memory_size_ - load_size) - offset));
-					ja(intrinsics_.adel, T_NEAR);
+					const Xbyak::Label no_adel;
+					jbe(no_adel, T_SHORT);
+					L(adel);
+					mov(eax, address);
+					mov(ecx, edx);
+					jmp(intrinsics_.adel, T_NEAR);
+					L(no_adel);
 				}
 
 				mov(rdx, qword[rbp + memp_offset]);

@@ -33,7 +33,7 @@ namespace mips {
 			mmu mmu_type = mmu::emulated;
 			uint16 debug_port = 0;
 			bool read_only_exec : 1 = false;
-			bool record_instruction_stats : 1 = false;
+			bool collect_statistics : 1 = false;
 			bool disable_cti : 1 = false;
 			bool ticked : 1 = false;
 			bool instruction_cache : 1 = false;
@@ -42,10 +42,18 @@ namespace mips {
 
 			void validate() const;
 		};
+
+		struct capabilities final
+		{
+			bool can_handle_syscalls_inline : 1 = false;
+		};
 	protected:
 		const options options_;
-
+		const capabilities capabilities_;
+			
 		void initialize(const elf::binary & __restrict binary);
+
+		system(capabilities&& capabilities, const options & __restrict init_options, const elf::binary & __restrict binary);
 	public:
 		system(const options & __restrict init_options, const elf::binary & __restrict binary);
 		virtual ~system();
@@ -53,13 +61,16 @@ namespace mips {
 		virtual void clock(uint64 clocks) __restrict;
 
 		[[nodiscard]]
+		_nothrow const capabilities& get_capabilities() const __restrict noexcept
+		{
+			return capabilities_;
+		}
+
+		[[nodiscard]]
 		uint64 get_instruction_count() const __restrict;
 
 		[[nodiscard]]
-		const std::unordered_map<const char *, size_t> & get_stats_map() const __restrict;
-
-		[[nodiscard]]
-		std::unordered_map<const char *, size_t> & get_stats_map() __restrict;
+		const processor::statistics* get_statistics() const __restrict;
 
 		[[nodiscard]]
 		size_t get_jit_max_instruction_size() const __restrict;

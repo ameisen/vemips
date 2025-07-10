@@ -125,15 +125,14 @@ _forceinline jit1::chunk_data& jit1::MapLevel1::operator [] (uint32 idx) {
 #endif
 
 namespace {
-	_pragma_small_code
 	_cold _nothrow void RI_Exception (instruction_t, processor & __restrict processor) noexcept
 	{
 		processor.set_trapped_exception({ CPU_Exception::Type::RI, processor.get_program_counter() });
 	}
 
-	_cold _nothrow void OV_Exception (uint32 code, processor & __restrict processor) noexcept
+	_cold _nothrow void OV_Exception (processor & __restrict processor) noexcept
 	{
-		processor.set_trapped_exception({ CPU_Exception::Type::Ov, processor.get_program_counter(), code });
+		processor.set_trapped_exception({ CPU_Exception::Type::Ov, processor.get_program_counter() });
 	}
 
 	_cold _nothrow void TR_Exception (uint32 code, processor & __restrict processor) noexcept
@@ -192,9 +191,9 @@ jit1::~jit1() = default;
 
 namespace
 {
-	void collect_stats(const char * __restrict instruction, processor & __restrict processor)
+	void increment_instruction_statistic(const char * __restrict instruction, processor & __restrict processor)
 	{
-		processor.add_stat(instruction);
+		processor.increment_instruction_statistic(instruction);
 	}
 
 	static uint32 should_debug_break(const processor * __restrict proc)
@@ -217,6 +216,8 @@ namespace
 
 void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update) {
 	xassert((start_address % 4) == 0);
+
+	const auto& this_processor = jit_.processor_;
 
 	cache_flusher scoped_cache_flusher(*this);
 
@@ -260,6 +261,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		L(intrinsics_.code_start);
 	}
 
+	const Xbyak::Label intrinsic_ex;
+	const Xbyak::Label intrinsic_ex_no_pc;
+
 	static constexpr uint32 num_instructions = jit1::NumInstructionsChunk;
 	for (uint32 i = start_index; i < num_instructions; ++i)
 	{
@@ -285,6 +289,28 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		const instructions::InstructionInfo * __restrict prev_instruction_info_ptr = nullptr;
 		const instructions::InstructionInfo * __restrict instruction_info_ptr = nullptr;
 
+		const auto handle_except_result = [&](const except_result& result)
+		{
+			switch (result)
+			{
+				case except_result::can_except:
+					can_except = true;
+					break;
+				case except_result::forced_except:
+					can_except = true;
+					terminate_instruction = true;
+					break;
+				case except_result::no_except:
+					can_except = false;
+					// no-op
+					break;
+				default: [[unlikely]]
+					xassert(false);
+			}
+
+			return result;
+		};
+
 #if JIT_INSERT_IDENTIFIERS
 		const Xbyak::Label id_label;
 		jmp(id_label);
@@ -294,7 +320,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		L(id_label);
 #endif
 		
-		if (jit_.processor_.ticked_ && jit_.processor_.debugging_)
+		if (this_processor.ticked_ && this_processor.debugging_)
 		{
 			mov(rax, int64(&should_debug_break));
 			mov(dword[rbp + pc_offset], int32(current_address));
@@ -306,7 +332,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			cmp(rdi, r14);
 			je(intrinsics_.save_return, T_NEAR);
 		}
-		else if (jit_.processor_.debugging_)
+		else if (this_processor.debugging_)
 		{
 			mov(rax, int64(&should_debug_break));
 			mov(dword[rbp + pc_offset], int32(current_address));
@@ -316,7 +342,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
 		}
-		else if (jit_.processor_.ticked_)
+		else if (this_processor.ticked_)
 		{
 			// check if we are already at our tick count.
 			cmp(rdi, r14);
@@ -329,7 +355,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			const size_t ins_start_size = getSize();
 
 			// Also fetch previous instruction.
-			const instruction_t * __restrict prev_ptr = jit_.processor_.safe_mem_fetch_exec<const instruction_t>(current_address - 4);
+			const instruction_t * __restrict prev_ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4);
 			if (prev_ptr)
 			{
 				prev_instruction = *prev_ptr;
@@ -345,7 +371,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				}
 			}
 
-			const instruction_t * __restrict ptr = jit_.processor_.safe_mem_fetch_exec<const instruction_t>(current_address);
+			const instruction_t * __restrict ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address);
 			if (ptr)
 			{
 				const instruction_t instruction = *ptr;
@@ -353,7 +379,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 				if (instruction_info_ptr)
 				{
-					if (jit_.processor_.collect_stats_)
+					if (this_processor.collect_stats_)
 					{
 						// dispatch a stat call.
 						mov(rcx, int64(instruction_info_ptr->Name));
@@ -363,7 +389,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					compact_branch = ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::CompactBranch)) != 0);
 					delay_branch = ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::DelayBranch)) != 0);
 
-					if (cti_test && !jit_.processor_.disable_cti_)
+					if (cti_test && !this_processor.disable_cti_)
 					{
 						// CTI instruction prefix.
 						if ((instruction_info_ptr->OpFlags & uint32(mips::instructions::OpFlags::ControlInstruction)) != 0)
@@ -372,7 +398,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 							test(ebx, processor::flag::no_cti);
 							jz(no_ex);
-							mov(eax, int32(current_address));
+							mov(ecx, int32(current_address));
 							jmp(intrinsics_.ri, T_NEAR);
 							L(no_ex);
 						}
@@ -436,7 +462,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SUB))
 					{
-						write_PROC_SUB(chunk_offset, current_address, instruction, *instruction_info_ptr);
+						handle_except_result(write_PROC_SUB(chunk_offset, current_address, instruction, *instruction_info_ptr));
 					}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_OR))
 					{
@@ -468,7 +494,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					}
 					//else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ADDI))
 					//{
-					//	write_PROC_ADDI(chunk_offset, current_address, instruction, *instruction_info_ptr);
+					//	handle_except_result(write_PROC_ADDI(chunk_offset, current_address, instruction, *instruction_info_ptr));
 					//}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ADDU))
 					{
@@ -476,7 +502,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_ADD))
 					{
-						write_PROC_ADD(chunk_offset, current_address, instruction, *instruction_info_ptr);
+						handle_except_result(write_PROC_ADD(chunk_offset, current_address, instruction, *instruction_info_ptr));
 					}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_AUI))
 					{
@@ -602,33 +628,50 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					{
 						write_PROC_SYNC(chunk_offset, current_address, instruction, *instruction_info_ptr);
 					}
-					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TEQ))
+					else if (
+						const auto&& write_trap_func = [&] -> std::optional<decltype(&Jit1_CodeGen::write_PROC_TNE)>
+						{
+							if (IS_INSTRUCTION(instruction_info_ptr, PROC_TEQ))
+							{
+								return std::make_optional(&Jit1_CodeGen::write_PROC_TEQ);
+							}
+							else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TGE))
+							{
+								return std::make_optional(&Jit1_CodeGen::write_PROC_TGE);
+							}
+							else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TGEU))
+							{
+								return std::make_optional(&Jit1_CodeGen::write_PROC_TGEU);
+							}
+							else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TLT))
+							{
+								return std::make_optional(&Jit1_CodeGen::write_PROC_TLT);
+							}
+							else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TLTU))
+							{
+								return std::make_optional(&Jit1_CodeGen::write_PROC_TLTU);
+							}
+							else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TNE))
+							{
+								return std::make_optional(&Jit1_CodeGen::write_PROC_TNE);
+							}
+							else
+							{
+								return std::nullopt;
+							}
+						}();
+						write_trap_func.has_value()
+					)
 					{
-						write_PROC_TEQ(chunk_offset, current_address, instruction, *instruction_info_ptr);
-					}
-					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TGE))
-					{
-						write_PROC_TGE(chunk_offset, current_address, instruction, *instruction_info_ptr);
-					}
-					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TGEU))
-					{
-						write_PROC_TGEU(chunk_offset, current_address, instruction, *instruction_info_ptr);
-					}
-					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TLT))
-					{
-						write_PROC_TLT(chunk_offset, current_address, instruction, *instruction_info_ptr);
-					}
-					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TLTU))
-					{
-						write_PROC_TLTU(chunk_offset, current_address, instruction, *instruction_info_ptr);
-					}
-					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_TNE))
-					{
-						write_PROC_TNE(chunk_offset, current_address, instruction, *instruction_info_ptr);
+						const except_result result = (this->*write_trap_func.value())(chunk_offset, current_address, instruction, *instruction_info_ptr);
+
+						handle_except_result(result);
 					}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SYSCALL))
 					{
-						write_PROC_SYSCALL(chunk_offset, current_address, instruction, *instruction_info_ptr);
+						const except_result result = write_PROC_SYSCALL(chunk_offset, current_address, instruction, *instruction_info_ptr, intrinsic_ex_no_pc);
+
+						handle_except_result(result);
 					}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_EXT))
 					{
@@ -645,16 +688,17 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				else
 				{
 					// RI
-					mov(eax, int32(current_address));
+					set(ecx, int32(current_address));
 					jmp(intrinsics_.ri, T_NEAR);
+					terminate_instruction = true;
 				}
 			}
 			else
 			{
 				// AdEL
-				mov(eax, int32(current_address));
-				mov(ecx, eax);
+				set(ecx, int32(current_address));
 				jmp(intrinsics_.adel, T_NEAR);
+				terminate_instruction = true;
 			}
 
 			const size_t ins_size = getSize() - ins_start_size;
@@ -663,17 +707,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		else
 		{
 			// AdEL
-			if (current_address == 0U)
-			{
-				xor_(eax, eax);
-				xor_(ecx, ecx);
-			}
-			else
-			{
-				mov(eax, int32(current_address));
-				mov(ecx, eax);
-			}
+			set(ecx, current_address);
 			jmp(intrinsics_.adel, T_NEAR);
+			terminate_instruction = true;
 		}
 		// Epilog for store ops, as we need to test afterwards to see if they may have altered JIT memory.
 		//if (!terminate_instruction)
@@ -802,21 +838,21 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
-		// Start with a set of nops so that we have somewhere to write patch code.
+		// Start with a set of no-ops so that we have somewhere to write patch code.
 		auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
 		auto &patch_pair = chunk.m_patches->emplace_back(uint32(getSize()), 0);
 		uint32 &patch_target = patch_pair.target;
 
 		// patch no-op
 		if (address == nullptr) {
-			db(0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F, 0x1F, 0x00);
+			nop(12, true);
 		}
 		else {
 			static constexpr uint16 patch_prefix = 0xB848;
 			static constexpr uint16 patch_suffix = 0xE0FF;
-			dw(patch_prefix);
-			dq(uint64(address));
-			dw(patch_suffix);
+			dw(patch_prefix);         // movabs rax, 
+			dq(uint64(address));      //        address
+			dw(patch_suffix);         // jmp    rax
 		}
 
 		mov(rcx, int64(&patch_target));
@@ -860,50 +896,48 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	jmp(rax);
 
 	{
-		const Xbyak::Label intrinsic_ex;
 		const Xbyak::Label save;
 
 		L(intrinsics_.intrinsic_start);
 
-		bool exception_label_used = false;
-
 		if (intrinsics_.ri.used) {
 			L(intrinsics_.ri);
-			mov(rax, uint64(RI_Exception));
-			jmp(intrinsic_ex);
-			exception_label_used = true;
+			mov(rax, uintptr(RI_Exception));
+			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.adel.used) {
 			L(intrinsics_.adel);
-			mov(rax, uint64(AdEL_Exception));
-			jmp(intrinsic_ex);
-			exception_label_used = true;
+			mov(rax, uintptr(AdEL_Exception));
+			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.ades.used) {
 			L(intrinsics_.ades);
-			mov(rax, uint64(AdES_Exception));
-			jmp(intrinsic_ex);
-			exception_label_used = true;
+			mov(rax, uintptr(AdES_Exception));
+			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.ov.used) {
 			L(intrinsics_.ov);
-			mov(rax, uint64(OV_Exception));
-			jmp(intrinsic_ex);
-			exception_label_used = true;
+			mov(rax, uintptr(OV_Exception));
+			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.tr.used) {
 			L(intrinsics_.tr);
-			mov(rax, uint64(TR_Exception));
-			jmp(intrinsic_ex);
-			exception_label_used = true;
+			mov(rax, uintptr(TR_Exception));
+			mov(dword[rbp + pc_offset], ecx);
+			mov(ecx, edx);
+			jmp(intrinsic_ex_no_pc, T_SHORT);
 		}
 
-		if (exception_label_used) {
-			L(intrinsic_ex);
+		if (isReferenced(intrinsic_ex) || isReferenced(intrinsic_ex_no_pc)) {
+			if (isReferenced(intrinsic_ex)) {
+				L(intrinsic_ex);
+				mov(dword[rbp + pc_offset], ecx);
+			}
+			L(intrinsic_ex_no_pc);
 			call(save);
 			mov(rdx, rbp);
 			add(rdx, -128);
@@ -913,18 +947,18 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 		if (intrinsics_.store_flush.used) {
 			L(intrinsics_.store_flush);
-			jmp(intrinsics_.save_return);
+			jmp(intrinsics_.save_return, T_SHORT);
 		}
 
 		if (intrinsics_.check_ex.used) {
 			L(intrinsics_.check_ex);
-			jmp(intrinsics_.save_return);
+			jmp(intrinsics_.save_return, T_SHORT);
 		}
 
 		if (intrinsics_.save_return_eax_pc.used) {
 			L(intrinsics_.save_return_eax_pc);
 			mov(dword[rbp + pc_offset], eax);
-			jmp(intrinsics_.save_return);
+			jmp(intrinsics_.save_return, T_SHORT);
 		}
 
 		L(save);
@@ -941,11 +975,11 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			ret();
 		}
 
-		if (jit_.processor_.collect_stats_) {
+		if (this_processor.collect_stats_) {
 			// dispatch a stat call.
 			if (intrinsics_.stats.used) {
 				L(intrinsics_.stats);
-				mov(rax, uint64(collect_stats));
+				mov(rax, uint64(increment_instruction_statistic));
 				mov(rdx, rbp);
 				add(rdx, -128);
 				sub(rsp, 40);
@@ -1110,6 +1144,8 @@ void jit1::execute_instruction(const uint32 address)
 		.target_instruction = processor.target_instructions_,
 		.frame_pointer = processor.get_register<>(processor::named_registers::frame_pointer)
 	};
+
+	processor.increment_jit_transition_statistic();
 
 	const uintptr result = [&] {
 		jit_scope_guard guard{processor};

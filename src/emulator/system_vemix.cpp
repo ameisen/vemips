@@ -3,6 +3,7 @@
 #include "system_vemix.hpp"
 
 #include "../../vemips_sdk/MIPS_SDK/include/bits/syscall.h"
+#include "mips/system.hpp"
 
 
 using namespace mips;
@@ -36,7 +37,14 @@ namespace {
 	};
 }
 
-system_vemix::system_vemix(const options & __restrict init_options, const elf::binary & __restrict binary) : system(init_options, binary) {}
+system_vemix::system_vemix(const options & __restrict init_options, const elf::binary & __restrict binary)
+	: system(
+		capabilities{
+			.can_handle_syscalls_inline = true
+		},
+		init_options,
+		binary
+	) {}
 
 void system_vemix::clock(const uint64 clocks) __restrict {
 	system::clock(clocks);
