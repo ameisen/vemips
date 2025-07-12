@@ -114,7 +114,7 @@ namespace mips
 			virtual _nothrow ~LazyOperand() noexcept = default;
 
 		public:
-			_nothrow operator const Xbyak::Operand&() const noexcept
+			_nothrow const Xbyak::Operand& get_operand() const noexcept
 			{
 				if (!operand_)
 				{
@@ -123,6 +123,26 @@ namespace mips
 				}
 
 				return *operand_;
+			}
+
+			_nothrow const Xbyak::Operand& operator *() const noexcept
+			{
+				return get_operand();
+			}
+
+			_nothrow const Xbyak::Operand* operator ->() const noexcept
+			{
+				return &get_operand();
+			}
+
+			_nothrow operator const Xbyak::Operand&() const noexcept
+			{
+				return get_operand();
+			}
+
+			_nothrow bool isMEM() const noexcept
+			{
+				return get_operand().isMEM();
 			}
 		};
 
@@ -148,13 +168,13 @@ namespace mips
 				switch (size_)
 				{
 					case 0:
-						return codegen_.get_register_op8(register_);
+						return codegen_.get_register_op8_internal(register_);
 					case 1:
-						return codegen_.get_register_op16(register_);
+						return codegen_.get_register_op16_internal(register_);
 					case 2:
-						return codegen_.get_register_op32(register_);
+						return codegen_.get_register_op32_internal(register_);
 					case 3: [[unlikely]]
-						return codegen_.get_register_op64(register_);
+						return codegen_.get_register_op64_internal(register_);
 					default: [[unlikely]]
 						xassert(false);
 				}
@@ -171,9 +191,9 @@ namespace mips
 				return { codegen, _register, log2_ceil(Size) - log2_ceil(8) };
 			}
 		};
-
+	private:
 		template <typename GPR>
-		const Xbyak::Operand & get_register_op8(const GPR &reg) {
+		const Xbyak::Operand & get_register_op8_internal(const GPR &reg) {
 			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
@@ -189,12 +209,7 @@ namespace mips
 		}
 
 		template <typename GPR>
-		LazyRegisterOperand get_register_op8_lazy(const GPR &reg) {
-			return LazyRegisterOperand::get<8>(*this, reg);
-		}
-
-		template <typename GPR>
-		const Xbyak::Operand & get_register_op16(const GPR &reg) {
+		const Xbyak::Operand & get_register_op16_internal(const GPR &reg) {
 			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
@@ -210,12 +225,7 @@ namespace mips
 		}
 
 		template <typename GPR>
-		LazyRegisterOperand get_register_op16_lazy(const GPR &reg) {
-			return LazyRegisterOperand::get<16>(*this, reg);
-		}
-
-		template <typename GPR>
-		const Xbyak::Operand & get_register_op32(const GPR &reg) {
+		const Xbyak::Operand & get_register_op32_internal(const GPR &reg) {
 			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
@@ -231,12 +241,7 @@ namespace mips
 		}
 
 		template <typename GPR>
-		LazyRegisterOperand get_register_op32_lazy(const GPR &reg) {
-			return LazyRegisterOperand::get<32>(*this, reg);
-		}
-
-		template <typename GPR>
-		const Xbyak::Operand &get_register_op64(const GPR &reg) {
+		const Xbyak::Operand &get_register_op64_internal(const GPR &reg) {
 			const auto reg_offset = reg.get_offset();
 		
 			// otherwise we will type slice. That's bad.
@@ -251,8 +256,24 @@ namespace mips
 			}
 		}
 
+	public:
 		template <typename GPR>
-		LazyRegisterOperand get_register_op64_lazy(const GPR &reg) {
+		LazyRegisterOperand get_register_op8(const GPR &reg) {
+			return LazyRegisterOperand::get<8>(*this, reg);
+		}
+
+		template <typename GPR>
+		LazyRegisterOperand get_register_op16(const GPR &reg) {
+			return LazyRegisterOperand::get<16>(*this, reg);
+		}
+
+		template <typename GPR>
+		LazyRegisterOperand get_register_op32(const GPR &reg) {
+			return LazyRegisterOperand::get<32>(*this, reg);
+		}
+
+		template <typename GPR>
+		LazyRegisterOperand get_register_op64(const GPR &reg) {
 			return LazyRegisterOperand::get<64>(*this, reg);
 		}
 

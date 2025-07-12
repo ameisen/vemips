@@ -1939,8 +1939,8 @@ void Jit1_CodeGen::write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, ui
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
-	auto&& rs_reg = get_register_op32_lazy(rs);
-	auto&& rt_reg = get_register_op32_lazy(rt);
+	auto&& rs_reg = get_register_op32(rs);
+	auto&& rt_reg = get_register_op32(rt);
 
 	const uint32 msb = instructions::TinyInt<5>(instruction >> 11).zextend<uint32>();
 	const uint32 lsb = instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
@@ -2057,9 +2057,9 @@ void Jit1_CodeGen::write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, ui
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 	const uint32 sa = instructions::TinyInt<2>(instruction >> 6).zextend<uint32>() + 1U;
 
-	auto&& rs_reg = get_register_op32_lazy(rs);
-	auto&& rt_reg = get_register_op32_lazy(rt);
-	auto&& rd_reg = get_register_op32_lazy(rd);
+	auto&& rs_reg = get_register_op32(rs);
+	auto&& rt_reg = get_register_op32(rt);
+	auto&& rd_reg = get_register_op32(rd);
 
 	if (rd.is_zero()) [[unlikely]]
 	{
