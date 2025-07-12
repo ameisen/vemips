@@ -56,9 +56,16 @@ void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 	else if (rs.is_zero())
 	{
-		mov(eax, get_register_op32(rt));
-		neg(eax);
-		mov(get_register_op32(rd), eax);
+		if (rt == rd)
+		{
+			neg(get_register_op32(rd));
+		}
+		else
+		{
+			mov(eax, get_register_op32(rt));
+			neg(eax);
+			mov(get_register_op32(rd), eax);
+		}
 	}
 	else if (rt.is_zero())
 	{
@@ -1637,7 +1644,7 @@ void Jit1_CodeGen::write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 	else
 	{
-		movsx(eax, get_register_op8(rt));
+		movsx(eax, get_register_op16(rt));
 		mov(get_register_op32(rd), eax);
 	}
 }
