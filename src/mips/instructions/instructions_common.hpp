@@ -48,28 +48,45 @@ namespace mips
 			COP1 = (1U << 23),
 		};
 
-		constexpr OpFlags operator | (OpFlags a, OpFlags b)
+		[[nodiscard]]
+		constexpr _nothrow OpFlags operator | (const OpFlags a, const OpFlags b) noexcept
 		{
-			return OpFlags(uint32(a) | uint32(b));
+			return OpFlags(std::to_underlying(a) | std::to_underlying(b));
 		}
 
-		constexpr OpFlags operator & (OpFlags a, OpFlags b)
+		[[nodiscard]]
+		constexpr _nothrow OpFlags operator & (const OpFlags a, const OpFlags b) noexcept
 		{
-			return OpFlags(uint32(a) & uint32(b));
+			return OpFlags(std::to_underlying(a) & std::to_underlying(b));
 		}
 
-		static constexpr uint32 Bits(uint32 NumBits)
+		[[nodiscard]]
+		constexpr _nothrow bool HasAllFlags(const OpFlags ref, const OpFlags flags) noexcept
+		{
+			return (ref & flags) == flags;
+		}
+
+		[[nodiscard]]
+		constexpr _nothrow bool HasAnyFlags(const OpFlags ref, const OpFlags flags) noexcept
+		{
+			return (ref & flags) != OpFlags::None;
+		}
+
+		[[nodiscard]]
+		static constexpr _nothrow uint32 Bits(const uint32 NumBits) noexcept
 		{
 			return (1 << (NumBits)) - 1;
 		}
 
-		static constexpr uint32 HighBits(uint32 NumBits)
+		[[nodiscard]]
+		static constexpr _nothrow uint32 HighBits(const uint32 NumBits) noexcept
 		{
 			return ((1 << (NumBits)) - 1) << (32 - NumBits);
 		}
 
 		template <typename TFrom, typename TTo>
-		static constexpr bool in_range(const TFrom value)
+		[[nodiscard]]
+		static constexpr _nothrow bool in_range(const TFrom value) noexcept
 		{
 			return
 				value >= std::numeric_limits<TTo>::lowest() &&
@@ -82,22 +99,25 @@ namespace mips
 			int32 m_Value : BitSize;
 
 			template <typename T>
-			TinyInt(const T &val) : m_Value(val)
+			_nothrow TinyInt(const T &val) noexcept : m_Value(val)
 			{
 			}
 
 			template <typename T>
-			T sextend() const
+			[[nodiscard]]
+			_nothrow _forceinline T sextend() const noexcept
 			{
 				// todo: value range check
 				return T(m_Value);
 			}
 
 			template <typename T>
-			T zextend() const
+			[[nodiscard]]
+			_nothrow _forceinline T zextend() const noexcept
 			{
 				// todo: value range check
-				return T(uint32(m_Value) & Bits(BitSize));
+				const T result = T(uint32(m_Value) & Bits(BitSize));
+				return result;
 			}
 		};
 
@@ -126,16 +146,16 @@ namespace mips
 		{
 			const char* Name;
 			instructionexec_t Proc;
-			uint32 OpFlags;
+			OpFlags OpFlags;
 			uint8 CoprocessorIdx : log2_ceil(coprocessor::max);
 			instruction_type Type : std::to_underlying(instruction_type::_bits);
 			instruction_flags Flags/* : instruction_flags::Bits*/;
 
-			InstructionInfo(
+			_nothrow InstructionInfo(
 				const char* const __restrict name,
 				const uint8 coprocessor,
 				const instructionexec_t proc,
-				const uint32 op_flags,
+				const instructions::OpFlags op_flags,
 				const instruction_flags flags,
 				const instruction_type type = instruction_type::normal
 			) noexcept :
@@ -149,7 +169,7 @@ namespace mips
 				xassert(coprocessor::is_valid(coprocessor));
 			}
 
-			InstructionInfo(const InstructionInfo&) = default;
+			_nothrow InstructionInfo(const InstructionInfo&) noexcept = default;
 		};
 		//_Pragma("pack(pop)")
 
@@ -241,14 +261,16 @@ namespace mips
 			const uint32 m_Register;
 
 		protected:
-			_RegisterBase(const uint32 _register)
+			_nothrow _RegisterBase(const uint32 _register) noexcept
 				: m_Register(_register)
 			{}
 
 		public:
 
-			int8 get_offset_gp() const;
-			int16 get_offset_fp() const;
+			[[nodiscard]]
+			_nothrow int8 get_offset_gp() const noexcept;
+			[[nodiscard]]
+			_nothrow int16 get_offset_fp() const noexcept;
 		};
 
 		template <uint32 offset, uint32 size, typename T>
@@ -259,51 +281,59 @@ namespace mips
 			using processor_t = T;
 			processor_t * __restrict m_Processor = nullptr;
 			using _RegisterBase::m_Register;
-			static uint32 _get_register(instruction_t instruction) { return (instruction >> offset) & Bits(size); }
+			static [[nodiscard]] _nothrow uint32 _get_register(const instruction_t instruction) noexcept { return (instruction >> offset) & Bits(size); }
 		public:
-			_Register(instruction_t instruction, processor_t& processor) :
+			_nothrow _Register(const instruction_t instruction, processor_t& processor) noexcept :
 				_RegisterBase(_get_register(instruction)), 
 				m_Processor(&processor) {}
 
-			_Register(instruction_t instruction, processor_t* processor) :
+			_nothrow _Register(const instruction_t instruction, processor_t* const processor) noexcept :
 				_RegisterBase(_get_register(instruction)), 
 				m_Processor(processor) {}
 
-			_Register(const uint32 _register) :
+			_nothrow _Register(const uint32 _register) noexcept :
 				_RegisterBase(_register) {}
 
 			template <uint32 _offset, uint32 _size>
-			bool operator == (const _Register<_offset, _size, T> & __restrict reg) const
+			[[nodiscard]]
+			_nothrow bool operator == (const _Register<_offset, _size, T> & __restrict reg) const noexcept
 			{
-				return m_Register == reg.m_Register;
+				return get_register() == reg.get_register();
 			}
 
 			template <uint32 _offset, uint32 _size>
-			bool operator != (const _Register<_offset, _size, T> & __restrict reg) const
+			[[nodiscard]]
+			_nothrow bool operator != (const _Register<_offset, _size, T> & __restrict reg) const noexcept
 			{
-				return m_Register != reg.m_Register;
+				return get_register() != reg.get_register();
 			}
 
 			template <uint32 _offset, uint32 _size>
-			auto operator <=> (const _Register<_offset, _size, T> & __restrict reg) const
+			[[nodiscard]]
+			_nothrow auto operator <=> (const _Register<_offset, _size, T> & __restrict reg) const noexcept
 			{
-				return m_Register <=> reg.m_Register;
+				return get_register() <=> reg.get_register();
 			}
 
-			uint32 get_register() const
+			[[nodiscard]]
+			_nothrow uint32 get_register() const noexcept
 			{
+				xassert(m_Register < 32);
+
 				return m_Register;
 			}
 
-			uint32 get_index() const
+			[[nodiscard]]
+			_nothrow uint32 get_index() const noexcept
 			{
-				xassert(m_Register != 0);
+				xassert(m_Register != 0 && m_Register < 32);
 
 				return m_Register /*- 1*/;
 			}
 
 			template <typename format_t>
-			format_t value() const
+			[[nodiscard]]
+			_nothrow format_t value() const noexcept
 			{
 				xassert(m_Processor != nullptr);
 
@@ -311,7 +341,7 @@ namespace mips
 			}
 
 			template <typename format_t>
-			format_t set(format_t value)
+			_nothrow format_t set(format_t value) noexcept
 			{
 				xassert(m_Processor != nullptr);
 
@@ -321,33 +351,79 @@ namespace mips
 			}
 		};
 
+		struct GPRegisterInfo final
+		{
+			uint32 register_;
+			int8 offset_;
+			std::optional<int32> constant_;
+
+			_forceinline _nothrow bool is_zero() const noexcept
+			{
+				return register_ == 0U;
+			}
+
+			_forceinline _nothrow bool is_constant() const noexcept
+			{
+				return constant_.has_value();
+			}
+
+			_forceinline _nothrow const std::optional<int32>& get_constant() const noexcept
+			{
+				return constant_;
+			}
+
+			_forceinline _nothrow int8 get_offset() const noexcept
+			{
+				return offset_;
+			}
+
+			_forceinline _nothrow uint32 get_index() const noexcept
+			{
+				xassert(register_ != 0);
+
+				return register_ /*- 1*/;
+			}
+
+			_forceinline _nothrow uint32 get_register() const noexcept
+			{
+				xassert(register_ < 32);
+				return register_;
+			}
+		};
+
 		template <uint32 offset = 0, uint32 size = 0>
 		class GPRegister : public _Register<offset, size, processor>
 		{
-		public:
-			GPRegister(instruction_t instruction, processor& _processor) :
-				_Register<offset, size, processor>(instruction, _processor) {}
+			using base = _Register<offset, size, processor>;
 
-			GPRegister(instruction_t instruction, processor* _processor) :
-				_Register<offset, size, processor>(instruction, _processor)
+		public:
+			_nothrow GPRegister(const instruction_t instruction, processor& _processor) noexcept :
+				base(instruction, _processor) {}
+
+			_nothrow GPRegister(const instruction_t instruction, processor* const _processor) noexcept :
+				base(instruction, _processor)
 			{
 				xassert(_processor != nullptr);
 			}
 
-			GPRegister(const uint32 _register) :
-				_Register<offset, size, processor>(_register) {}
+			_nothrow GPRegister(const uint32 _register) noexcept :
+				base(_register)
+			{}
 
-			_forceinline bool is_zero() const
+			[[nodiscard]]
+			_nothrow _forceinline bool is_zero() const noexcept
 			{
 				return _RegisterBase::m_Register == 0U;
 			}
 
-			_forceinline bool is_constant() const
+			[[nodiscard]]
+			_nothrow _forceinline bool is_constant() const noexcept
 			{
 				return is_zero();
 			}
 
-			_forceinline std::optional<int32> get_constant() const
+			[[nodiscard]]
+			_nothrow _forceinline std::optional<int32> get_constant() const noexcept
 			{
 				if (is_zero())
 				{
@@ -361,7 +437,8 @@ namespace mips
 				}
 			}
 
-			_forceinline int8 get_offset(const bool force = false) const
+			[[nodiscard]]
+			_nothrow _forceinline int8 get_offset(const bool force = false) const noexcept
 			{
 				if (!force)
 				{
@@ -369,6 +446,16 @@ namespace mips
 				}
 
 				return _RegisterBase::get_offset_gp();
+			}
+
+			[[nodiscard]]
+			_nothrow _forceinline operator GPRegisterInfo() const noexcept
+			{
+				return {
+					.register_ = base::get_register(),
+					.offset_ = get_offset(true),
+					.constant_ = get_constant()
+				};
 			}
 		};
 

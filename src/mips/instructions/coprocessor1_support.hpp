@@ -290,7 +290,7 @@ namespace mips::instructions
 			uint32 instructionRef,
 			std::span<const MaskType>&& referenceMasks,
 			instructionexec_t exec_f, instructionexec_t exec_d, instructionexec_t exec_w, instructionexec_t exec_l,
-			uint32 OpFlags,
+			OpFlags OpFlags,
 			bool control
 		)
 		{
@@ -885,7 +885,7 @@ namespace COP1_ ## InsInstruction ## _NS																																								
 				functor<int64,																																																											\
 					uint32(COP1_ ## InsInstruction::Formats) != 0,																																										\
 					(COP1_ ## InsInstruction::Formats & FormatBits::Long) == FormatBits::Long>::_functor,																							\
-				uint32(COP1_ ## InsInstruction::Flags),																																															\
+				(COP1_ ## InsInstruction::Flags),																																															\
 				uint32(COP1_ ## InsInstruction::Flags & OpFlags::ControlInstruction) != 0																														\
 			)																																																																			\
 		{}																																																																			\

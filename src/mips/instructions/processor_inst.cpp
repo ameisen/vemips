@@ -46,7 +46,7 @@ namespace PROC_ ## InsInstruction ## _NS																														\
 				PROC_ ## InsInstruction::OpMask,																												  \
 				InsOpRef,																																				 \
 				&Execute,																																				 \
-				uint32(PROC_ ## InsInstruction::Flags),																										 \
+				(PROC_ ## InsInstruction::Flags),																										 \
 				uint32(PROC_ ## InsInstruction::Flags & OpFlags::ControlInstruction) != 0															\
 			)																																								\
 		{}																																								  \
@@ -59,7 +59,7 @@ namespace mips::instructions
 	class _instruction_initializer
 	{
 	public:
-		_instruction_initializer(const char *name, uint32 instructionMask, uint32 instructionRef, instructionexec_t exec, uint32 OpFlags, bool control)
+		_instruction_initializer(const char *name, uint32 instructionMask, uint32 instructionRef, instructionexec_t exec, OpFlags OpFlags, bool control)
 		{
 #if !USE_STATIC_INSTRUCTION_SEARCH
 			const InstructionInfo Procs{ name, 1, exec, OpFlags, { .control = control } };
@@ -123,7 +123,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ADD,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -141,11 +141,11 @@ namespace mips::instructions
 		return write_result(rd, int32(result));
 	}
 
-	// No support on MIPS32r6
+	// No support on MIPSr6
 	/*
 	ProcInstructionDef(
 		ADDI,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b00100000000000000000000000000000
 	) (const instruction_t instruction, processor& __restrict processor, coprocessor1& __restrict)
@@ -420,7 +420,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BLEZALC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111111111000000000000000000000,
 		0b00011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -452,7 +452,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP06,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b00011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -497,7 +497,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BGTZALC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111111111000000000000000000000,
 		0b00011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -506,7 +506,7 @@ namespace mips::instructions
 		const int32 offset = TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 pc = processor.get_program_counter();
 		
-		if (rt.get_register() != 0) // BGTZALC
+		if (!rt.is_zero()) // BGTZALC
 		{
 			processor.set_link(pc + 4);
 			if (rt.value<int32>() > 0)
@@ -529,7 +529,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP07,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b00011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -574,7 +574,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP10,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b00100000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -634,7 +634,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP30,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b01100000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -694,7 +694,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BLEZC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111111111000000000000000000000,
 		0b01011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -725,7 +725,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP26,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b01011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -769,7 +769,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BGTZC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111111111000000000000000000000,
 		0b01011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -800,7 +800,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP27,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b01011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1058,7 +1058,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BREAK,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000001101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1365,7 +1365,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LB,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b10000000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1383,7 +1383,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBE,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1401,7 +1401,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBU,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b10010000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1419,7 +1419,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBUE,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1437,7 +1437,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LH,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b10000100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1455,7 +1455,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHE,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1473,7 +1473,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHU,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b10010100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1491,7 +1491,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHUE,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1509,7 +1509,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LL,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1530,7 +1530,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLE,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1551,7 +1551,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLWP,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1574,7 +1574,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLWPE,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001101110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1607,14 +1607,14 @@ namespace mips::instructions
 		GPRegister<11, 5> rd(instruction, processor);
 		const uint32 sa = TinyInt<2>(instruction >> 6).zextend<uint32>() + 1U;
 
-		// Not sure if this is right. The docs say sign extend... but it also says to use logical shifts.
-		const uint32 result = (rs.value<uint32>() << sa) + rt.value<uint32>();
+		const int32 result = (rs.value<int32>() << sa) + rt.value<int32>();
+
 		return write_result(rd, result);
 	}
 
 	ProcInstructionDef(
 		LW,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b10001100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1632,7 +1632,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LWE,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1650,7 +1650,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LWPC,
-		(OpFlags::Load),
+		(OpFlags::Load | OpFlags::Throws),
 		0b11111100000110000000000000000000,
 		0b11101100000010000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1847,7 +1847,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		RDHWR,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111111111000000000011000111111,
 		0b01111100000000000000000000111011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1908,7 +1908,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SB,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b10100000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1927,7 +1927,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SBE,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1946,7 +1946,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SC,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000100110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1969,7 +1969,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCE,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1992,7 +1992,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCWP,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001100110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2015,7 +2015,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCWPE,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001011110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2038,7 +2038,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SDBBP,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000001110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2116,7 +2116,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SH,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000000000000000,
 		0b10100100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2135,7 +2135,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SHE,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::Throws),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2154,7 +2154,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SIGRIE,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111111111111110000000000000000,
 		0b00000100000101110000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2345,7 +2345,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SUB,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2448,7 +2448,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SYSCALL,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000001100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2461,7 +2461,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TEQ,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2480,7 +2480,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TGE,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2499,7 +2499,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TGEU,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2518,7 +2518,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TLT,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2537,7 +2537,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TLTU,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2556,7 +2556,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TNE,
-		(OpFlags::None),
+		(OpFlags::Throws),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)

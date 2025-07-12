@@ -62,7 +62,18 @@ namespace mips {
 
 		struct statistics final
 		{
-			std::unordered_map<const char *, size_t> instructions;
+			struct name_hash final
+			{
+				std::size_t operator()(const char* const name) const
+				{
+					return reinterpret_cast<std::size_t>(name);
+				}
+			};
+
+			using instruction_map = std::unordered_map<const char *, size_t, name_hash>;
+
+			instruction_map instructions;
+			instruction_map jit_emulated_instructions;
 			usize jit_transitions = 0;
 
 			void append(const statistics& other)
@@ -70,6 +81,11 @@ namespace mips {
 				for (const auto&[name, count] : other.instructions)
 				{
 					instructions[name] += count;
+				}
+
+				for (const auto&[name, count] : other.jit_emulated_instructions)
+				{
+					jit_emulated_instructions[name] += count;
 				}
 
 				jit_transitions = other.jit_transitions;
@@ -156,6 +172,13 @@ namespace mips {
 			if (collect_stats_)
 			{
 				++(statistics_->instructions[name]);
+			}
+		}
+
+		void increment_jit_emulated_instruction_statistic(const char *name) {
+			if (collect_stats_)
+			{
+				++(statistics_->jit_emulated_instructions[name]);
 			}
 		}
 

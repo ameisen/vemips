@@ -4,10 +4,9 @@
 #include "mips/coprocessor/coprocessor.hpp"
 
 
-
 namespace mips::instructions
 {
-	int8 _RegisterBase::get_offset_gp() const
+	_nothrow int8 _RegisterBase::get_offset_gp() const noexcept
 	{
 		//xassert(m_Register != 0);
 
@@ -21,7 +20,7 @@ namespace mips::instructions
 		return result;
 	}
 
-	int16 _RegisterBase::get_offset_fp() const
+	_nothrow int16 _RegisterBase::get_offset_fp() const noexcept
 	{
 		static constexpr const intptr offset_raw = coprocessor1::get_address_offset_static(coprocessor1::offset_type::registers);
 		static constexpr const int16 offset = value_assert<int16>(offset_raw - 128);

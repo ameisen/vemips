@@ -89,12 +89,12 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __r
 	if (rd.is_zero())
 	{
 		// nop
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else if (rs == rt)
 	{
 		mov(get_register_op32(rd), 0);
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else if (rs.is_zero())
 	{
@@ -102,13 +102,13 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __r
 		neg(eax);
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), eax);
-		return except_result::can_except;
+		return except_result::can_throw;
 	}
 	else if (rt.is_zero())
 	{
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else
 	{
@@ -116,7 +116,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __r
 		sub(eax, get_register_op32(rt));
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), eax);
-		return except_result::can_except;
+		return except_result::can_throw;
 	}
 }
 
@@ -542,26 +542,17 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 	if (rt.is_zero())
 	{
 		// nop
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else if (rs.is_zero())
 	{
-		#if 0
-		if (immediate < 0)
-		{
-			// TODO: this is incorrect.
-			jmp(intrinsics_.ov, T_NEAR);
-			return except_result::forced_except;
-		}
-		else
-		#endif
 		if (immediate == 0)
 		{
 			// This just sets rt to 0.
 			// 89 4A EE 
 			// mov dword [rdx + 0xEE], ecx ; EE = 'rt' offset
 			mov(get_register_op32(rt), 0);
-			return except_result::no_except;
+			return except_result::none;
 		}
 		// // // // // // TODO 128/-128
 		else
@@ -570,7 +561,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 			// C7 42 EE FF FF FF FF 
 			// mov dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
 			mov(get_register_op32(rt), immediate);
-			return except_result::no_except;
+			return except_result::none;
 		}
 	}
 	else if (rs == rt)
@@ -578,7 +569,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 		if (immediate == 0)
 		{
 			// nop
-			return except_result::no_except;
+			return except_result::none;
 		}
 		else
 		{
@@ -612,7 +603,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 
 			jo(intrinsics_.ov, T_NEAR);
 			mov(get_register_op32(rt), eax);
-			return except_result::can_except;
+			return except_result::can_throw;
 		}
 	}
 	else if (immediate == 0)
@@ -623,7 +614,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rt), eax);
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else
 	{
@@ -673,7 +664,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rt), eax);
-		return except_result::can_except;
+		return except_result::can_throw;
 	}
 }
 
@@ -741,27 +732,27 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __r
 	if (rd.is_zero())
 	{
 		// nop
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else if (rt.is_zero() && rd.is_zero())
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else if (rt.is_zero())
 	{
 		// move [rs] to [rd]
 		mov(eax, get_register_op32(rs));
 		mov(get_register_op32(rd), eax);
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else if (rs.is_zero())
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		mov(get_register_op32(rd), eax);
-		return except_result::no_except;
+		return except_result::none;
 	}
 	else if (rs == rd)
 	{
@@ -774,7 +765,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __r
 		sub(get_register_op32(rd), eax);
 		jmp(intrinsics_.ov, T_NEAR);
 		L(no_overflow);
-		return except_result::can_except;
+		return except_result::can_throw;
 	}
 	else
 	{
@@ -788,7 +779,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __r
 		}
 		jo(intrinsics_.ov, T_NEAR);
 		mov(get_register_op32(rd), eax);
-		return except_result::can_except;
+		return except_result::can_throw;
 	}
 }
 
@@ -1189,19 +1180,19 @@ void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, u
 	{
 		// nop
 	}
-	else if (rt.is_zero() || rs.is_zero()) // fixed bug
+	else if (rt.is_zero() || rs.is_zero())
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs == rd)
+	else if (rs == rd) // TODO: identical to `else`
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		imul(get_register_op32(rd));
 		mov(get_register_op32(rd), edx);
 	}
-	else if (rt == rd)
+	else if (rt == rd) // TODO: identical to `else`
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rs));
@@ -1233,19 +1224,19 @@ void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, 
 	{
 		// nop
 	}
-	else if (rt.is_zero() || rs.is_zero()) // fixed bug
+	else if (rt.is_zero() || rs.is_zero())
 	{
 		// set [rd] to 0.
 		mov(get_register_op32(rd), 0);
 	}
-	else if (rs == rd)
+	else if (rs == rd) // TODO: identical to `else`
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rt));
 		mul(get_register_op32(rd));
 		mov(get_register_op32(rd), edx);
 	}
-	else if (rt == rd)
+	else if (rt == rd) // TODO: identical to `else`
 	{
 		// move [rt] to [rd]
 		mov(eax, get_register_op32(rs));
@@ -1872,7 +1863,7 @@ void Jit1_CodeGen::write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, 
 }
 
 
-void Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, bool& terminate_instruction, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	static const int8 uv_offset =  value_assert<int8>(offsetof(processor, user_value_) - 128);
 
@@ -1886,44 +1877,47 @@ void Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset,
 		case 29:
 			mov(eax, dword[rbp + uv_offset]);
 			mov(get_register_op32(rt), eax);
-			return;
+			return except_result::none;
 		case 1:
 			mov(get_register_op32(rt), 0x100);
-			return;
+			return except_result::none;
 		}
 	}
-	terminate_instruction = true;
+
 	mov(ecx, int32(address));
 	jmp(intrinsics_.ri, T_NEAR);
+	return except_result::always_throw;
 }
 
 void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
 {
+	// rt = rs[msbd+lsb...lsb]
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
-	auto& rs_reg = get_register_op32(rs);
-	auto& rt_reg = get_register_op32(rt);
+	auto&& rs_reg = get_register_op32(rs);
+	auto&& rt_reg = get_register_op32(rt);
 
 	const uint32 msbd = instructions::TinyInt<5>(instruction >> 11).zextend<uint32>();
-	const uint32 lsb = instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
+	const uint32 lsb =  instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
 
-	if (rt.is_zero()) {
+	if (rt.is_zero()) [[unlikely]] {
 		// nop
 	}
 	else {
-		if (lsb + msbd > 31) {
+		if (lsb + msbd > 31) [[unlikely]] {
 			// Result is unpredictable, just push -1.
 			mov(rt_reg, -1);
 		}
-		else if (rs.is_zero()) {
+		else if (rs.is_zero()) [[unlikely]] {
 			// The operation would just return 0.
 			mov(rt_reg, 0);
 		}
 		else {
 			// Equivalent logic to ProcInstructionDef::EXT
-			const uint32_t mask = ((1U << (msbd + 1)) - 1) & (uint32_t(-1) >> lsb); // Optimization, mainly, to detect if the mask would always be zero.
-			if (mask == 0) {
+			const uint32_t mask = ((1U << (msbd + 1)) - 1) & (std::numeric_limits<uint32>::max() >> lsb);
+			xassert(mask != 0 || (lsb == 0 && msbd == 31));
+			if (mask == 0) [[unlikely]] {
 				mov(rt_reg, 0);
 			}
 			else {
@@ -1934,6 +1928,185 @@ void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, ui
 				and_(eax, mask);
 				mov(rt_reg, eax);
 			}
+		}
+	}
+}
+
+// TODO : test me
+void Jit1_CodeGen::write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
+{
+	// rt = rt[31..msb+1] || rs[msb-lsb..0] || rt[lsb-1..0]]
+	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
+	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
+
+	auto&& rs_reg = get_register_op32_lazy(rs);
+	auto&& rt_reg = get_register_op32_lazy(rt);
+
+	const uint32 msb = instructions::TinyInt<5>(instruction >> 11).zextend<uint32>();
+	const uint32 lsb = instructions::TinyInt<5>(instruction >> 6).zextend<uint32>();
+
+	if (rt.is_zero()) [[unlikely]] {
+		// nop
+	}
+	else if (lsb > msb) [[unlikely]] {
+		// Result is unpredictable, just push -1.
+		mov(rt_reg, -1);
+	}
+	else [[likely]] {
+		const uint32 size = msb - lsb + 1;
+		const uint32 size_mask = mips::make_bitmask<uint32>(size);
+		const uint32 inverse_mask = ~(size_mask << lsb);
+
+		xassert(size > 0U);      // it should be impossible for size to be zero
+		xassert(size_mask != 0); // likewise, the size_mask should not be able to be zero
+		// inverse_mask can only be zero when lsb=0 and msb=31. In this situation, and only in this situation, size_mask can be ~0.
+		xassert(inverse_mask != 0 || (size_mask == std::numeric_limits<uint32>::max() && lsb == 0 && msb == 31));
+		xassert(size_mask != std::numeric_limits<uint32>::max() || inverse_mask == 0);
+		xassert(inverse_mask != std::numeric_limits<uint32>::max());
+
+		if (rs.is_zero()) {
+			// rs == 0
+			// size = msb - lsb + 1
+			// tmp0 = rt & ~(mask(size) << lsb)
+			// rt = tmp0
+
+			if (inverse_mask == 0) [[unlikely]]
+			{
+				mov(rt_reg, 0);
+			}
+			else
+			{
+				and_(rt_reg, inverse_mask);
+			}
+		}
+		else if (rs == rt)
+		{
+			if (lsb == 0) [[unlikely]]
+			{
+				xassert(inverse_mask == std::numeric_limits<uint32>::max());
+				// nop, do nothing
+			}
+			else
+			{
+				// size = msb - lsb + 1
+				// mask = mask(size) | ~(mask(size) << lsb)
+				// rt = rt & mask
+
+				const uint32 mask = size_mask | inverse_mask;
+				xassert(mask != 0);
+				xassert(mask != std::numeric_limits<uint32>::max()); // this is only possible if lsb=0, in which case it's always true
+				and_(rt_reg, mask);
+			}
+		}
+		else if (inverse_mask == 0) [[unlikely]]
+		{
+			xassert(lsb == 0 && msb == 31);
+			xassert(size_mask == std::numeric_limits<uint32>::max());
+			// input from [rt] will be zero
+			// input from [rt] will be total, unshifted
+			// ergo, this becomes a no-op.
+		}
+		else {
+			// Equivalent logic to ProcInstructionDef::INS
+
+			// size = msb - lsb + 1
+			// eval = rs & mask(size)
+			// tmp0 = rt & ~(mask(size) << lsb)
+			// rt = tmp0 | (eval << lsb)
+
+			// LSB == 0
+			// size = msb + 1
+			// eval = rs & mask(size)
+			// tmp0 = rt & ~mask(size)
+			// rt = tmp0 | eval
+
+			// MSB == 0, LSB == 0
+			// size = 1
+			// eval = rs & 1
+			// tmp0 = rt & ~1
+			// rt = tmp0 | eval
+
+			// rs == rt
+			// size = msb - lsb + 1
+			// eval = r & mask(size)
+			// tmp0 = r & ~(mask(size) << lsb)
+			// r = tmp0 | (eval << lsb)
+
+			// if lsb == 0, then inverse_mask is 0 and mask is ~0, and other branches take precedence.
+			xassert(lsb != 0);
+			xassert(size_mask != std::numeric_limits<uint32>::max());
+
+			// TODO : this can be one fewer instruction depending on the various values, as you can shift the masks and then use `lea`.
+			mov(eax, rs_reg);
+			mov(edx, rt_reg);
+			and_(eax, size_mask);
+			and_(edx, inverse_mask);
+			shl(eax, static_cast<int>(lsb));
+			or_(edx, eax);
+			mov(rt_reg, edx);
+		}
+	}
+}
+
+void Jit1_CodeGen::write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
+{
+	// rd = signed( ([rs] << (sa + 1)) + [rt] )
+
+	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
+	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
+	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
+	const uint32 sa = instructions::TinyInt<2>(instruction >> 6).zextend<uint32>() + 1U;
+
+	auto&& rs_reg = get_register_op32_lazy(rs);
+	auto&& rt_reg = get_register_op32_lazy(rt);
+	auto&& rd_reg = get_register_op32_lazy(rd);
+
+	if (rd.is_zero()) [[unlikely]]
+	{
+		// nop
+	}
+	else if (rs.is_zero() && rt.is_zero()) [[unlikely]]
+	{
+		mov(rd_reg, 0);
+	}
+	else if (rs.is_zero()) [[unlikely]]
+	{
+		mov(eax, rt_reg);
+		mov(rd_reg, eax);
+	}
+	else if (rs == rd)
+	{
+		if (rt.is_zero())
+		{
+			// rd = signed( ([rd] << (sa + 1)) )
+			// TODO : is SAL correct?
+			sal(rd_reg, sa);
+		}
+		else
+		{
+			// signed( rs <<= (sa + 1); rs += rt; )
+			sal(rs_reg, sa);
+			add(rs_reg, rt_reg);
+		}
+	}
+	else
+	{
+		mov(eax, rs_reg);
+		// TODO : is SAL correct?
+		sal(eax, sa);
+		// TODO : sign extension
+		if (rt == rd)
+		{
+			add(rd_reg, eax);
+		}
+		else
+		{
+			if (!rt.is_zero()) [[likely]]
+			{
+				add(eax, rt_reg);
+			}
+
+			mov(rd_reg, eax);
 		}
 	}
 }

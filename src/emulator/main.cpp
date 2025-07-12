@@ -621,22 +621,39 @@ namespace {
 			fmt::println("\tJIT Transitions: {}", statistics.jit_transitions);
 			std::puts("");
 
-			std::vector<std::pair<const char *, size_t>> instruction_stats;
-			instruction_stats.reserve(statistics.instructions.size());
-			for (const auto& item : statistics.instructions)
-			{
-				instruction_stats.push_back(item);
-			}
-
 			struct final {
 				bool operator()(const std::pair<const char *, size_t> & __restrict a, const std::pair<const char *, size_t> & __restrict b) const __restrict {
 					return a.second > b.second;
 				}	
 			} constexpr custom_comparator;
 
-			std::ranges::stable_sort(instruction_stats, custom_comparator);
-			for (const auto &stat_pair : instruction_stats) {
-				fmt::println("\t{} - {}", stat_pair.first, stat_pair.second);
+			const auto dump_instructions = [&](const char* const tab, const processor::statistics::instruction_map& data) {
+				std::vector<std::pair<const char *, size_t>> instruction_stats;
+				instruction_stats.reserve(data.size());
+				for (const auto& item : data)
+				{
+					instruction_stats.emplace_back(item);
+				}
+
+				std::ranges::stable_sort(instruction_stats, custom_comparator);
+
+				size_t max_len = 0;
+				for (const auto &stat_pair : instruction_stats) {
+					max_len = std::max(max_len, std::strlen(stat_pair.first));
+				}
+
+				for (const auto &stat_pair : instruction_stats) {
+					fmt::println("{}{:<{}} - {}", tab, stat_pair.first, max_len, stat_pair.second);
+				}
+			};
+
+			std::puts("\tAll Instructions:");
+			dump_instructions("\t\t", statistics.instructions);
+			if (argument_data.jit != JitType::None)
+			{
+				std::puts("");
+				std::puts("\tEmulated Instructions:");
+				dump_instructions("\t\t", statistics.jit_emulated_instructions);
 			}
 		}
 

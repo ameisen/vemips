@@ -130,12 +130,20 @@ using tstring = std::string;
 #endif
 
 template <uint32 Bit> constexpr uint64 bit = (uint64(1) << Bit);
+template <uint32 Bit> constexpr uint64 bitmask = bit<Bit> - 1;
 
 // ReSharper disable once IdentifierTypo CppInconsistentNaming
 #if _DEBUG
 #	define xassert(expr) do { const bool assert_result = bool(expr); assert(assert_result && #expr); if (!assert_result) { __debugbreak(); } _assume(assert_result); } while (false)
-#else
+#	define xunreachable(message) do { assert(false && message); _assume(0); std::unreachable(); } while(false)
+#elif _DEVELOPMENT
 #	define xassert(expr) do { const bool assert_result = bool(expr); assert(assert_result && #expr); _assume(assert_result); } while (false)
+#	define xunreachable(message) do { assert(false && message); _assume(0); std::unreachable(); } while(false)
+#elif _RELEASE
+#	define xassert(expr) do { const bool assert_result = bool(expr); _assume(assert_result); if (!(expr)) [[unlikely]] { std::unreachable(); } } while (false)
+#	define xunreachable(message) do { _assume(0); std::unreachable(); } while(false)
+#else
+#	error Unknown Configuration
 #endif
 
 #define xwarn(expr, msg) xwarn_impl((expr), #expr, msg)
@@ -159,6 +167,23 @@ namespace mips {
 		const signed_t signed_value = value;
 		xassert(signed_value >= min_value && signed_value <= max_value);
 		return T(signed_value);
+	}
+
+	template <typename T>
+	static constexpr T make_bit(const uint32 bit)
+	{
+		return static_cast<T>(1) << bit;
+	}
+
+	template <typename T>
+	static constexpr T make_bitmask(const uint32 bit)
+	{
+		if (bit == sizeof(T) * 8)
+		{
+			return std::numeric_limits<T>::max();
+		}
+
+		return static_cast<T>((static_cast<uint64>(1) << bit) - 1);
 	}
 
 	template <typename T> using raw_ptr = T*;

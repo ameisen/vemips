@@ -14,7 +14,7 @@ using namespace mips;
 
 static constexpr uint32 MaxShortJumpLookAhead = 2;
 
-bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const uint32 this_address = address;
 
@@ -31,15 +31,22 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
 	const Xbyak::Label no_jump;
 
-	const auto get_delay_cti_flags = [&]
+	const auto set_cti_flag = [&]
 	{
-		return
-			processor::flag::branch_delay |
-			(
-				jit_.processor_.disable_cti_ ?
-					processor::flag::none :
-					processor::flag::no_cti
-			);
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
+	};
+
+	const auto set_cti_delay_flag = [&]
+	{
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti | processor::flag::branch_delay);
+		}
+		else
+		{
+			or_(ebx, processor::flag::branch_delay);
+		}
 	};
 
 	if (IS_INSTRUCTION(instruction_info, COP1_BC1EQZ_v))
@@ -56,9 +63,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		mov(esi, target_address);
 		or_(ebx, processor::flag::branch_delay);
 		L(no_jump);
-		if (!jit_.processor_.disable_cti_) {
-			or_(ebx, processor::flag::no_cti);
-		}
+		set_cti_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, COP1_BC1NEZ_v))
 	{
@@ -73,9 +78,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		mov(esi, target_address);
 		or_(ebx, processor::flag::branch_delay);
 		L(no_jump);
-		if (!jit_.processor_.disable_cti_) {
-			or_(ebx, processor::flag::no_cti);
-		}
+		set_cti_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BAL))
 	{
@@ -86,7 +89,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
 		mov(get_register_op32(r31), link_address);
 		mov(esi, target_address);
-		or_(ebx, get_delay_cti_flags());
+		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BEQ))
 	{
@@ -99,7 +102,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		if (rs == rt)
 		{
 			mov(esi, target_address); // 0 == 0
-			or_(ebx, get_delay_cti_flags());
+			set_cti_delay_flag();
 		}
 		else
 		{
@@ -120,9 +123,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			mov(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			set_cti_flag();
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGEZ))
@@ -135,7 +136,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		if (rs.is_zero()) // 0 >= 0
 		{
 			mov(esi, target_address);
-			or_(ebx, get_delay_cti_flags());
+			set_cti_delay_flag();
 		}
 		else
 		{
@@ -144,9 +145,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			mov(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			set_cti_flag();
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZ))
@@ -168,9 +167,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
-		if (!jit_.processor_.disable_cti_) {
-			or_(ebx, processor::flag::no_cti);
-		}
+
+		set_cti_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLEZ))
 	{
@@ -182,7 +180,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		if (rs.is_zero()) // 0 <= 0
 		{
 			mov(esi, target_address);
-			or_(ebx, get_delay_cti_flags());
+			set_cti_delay_flag();
 		}
 		else
 		{
@@ -191,9 +189,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			mov(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+
+			set_cti_flag();
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLTZ))
@@ -215,9 +212,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
-		if (!jit_.processor_.disable_cti_) {
-			or_(ebx, processor::flag::no_cti);
-		}
+
+		set_cti_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BNE))
 	{
@@ -251,9 +247,8 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
-		if (!jit_.processor_.disable_cti_) {
-			or_(ebx, processor::flag::no_cti);
-		}
+		
+		set_cti_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_J))
 	{
@@ -262,7 +257,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		const uint32 target_address = (address & instructions::HighBits(4)) | instr_index;
 
 		mov(esi, target_address);
-		or_(ebx, get_delay_cti_flags());
+		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JAL))
 	{
@@ -274,7 +269,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 
 		mov(get_register_op32(r31), link_address);
 		mov(esi, target_address);
-		or_(ebx, get_delay_cti_flags());
+		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
 	{
@@ -288,7 +283,7 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 			mov(get_register_op32(rd), link_address);
 		}
 		mov(esi, get_register_op32(rs));
-		or_(ebx, get_delay_cti_flags());
+		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JR))
 	{
@@ -296,16 +291,16 @@ bool Jit1_CodeGen::write_delay_branch(bool &terminate_instruction, jit1::ChunkOf
 		const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
 		mov(esi, get_register_op32(rs));
-		or_(ebx, get_delay_cti_flags());
+		set_cti_delay_flag();
 	}
 	else
 	{
 		xwarn(false, "delay branch implementation missing");
 		insert_procedure_ecx(address, uint64(instruction_info.Proc), instruction, instruction_info);
-		return true;
+		return except_result::can_except;
 	}
 
-	return false;
+	return except_result::none;
 }
 
 // enum class branch_type : uint32

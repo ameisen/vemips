@@ -12,7 +12,7 @@ using namespace mips;
 
 static constexpr uint32 MaxShortJumpLookAhead = 2;
 
-bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &terminate_instruction, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const uint32 chunk_begin = address & ~(jit1::ChunkSize - 1);
 	const uint32 chunk_last = chunk_begin + (jit1::ChunkSize - 1);
@@ -24,6 +24,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
 	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
 	const instructions::GPRegister<> r31 = {31U};
+
+	except_result exception_result = except_result::none;
 
 	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
 	{
@@ -121,7 +123,7 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 	};
 
-	 if (IS_INSTRUCTION(instruction_info, PROC_BALC))
+	if (IS_INSTRUCTION(instruction_info, PROC_BALC))
 	{
 		const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + immediate;
@@ -162,9 +164,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP06))
@@ -209,9 +211,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZALC)) // branch rt > 0 and link
@@ -239,9 +241,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP07))
@@ -286,9 +288,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP10))
@@ -348,9 +350,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP30))
@@ -410,9 +412,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLEZC)) // branch rt <= 0
@@ -438,9 +440,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP26))
@@ -482,9 +484,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZC)) // branch rt > 0
@@ -510,9 +512,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_POP27))
@@ -554,9 +556,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BEQZC)) // branch [rs] == 0
@@ -582,9 +584,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BNEZC)) // branch [rs] != 0
@@ -610,9 +612,9 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 		}
 		else
 		{
-			terminate_instruction = true;
 			mov(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
+			exception_result = except_result::always_throw;
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JIC)) // branch [rt] + offset
@@ -686,7 +688,8 @@ bool Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, bool &te
 	{
 		//terminate_instruction = true;
 		insert_procedure_ecx(address, uint64(instruction_info.Proc), instruction, instruction_info);
-		return true;
+		exception_result = except_result::can_except;
+		return { true, exception_result };
 	}
-	return false;
+	return { false, exception_result };
 }

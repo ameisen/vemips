@@ -41,12 +41,12 @@ namespace vemips::tablegen::writers {
 			auto&& signature = GetTypeSignature(info);
 
 			return fmt::format(
-				R"(( "{}", {}, &{}_NS::Execute{}, 0x{:08X}, {{ .control = {} }}, {}))",
+				R"(( "{}", {}, &{}_NS::Execute{}, static_cast<instructions::OpFlags>(0x{:08X}), {{ .control = {} }}, {}))",
 				info.Name,
 				info.CoprocessorIdx,
 				info.Name,
 				signature.signature,
-				info.OpFlags,
+				static_cast<uint32>(info.OpFlags),
 				info.Flags.control ? "true" : "false",
 				signature.name
 			);
@@ -228,6 +228,12 @@ namespace vemips::tablegen::writers {
 		{
 			const std::string filename = std::string(options.file_out) + ".cpp";
 			out_stream = fopen(filename.c_str(), "w");
+
+			if (out_stream == nullptr) [[unlikely]]
+			{
+				fmt::println(stderr, "Could not open file for write: `{}`", filename);
+				std::exit(-2);
+			}
 		}
 		else
 		{

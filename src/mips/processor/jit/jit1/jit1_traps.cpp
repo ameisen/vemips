@@ -22,12 +22,12 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __r
 
 	// tr ? [rs] == [rt]
 	mov(eax, int32(code));
-	if (rs == rt) {
+	if (rs == rt) [[unlikely]] {
 		set(ecx, address);
 		set(edx, code);
 		jmp(intrinsics_.tr, T_NEAR);
 
-		return Jit1_CodeGen::except_result::forced_except;
+		return Jit1_CodeGen::except_result::always_throw;
 	}
 	else {
 		const Xbyak::Label no_trap;
@@ -56,7 +56,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __r
 
 		L(no_trap);
 
-		return Jit1_CodeGen::except_result::can_except;
+		return Jit1_CodeGen::except_result::can_throw;
 	}
 }
 
@@ -68,12 +68,12 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __r
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
 	// tr ? [rs] >= [rt]
-	if (rs == rt) {
+	if (rs == rt) [[unlikely]] {
 		set(ecx, address);
 		set(edx, code);
 		jmp(intrinsics_.tr, T_NEAR);
 
-		return Jit1_CodeGen::except_result::forced_except;
+		return Jit1_CodeGen::except_result::always_throw;
 	}
 	else {
 		const Xbyak::Label no_trap;
@@ -104,7 +104,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __r
 
 		L(no_trap);
 
-		return Jit1_CodeGen::except_result::can_except;
+		return Jit1_CodeGen::except_result::can_throw;
 	}
 }
 
@@ -116,12 +116,12 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __
 
 	// tr ? [rs] >= [rt]
 
-	if (rs == rt) {
+	if (rs == rt) [[unlikely]] {
 		set(ecx, address);
 		set(edx, code);
 		jmp(intrinsics_.tr, T_NEAR);
 
-		return Jit1_CodeGen::except_result::forced_except;
+		return Jit1_CodeGen::except_result::always_throw;
 	}
 	else {
 		const Xbyak::Label no_trap;
@@ -152,7 +152,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __
 
 		L(no_trap);
 
-		return Jit1_CodeGen::except_result::can_except;
+		return Jit1_CodeGen::except_result::can_throw;
 	}
 }
 
@@ -163,9 +163,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __r
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
 	// tr ? [rs] < [rt]
-	if (rs.get_register() == rt.get_register()) {
+	if (rs == rt) {
 		// nop
-		return Jit1_CodeGen::except_result::no_except;
+		return Jit1_CodeGen::except_result::none;
 	}
 	else {
 		const Xbyak::Label no_trap;
@@ -196,7 +196,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __r
 
 		L(no_trap);
 
-		return Jit1_CodeGen::except_result::can_except;
+		return Jit1_CodeGen::except_result::can_throw;
 	}
 }
 
@@ -212,7 +212,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __
 		rt.is_zero() // rs < 0 impossible
 	) {
 		// nop
-		return Jit1_CodeGen::except_result::no_except;
+		return Jit1_CodeGen::except_result::none;
 	}
 	else {
 		const Xbyak::Label no_trap;
@@ -242,7 +242,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __
 
 		L(no_trap);
 
-		return Jit1_CodeGen::except_result::can_except;
+		return Jit1_CodeGen::except_result::can_throw;
 	}
 }
 
@@ -255,7 +255,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __r
 	// tr ? [rs] != [rt]
 	if (rs == rt) {
 		// nop
-		return Jit1_CodeGen::except_result::no_except;
+		return Jit1_CodeGen::except_result::none;
 	}
 	else {
 		const Xbyak::Label no_trap;
@@ -284,7 +284,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __r
 
 		L(no_trap);
 
-		return Jit1_CodeGen::except_result::can_except;
+		return Jit1_CodeGen::except_result::can_throw;
 	}
 }
 
@@ -310,6 +310,18 @@ namespace {
 	_cold _nothrow static void SYS_Exception(uint32 code, processor & __restrict processor) noexcept
 	{
 		processor.set_trapped_exception({ CPU_Exception::Type::Sys, processor.get_program_counter(), code });
+	}
+
+	_pragma_small_code
+	_cold _nothrow static void BP_Exception(uint32 code, processor & __restrict processor) noexcept
+	{
+		processor.set_trapped_exception({ CPU_Exception::Type::Bp, processor.get_program_counter(), code });
+	}
+
+	_pragma_small_code
+	_cold _nothrow static void RI_Exception(uint32 code, processor & __restrict processor) noexcept
+	{
+		processor.set_trapped_exception({ CPU_Exception::Type::RI, processor.get_program_counter(), code });
 	}
 }
 
@@ -337,7 +349,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 		test(eax, eax);
 		jnz(intrinsics_.save_return, T_NEAR);
 
-		return except_result::can_except;
+		return except_result::can_throw | except_result::can_except;
 	}
 	else
 	{
@@ -346,7 +358,32 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 		mov(rax, uint64(SYS_Exception));
 		jmp(intrinsic_ex, T_NEAR);
 
-		return except_result::forced_except;
+		return except_result::always_throw | except_result::can_except;
 	}
 }
 
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_BREAK(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex) {
+	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
+
+	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
+
+	mov(ecx, code);
+	mov(dword[rbp + pc_offset], int32(address));
+	mov(rax, uint64(BP_Exception));
+	jmp(intrinsic_ex, T_NEAR);
+
+	return except_result::always_throw;
+}
+
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SIGRIE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex) {
+	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
+
+	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
+
+	mov(ecx, code);
+	mov(dword[rbp + pc_offset], int32(address));
+	mov(rax, uint64(RI_Exception));
+	jmp(intrinsic_ex, T_NEAR);
+
+	return except_result::always_throw;
+}
