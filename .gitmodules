@@ -34,3 +34,6 @@
 	path = sdk/zlib-ng
 	url = https://github.com/zlib-ng/zlib-ng.git
 	branch = 2.2.4
+[submodule "ext/xbyak"]
+	path = ext/xbyak
+	url = https://github.com/vemips/xbyak.git

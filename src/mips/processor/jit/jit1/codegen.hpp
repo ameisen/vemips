@@ -2,9 +2,12 @@
 
 #include <variant>
 
+#define XBYAK_STRICT_CHECK_MEM_REG_SIZE 0
+#include <xbyak.h>
+#undef XBYAK_STRICT_CHECK_MEM_REG_SIZE
+
 #include "mips_common.hpp"
 #include "instructions/instructions_common.hpp"
-#include "mips/processor/jit/xbyak/xbyak.h"
 #include "mips/processor/jit/jit1/jit1.hpp"
 
 namespace mips
