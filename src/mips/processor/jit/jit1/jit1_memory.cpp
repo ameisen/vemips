@@ -253,7 +253,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 					break;
 					case 2: {
 						const auto& src = get_register_op16(rt);
-						const auto& dst = byte[rdx + rax];
+						const auto& dst = word[rdx + rax];
 						if (src.isMEM()) {
 							mov(cx, src);
 							mov(dst, cx);
@@ -265,7 +265,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 					break;
 					case 4: {
 						const auto& src = get_register_op32(rt);
-						const auto& dst = byte[rdx + rax];
+						const auto& dst = dword[rdx + rax];
 						if (src.isMEM()) {
 							mov(ecx, src);
 							mov(dst, ecx);
@@ -277,7 +277,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 					break;
 					case 8: {
 						const auto& src = get_register_op64(rt);
-						const auto& dst = byte[rdx + rax];
+						const auto& dst = qword[rdx + rax];
 						if (src.isMEM()) {
 							mov(rcx, src);
 							mov(dst, rcx);
