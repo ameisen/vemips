@@ -9,6 +9,14 @@
 
 namespace mips
 {
+#ifdef XBYAK_NO_EXCEPTION
+	static constexpr const bool xbyak_throws = false;
+	#define _xbyak_nothrow _nothrow
+#else
+	static constexpr const bool xbyak_throws = true;
+	#define _xbyak_nothrow
+#endif
+
 	class jit1;
 	class Jit1_CodeGen final : public Xbyak::CodeGenerator
 	{
@@ -18,12 +26,24 @@ namespace mips
 				Xbyak::Label label;
 				mutable bool used = false;
 
-				_nothrow operator Xbyak::Label&() noexcept {
+				_nothrow operator const Xbyak::Label& () const noexcept {
 					used = true;
 					return label;
 				}
 
-				_nothrow operator const Xbyak::Label&() const noexcept {
+				_nothrow operator Xbyak::Label& () noexcept {
+					used = true;
+					return label;
+				}
+
+				_nothrow const Xbyak::Label& get() const noexcept
+				{
+					used = true;
+					return label;
+				}
+
+				_nothrow Xbyak::Label& get() noexcept
+				{
 					used = true;
 					return label;
 				}
@@ -94,9 +114,111 @@ namespace mips
 			}
 		}
 
+		// returns `true` if temporary register was used
 		[[nodiscard]]
-		Xbyak::Label & get_instruction_offset_label(const uint32 offset) {
+		bool mov_ex(
+			const Xbyak::Operand& dst,
+			const Xbyak::Operand& src,
+			const Xbyak::Reg& tmp
+		)
+		{
+			if (dst.isREG() || src.isREG())
+			{
+				mov(dst, src);
+				return false;
+			}
+
+			mov(tmp, src);
+			mov(dst, tmp);
+
+			return true;
+		}
+
+		// returns `true` if temporary register was used
+		[[nodiscard]]
+		bool mov_ex(
+			const Xbyak::Operand& dst,
+			const Xbyak::Operand& src,
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+		)
+		{
+			if (dst.isREG() || src.isREG())
+			{
+				mov(dst, src);
+				return false;
+			}
+
+			spill_tmp(tmp);
+			mov(tmp, src);
+			mov(dst, tmp);
+			restore_tmp(tmp);
+
+			return true;
+		}
+
+		void cmp_ex(const Xbyak::Operand& operand, const uint32 immediate)
+		{
+			if (operand.isREG() && immediate == 0)
+			{
+				const Xbyak::Reg& reg = static_cast<const Xbyak::Reg&>(operand);
+				test(reg, reg);
+			}
+			else
+			{
+				cmp(operand, immediate);	
+			}
+		}
+
+		// returns `true` if temporary register was used
+		[[nodiscard]]
+		bool cmp_ex(
+			const Xbyak::Operand& a,
+			const Xbyak::Operand& b,
+			const Xbyak::Reg& tmp
+		)
+		{
+			if (a.isREG() || b.isREG())
+			{
+				cmp(a, b);
+				return false;
+			}
+
+			mov(tmp, a);
+			cmp(tmp, b);
+
+			return true;
+		}
+
+		// returns `true` if temporary register was used
+		[[nodiscard]]
+		bool cmp_ex(
+			const Xbyak::Operand& a,
+			const Xbyak::Operand& b,
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+		)
+		{
+			if (a.isREG() || b.isREG())
+			{
+				cmp(a, b);
+				return false;
+			}
+
+			spill_tmp(tmp);
+			mov(tmp, a);
+			cmp(tmp, b);
+			restore_tmp(tmp);
+
+			return true;
+		}
+
+		[[nodiscard]]
+		_nothrow Xbyak::Label& get_instruction_offset_label(const uint32 offset) noexcept {
 			xassert(offset < jit1::NumInstructionsChunk);
+			xassert(offset < instruction_offset_labels_.size());
 			return instruction_offset_labels_[offset];
 		}
 
@@ -114,15 +236,16 @@ namespace mips
 			virtual _nothrow ~LazyOperand() noexcept = default;
 
 		public:
-			_nothrow const Xbyak::Operand& get_operand() const noexcept
+			template <typename Self>
+			_nothrow copy_qualifiers_ref<Self, Xbyak::Operand> get_operand(this Self&& self) noexcept
 			{
-				if (!operand_)
+				if (!self.operand_)
 				{
-					operand_ = &get_value();
-					xassert(operand_);
+					self.operand_ = &self.get_value();
+					xassert(self.operand_);
 				}
 
-				return *operand_;
+				return *self.operand_;
 			}
 
 			_nothrow const Xbyak::Operand& operator *() const noexcept
@@ -144,13 +267,89 @@ namespace mips
 			{
 				return get_operand().isMEM();
 			}
+
+			_nothrow bool isREG() const noexcept
+			{
+				return get_operand().isREG();
+			}
+
+			const Xbyak::Reg& as_reg() const
+			{
+				const Xbyak::Operand& operand = get_operand();
+				xassert(operand.isREG());
+				return static_cast<const Xbyak::Reg&>(operand);
+			}
+
+			_nothrow const Xbyak::Operand& if_reg(const Xbyak::Operand& else_operand) const noexcept
+			{
+				auto&& operand = get_operand();
+				return
+					operand.isREG() ?
+						operand :
+						else_operand;
+			}
+
+			_nothrow const Xbyak::Operand& if_mem(const Xbyak::Operand& else_operand) const noexcept
+			{
+				auto&& operand = get_operand();
+				return
+					operand.isMEM() ?
+						operand :
+						else_operand;
+			}
+		};
+
+		class VariantOperand final
+		{
+		public:
+		private:
+			using variant_type = std::variant<
+				Xbyak::Reg8,
+				Xbyak::Reg16,
+				Xbyak::Reg32,
+				Xbyak::Reg64,
+				Xbyak::Address
+			>;
+
+			variant_type storage_;
+
+			template <typename TVariant, typename T = copy_qualifiers_ref<TVariant, Xbyak::Operand>>
+			static _nothrow T get_reference(TVariant& variant) noexcept
+			{
+				T result = std::visit([](auto& ref) -> T { return static_cast<T&>(ref); }, variant);
+				return result;
+			}
+
+		public:
+			template <typename TOperand>
+			requires(std::is_constructible_v<variant_type, TOperand>)
+			_xbyak_nothrow VariantOperand(TOperand&& value) noexcept(!xbyak_throws) :
+				storage_(std::forward<TOperand>(value))
+			{
+			}
+
+			_nothrow operator const Xbyak::Operand&() const noexcept
+			{
+				const Xbyak::Operand& result = get_reference(storage_);
+				return result;
+			}
+
+			_nothrow operator Xbyak::Operand&() noexcept
+			{
+				Xbyak::Operand& result = get_reference(storage_);
+				return result;
+			}
 		};
 
 		class LazyRegisterOperand final : public LazyOperand
 		{
 			Jit1_CodeGen& codegen_;
-			instructions::GPRegisterInfo register_;
-			const uint8_t size_;
+			struct register_info final
+			{
+				instructions::GPRegisterInfo register_;
+				uint8_t size_;
+			};
+			mutable std::variant<register_info, VariantOperand> storage_;
 
 		protected:
 			_nothrow LazyRegisterOperand(
@@ -159,22 +358,29 @@ namespace mips
 				const uint8 size
 			) noexcept
 				: codegen_(codegen)
-				, register_(_register)
-				, size_(size)
+				, storage_(register_info{_register, size})
 			{}
 
 			virtual _nothrow const Xbyak::Operand& get_value() const noexcept override
 			{
-				switch (size_)
+				if (VariantOperand* variant = std::get_if<VariantOperand>(&storage_))
+				{
+					return *variant;
+				}
+
+				const register_info& info = *std::get_if<register_info>(&storage_);
+				const Jit1_CodeGen& codegen = static_cast<const Jit1_CodeGen&>(codegen_);
+
+				switch (info.size_)
 				{
 					case 0:
-						return codegen_.get_register_op8_internal(register_);
+						return storage_.emplace<VariantOperand>(codegen.get_register_op8_internal(info.register_));
 					case 1:
-						return codegen_.get_register_op16_internal(register_);
+						return storage_.emplace<VariantOperand>(codegen.get_register_op16_internal(info.register_));
 					case 2:
-						return codegen_.get_register_op32_internal(register_);
+						return storage_.emplace<VariantOperand>(codegen.get_register_op32_internal(info.register_));
 					case 3: [[unlikely]]
-						return codegen_.get_register_op64_internal(register_);
+						return storage_.emplace<VariantOperand>(codegen.get_register_op64_internal(info.register_));
 					default: [[unlikely]]
 						xassert(false);
 				}
@@ -191,68 +397,53 @@ namespace mips
 				return { codegen, _register, log2_ceil(Size) - log2_ceil(8) };
 			}
 		};
+
 	private:
 		template <typename GPR>
-		const Xbyak::Operand & get_register_op8_internal(const GPR &reg) {
+		VariantOperand get_register_op8_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
-		
-			// otherwise we will type slice. That's bad.
-			static thread_local Xbyak::Address AddrOperand = byte[rbp];
-			static Xbyak::Reg8 RegOperand = r15b;
+
 			if (reg.get_register() == mips_fp) {
-				return RegOperand;
+				return r15b;
 			}
 			else {
-				AddrOperand = byte[rbp + reg_offset];
-				return AddrOperand;
+				return byte[rbp + reg_offset];
 			}
 		}
 
 		template <typename GPR>
-		const Xbyak::Operand & get_register_op16_internal(const GPR &reg) {
+		VariantOperand get_register_op16_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
 		
-			// otherwise we will type slice. That's bad.
-			static thread_local Xbyak::Address AddrOperand = word[rbp];
-			static Xbyak::Reg16 RegOperand = r15w;
 			if (reg.get_register() == mips_fp) {
-				return RegOperand;
+				return r15w;
 			}
 			else {
-				AddrOperand = word[rbp + reg_offset];
-				return AddrOperand;
+				return word[rbp + reg_offset];
 			}
 		}
 
 		template <typename GPR>
-		const Xbyak::Operand & get_register_op32_internal(const GPR &reg) {
+		VariantOperand get_register_op32_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
 		
-			// otherwise we will type slice. That's bad.
-			static thread_local Xbyak::Address AddrOperand = dword[rbp];
-			static Xbyak::Reg32 RegOperand = r15d;
 			if (reg.get_register() == mips_fp) {
-				return RegOperand;
+				return r15d;
 			}
 			else {
-				AddrOperand = dword[rbp + reg_offset];
-				return AddrOperand;
+				return dword[rbp + reg_offset];
 			}
 		}
 
 		template <typename GPR>
-		const Xbyak::Operand &get_register_op64_internal(const GPR &reg) {
+		VariantOperand get_register_op64_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
 		
-			// otherwise we will type slice. That's bad.
-			static thread_local Xbyak::Address AddrOperand = qword[rbp];
-			static Xbyak::Reg64 RegOperand = r15;
 			if (reg.get_register() == mips_fp) {
-				return RegOperand;
+				return r15;
 			}
 			else {
-				AddrOperand = qword[rbp + reg_offset];
-				return AddrOperand;
+				return qword[rbp + reg_offset];
 			}
 		}
 

@@ -897,8 +897,22 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	{
 		auto &patch_pair = chunk.m_patches->back();
 		uint32 &patch_target = patch_pair.target;
-		mov(rcx, int64(&patch_target));
-		mov(dword[rcx], edx);
+		intptr patch_target_address = intptr(&patch_target);
+		if (
+			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
+			patch_target_address <= intptr(std::numeric_limits<int32>::max())
+		)
+		{
+			// xbyak cannot handle this sequence properly
+			// mov dword ptr [ds:patch_target_address], edx
+			db(0x89, 0x14, 0x25);
+			dd(uint32(patch_target_address));
+		}
+		else
+		{
+			mov(rcx, int64(&patch_target));
+			mov(dword[rcx], edx);
+		}
 	};
 
 	const auto patch_epilog = [&](const Xbyak::Label &patch)
@@ -1011,7 +1025,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			// dispatch a stat call.
 			if (intrinsics_.stats.used) {
 				L(intrinsics_.stats);
-				mov(rax, uint64(increment_instruction_statistic));
+				set(rax, uint64(increment_instruction_statistic));
 				mov(rdx, rbp);
 				add(rdx, -128);
 				sub(rsp, 40);
@@ -1022,7 +1036,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 			if (intrinsics_.emulated_stats.used) {
 				L(intrinsics_.emulated_stats);
-				mov(rax, uint64(increment_jit_emulated_instruction_statistic));
+				set(rax, uint64(increment_jit_emulated_instruction_statistic));
 				mov(rdx, rbp);
 				add(rdx, -128);
 				sub(rsp, 40);
@@ -1031,7 +1045,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				ret();
 			}
 		}
-}
+	}
 
 	xassert(!hasUndefinedLabel());
 	ready(PROTECT_RWE);
@@ -1052,6 +1066,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		jit_.chunks_.push_back(&chunk);
 		std::ranges::sort(jit_.chunks_);
 	}
+
+	static_assert(xbyak_throws, "must implement error checks");
 }
 
 void jit1::populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, const uint32 start_address, const bool update)

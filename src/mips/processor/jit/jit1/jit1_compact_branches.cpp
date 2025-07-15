@@ -25,9 +25,11 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
 	const instructions::GPRegister<> r31 = {31U};
 
+	auto&& op_r31 = get_register_op32(r31);
+
 	except_result exception_result = except_result::none;
 
-	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
+	const auto patch_preprolog = [&](auto patch_address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
 		// Start with a set of no-ops so that we have somewhere to write patch code.
@@ -35,30 +37,46 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		auto &patch_pair = chunk.m_patches->emplace_back(uint32(getSize()), 0);
 		uint32 &patch_target = patch_pair.target;
 
+		// TODO : make this pointer-size generic - this is 64-bit only
 		// patch no-op
-		if (address == nullptr) {
+		if (patch_address == nullptr) {
 			nop(12, true);
 		}
 		else {
 			static constexpr uint16 patch_prefix = 0xB848;
 			static constexpr uint16 patch_suffix = 0xE0FF;
 			dw(patch_prefix);
-			dq(uint64(address));
+			dq(uint64(patch_address));
 			dw(patch_suffix);
 		}
 
-		mov(rcx, int64(&patch_target));
+		mov(rcx, intptr(&patch_target));
 		mov(dword[rcx], edx);
 
 		return patch;
 	};
 
-	const auto patch_prolog = [&]()
+	const auto patch_prolog = [&]
 	{
 		auto &patch_pair = chunk.m_patches->back();
 		uint32 &patch_target = patch_pair.target;
-		mov(rcx, int64(&patch_target));
-		mov(dword[rcx], edx);
+		intptr patch_target_address = intptr(&patch_target);
+		if (
+			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
+			patch_target_address <= intptr(std::numeric_limits<int32>::max())
+		)
+		{
+			// xbyak cannot handle this sequence properly
+			// mov dword ptr [ds:patch_target_address], edx
+
+			db(0x89, 0x14, 0x25);
+			dd(uint32(patch_target_address));
+		}
+		else
+		{
+			mov(rcx, int64(&patch_target));
+			mov(dword[rcx], edx);
+		}
 	};
 
 	const auto patch_epilog = [&](const Xbyak::Label &patch)
@@ -74,7 +92,13 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 
 	const auto safejmp = [&](const Xbyak::Label &target_label, const uint32 instruction_offset)
 	{
-		if ((instruction_offset <= this_offset && (chunk_offset[this_offset] - chunk_offset[instruction_offset]) <= 128) || (instruction_offset - this_offset) <= MaxShortJumpLookAhead)
+		if (
+			(
+				instruction_offset <= this_offset &&
+				(chunk_offset[this_offset] - chunk_offset[instruction_offset]) <= 128
+			) ||
+			(instruction_offset - this_offset) <= MaxShortJumpLookAhead
+		)
 		{
 			jmp(target_label);
 		}
@@ -86,17 +110,17 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 
 	const auto patch_jump = [&](uint32 target_address)
 	{
-		 const auto currentAddress = jit_.fetch_instruction(target_address);
+		const auto current_address = jit_.fetch_instruction(target_address);
 
 		// In this case, we need to find the address in order to jump to it.
 		inc(rdi);
-		const auto patch = patch_preprolog(currentAddress);
+		const auto patch = patch_preprolog(current_address);
 		mov(eax, target_address);
 		patch_prolog();
 		mov(dword[rbp + pc_offset], eax);
 		mov(edx, eax);
-		mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-		mov(rcx, uint64(&jit_));
+		mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+		mov(rcx, uintptr(&jit_));
 		call(rax);
 		patch_epilog(patch);
 		jmp(rax);
@@ -123,12 +147,19 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		}
 	};
 
+	const auto disable_cti = [this]
+	{
+		if (!jit_.processor_.disable_cti_) {
+			or_(ebx, processor::flag::no_cti);
+		}
+	};
+
 	if (IS_INSTRUCTION(instruction_info, PROC_BALC))
 	{
 		const int32 immediate = instructions::TinyInt<28>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + immediate;
 		const uint32 link_address = address + 4;
-		mov(get_register_op32(r31), link_address);	// set link
+		set(op_r31, link_address);	// set link
 
 		emit_near_far_jump(target_address);
 	}
@@ -145,26 +176,27 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 		const uint32 link_address = address + 4;
-		mov(get_register_op32(r31), link_address);	// set link
+
+		auto&& op_rt = get_register_op32(rt);
+
+		set(op_r31, link_address);	// set link
 
 		// instruction only valid if rt != 0
 		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jg(no_jump, T_SHORT);															 // jump past branch
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -175,43 +207,41 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		const uint32 target_address = address + 4 + offset;
 
 		if (rs == rt && !rs.is_zero()) // BGEZALC - branch rt >= 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(get_register_op32(r31), link_address);	// set link
+			set(op_r31, link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jl(no_jump, T_SHORT);															 // jump past branch if < 0
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (rs != rt && !rs.is_zero() && !rt.is_zero()) // BGEUC - branch rs >= rt
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rt)); // get [rt]
-			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
+			std::ignore = cmp_ex(op_rs, op_rt, eax);
 			jl(no_jump, T_SHORT);															 // jump past branch if < 0
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, address);
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -222,26 +252,27 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 		const uint32 link_address = address + 4;
-		mov(get_register_op32(r31), link_address);	// set link
+
+		auto&& op_rt = get_register_op32(rt);
+
+		set(op_r31, link_address);	// set link
 
 		// instruction only valid if rt != 0
 		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jle(no_jump, T_SHORT);															 // jump past branch
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -252,43 +283,41 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		const uint32 target_address = address + 4 + offset;
 
 		if (rs == rt && !rs.is_zero()) // BLTZALC - branch rt < 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(get_register_op32(r31), link_address);	// set link
+			set(op_r31, link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jge(no_jump, T_SHORT);															
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (rs != rt && !rs.is_zero() && !rt.is_zero()) // BLTUC - branch rs < rt
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rt)); // get [rt]
-			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
+			std::ignore = cmp_ex(op_rs, op_rt, eax);
 			jge(no_jump, T_SHORT);															 
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -299,58 +328,54 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		const uint32 target_address = address + 4 + offset;
 
 		if (rs.is_zero() && rs < rt) // BEQZALC - branch rt == 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(get_register_op32(r31), link_address);	// set link
+			set(op_r31, link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0);
+			cmp_ex(op_rt, 0);
 			jne(no_jump, T_SHORT);															 
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (!rs.is_zero() && !rt.is_zero() && rs < rt) // BEQC - branch rt == rs
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rt)); // get [rt]
-			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
+			std::ignore = cmp_ex(op_rs, op_rt, eax);
 			jne(no_jump, T_SHORT);															 
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (rs >= rt) // BOVC - branch if rs + rt overflows (signed)
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rs)); // get [rs]
-			add(eax, get_register_op32(rt)); // add [rs] and [rt]
-			jno(no_jump, T_SHORT);															 
+			mov(eax, op_rs); // get [rs]
+			add(eax, op_rt); // add [rs] and [rt]
+			jnc(no_jump, T_SHORT);															 
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -361,58 +386,54 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		const uint32 target_address = address + 4 + offset;
 
 		if (rs.is_zero() && rs < rt) // BNEZALC - branch rt != 0 and link
 		{
 			const uint32 link_address = address + 4;
-			mov(get_register_op32(r31), link_address);	// set link
+			set(op_r31, link_address);	// set link
 
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			je(no_jump, T_SHORT);															 
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (!rs.is_zero() && !rt.is_zero() && rs < rt) // BNEC - branch rt != rs
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rt)); // get [rt]
-			cmp(get_register_op32(rs), eax); // compare [rs] to [rt]
+			std::ignore = cmp_ex(op_rt, op_rs, eax);
 			je(no_jump, T_SHORT);															 
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (rs >= rt) // BNVC - branch if rs + rt not overflows (signed)
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rs)); // get [rs]
-			add(eax, get_register_op32(rt)); // add [rs] and [rt]
-			jo(no_jump, T_SHORT);															 
+			mov(eax, op_rs); // get [rs]
+			add(eax, op_rt); // add [rs] and [rt]
+			jc(no_jump, T_SHORT);															 
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -423,24 +444,24 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
+		auto&& op_rt = get_register_op32(rt);
+
 		// instruction only valid if rt != 0
 		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jg(no_jump, T_SHORT);															 // jump past branch
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -451,40 +472,38 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		const uint32 target_address = address + 4 + offset;
 
 		if (!rs.is_zero() && !rt.is_zero() && rs == rt) // BGEZC - branch [rt] >= 0
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jl(no_jump, T_SHORT);
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (!rs.is_zero() && !rt.is_zero() && rs != rt) // BGEC / BLEC - branch [rs] >= [rt]
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rs)); // get [rs]
-			cmp(eax, get_register_op32(rt)); // compare [rs] and [rt]
+			std::ignore = cmp_ex(op_rs, op_rt, eax);
 			jl(no_jump, T_SHORT);
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -495,24 +514,24 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
+		auto&& op_rt = get_register_op32(rt);
+
 		// instruction only valid if rt != 0
 		if (!rt.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jle(no_jump, T_SHORT);															// jump past branch
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -523,40 +542,46 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		const uint32 target_address = address + 4 + offset;
 
 		if (!rs.is_zero() && !rt.is_zero() && rs == rt) // BLTZC - branch [rt] < 0
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rt), 0); // compare [rt] to 0
+			cmp_ex(op_rt, 0); // compare [rt] to 0
 			jge(no_jump, T_SHORT);
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else if (!rs.is_zero() && !rt.is_zero() && rs != rt) // BLTC / BGTC - branch [rs] < [rt]
 		{
 			const Xbyak::Label no_jump;
 
-			mov(eax, get_register_op32(rs)); // get [rs]
-			cmp(eax, get_register_op32(rt)); // compare [rs] and [rt]
+			if (op_rs.isREG() || op_rt.isREG())
+			{
+				cmp(op_rs, op_rt);
+			}
+			else
+			{
+				mov(eax, op_rs); // get [rs]
+				cmp(eax, op_rt); // compare [rs] and [rt]
+			}
 			jge(no_jump, T_SHORT);
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -567,24 +592,24 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const int32 offset = instructions::TinyInt<23>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
+		auto&& op_rs = get_register_op32(rs);
+
 		// instruction only valid if rt != 0
 		if (!rs.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rs), 0); // compare [rs] to 0
+			cmp_ex(op_rs, 0); // compare [rs] to 0
 			jne(no_jump, T_SHORT);															// jump past branch
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -595,24 +620,24 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const int32 offset = instructions::TinyInt<23>(instruction << 2).sextend<int32>();
 		const uint32 target_address = address + 4 + offset;
 
+		auto&& op_rs = get_register_op32(rs);
+
 		// instruction only valid if rt != 0
 		if (!rs.is_zero())
 		{
 			const Xbyak::Label no_jump;
 
-			cmp(get_register_op32(rs), 0); // compare [rs] to 0
+			cmp_ex(op_rs, 0); // compare [rs] to 0
 			je(no_jump, T_SHORT);															 // jump past branch
 
 			emit_near_far_jump(target_address);
 
 			L(no_jump);
-			if (!jit_.processor_.disable_cti_) {
-				or_(ebx, processor::flag::no_cti);
-			}
+			disable_cti();
 		}
 		else
 		{
-			mov(ecx, int32(address));
+			set(ecx, int32(address));
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -622,11 +647,20 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
 
+		auto&& op_rt = get_register_op32(rt);
+
 		const Xbyak::Label not_within;
 
 		inc(rdi);
-		mov(eax, get_register_op32(rt));
-		add(eax, offset);
+		if (op_rt.isREG())
+		{
+			lea(eax, dword[op_rt.as_reg() + offset]);
+		}
+		else
+		{
+			mov(eax, op_rt);
+			add(eax, offset);
+		}
 
 		mov(ecx, eax);
 		and_(ecx, ~(jit1::ChunkSize - 1));
@@ -634,17 +668,25 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		jne(not_within, T_SHORT);
 		and_(eax, (jit1::ChunkSize - 1));
 
-		mov(rcx, uint64(chunk_offset.data()));
-		mov(eax, dword[rcx + rax]);
-		mov(rcx, intrinsics_.chunk_start);
-		add(rax, rcx);
+		mov(eax, dword[rax + uintptr(chunk_offset.data())]);
+		auto&& chunk_start = intrinsics_.chunk_start.get();
+		if (chunk_start.getAddress())
+		{
+			lea(rax, dword[rax + uintptr(chunk_start.getAddress())]);
+		}
+		else 
+		{
+			// xbyak cannot handle `lea` with an unaddressed label
+			mov(rcx, intrinsics_.chunk_start);
+			add(rax, rcx);
+		}
 		
 		jmp(rax);
 		L(not_within);
 
 		mov(rdx, rax);
-		mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-		mov(rcx, uint64(&jit_));
+		mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+		mov(rcx, uintptr(&jit_));
 		call(rax);
 		
 		jmp(rax);
@@ -654,13 +696,23 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
 		const uint32 link_address = address + 4;
-		mov(get_register_op32(r31), link_address);	// set link
+
+		auto&& op_rt = get_register_op32(rt);
+
+		set(op_r31, link_address);	// set link
 
 		const Xbyak::Label not_within;
 
 		inc(rdi);
-		mov(eax, get_register_op32(rt));
-		add(eax, offset);
+		if (op_rt.isREG())
+		{
+			lea(eax, dword[op_rt.as_reg() + offset]);
+		}
+		else
+		{
+			mov(eax, op_rt);
+			add(eax, offset);
+		}
 
 		mov(ecx, eax);
 		and_(ecx, ~(jit1::ChunkSize - 1));
@@ -668,17 +720,25 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 		jne(not_within, T_SHORT);
 		and_(eax, (jit1::ChunkSize - 1));
 
-		mov(rcx, uint64(chunk_offset.data()));
-		mov(eax, dword[rcx + rax]);
-		mov(rcx, intrinsics_.chunk_start);
-		add(rax, rcx);
+		mov(eax, dword[rax + uintptr(chunk_offset.data())]);
+		auto&& chunk_start = intrinsics_.chunk_start.get();
+		if (chunk_start.getAddress())
+		{
+			lea(rax, dword[rax + uintptr(chunk_start.getAddress())]);
+		}
+		else 
+		{
+			// xbyak cannot handle `lea` with an unaddressed label
+			mov(rcx, intrinsics_.chunk_start);
+			add(rax, rcx);
+		}
 		
 		jmp(rax);
 		L(not_within);
 
 		mov(rdx, rax);
-		mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-		mov(rcx, uint64(&jit_));
+		mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+		mov(rcx, uintptr(&jit_));
 		call(rax);
 		
 		jmp(rax);
