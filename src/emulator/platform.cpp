@@ -4,12 +4,15 @@
 #include <Windows.h>
 #include <PowrProf.h>
 
+#include <limits>
+#include <memory>
+
 #include "platform.hpp"
 
 
-using namespace mips::platform;
+using namespace vemips::platform;
 
-uint64 mips::platform::get_host_frequency() {
+uint64 vemips::platform::get_host_frequency() {
 	// ReSharper disable CppInconsistentNaming
 	struct PROCESSOR_POWER_INFORMATION final {
 		ULONG Number;
@@ -42,4 +45,26 @@ uint64 mips::platform::get_host_frequency() {
 	// TODO : Also set the max performance state temporarily.
 
 	return power_info[0].MaxMhz;
+}
+
+void vemips::platform::set_process_high_priority()
+{
+	const HANDLE process = GetCurrentProcess();
+
+	SetPriorityClass(process, HIGH_PRIORITY_CLASS);
+	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+	ULONG_PTR process_affinity, system_affinity;
+	if (
+		const BOOL result = GetProcessAffinityMask(
+			process,
+			&process_affinity,
+			&system_affinity
+		);
+		result != FALSE && process_affinity != 1
+	) {
+		// stop the process from being placed onto the first CPU
+		process_affinity &= ~1ull;
+		SetProcessAffinityMask(process, process_affinity);
+		Yield();
+	}
 }

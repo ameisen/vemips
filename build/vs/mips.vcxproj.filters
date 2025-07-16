@@ -59,6 +59,9 @@
     <ClInclude Include="..\..\src\mips\processor\processor_support.hpp">
       <Filter>processor</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\jit.hpp">
+      <Filter>processor\jit</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\mips\pch.cpp" />

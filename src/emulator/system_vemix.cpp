@@ -1,12 +1,14 @@
 #include "pch.hpp"
 
+#include "fmt/format.h"
+
 #include "system_vemix.hpp"
 
 #include "../../vemips_sdk/MIPS_SDK/include/bits/syscall.h"
 #include "mips/system.hpp"
 
 
-using namespace mips;
+using namespace vemips;
 
 namespace {
 	enum class map_bits : uint32 {
@@ -50,8 +52,8 @@ void system_vemix::clock(const uint64 clocks) __restrict {
 	system::clock(clocks);
 }
 
-uint32 system_vemix::handle_exception(const CPU_Exception & __restrict ex) {
-	if (ex.m_ExceptionType == CPU_Exception::Type::Sys) [[likely]] {
+uint32 system_vemix::handle_exception(const mips::CPU_Exception & __restrict ex) {
+	if (ex.m_ExceptionType == mips::CPU_Exception::Type::Sys) [[likely]] {
 		return handle_syscall(ex);
 	}
 	else {
@@ -69,9 +71,9 @@ void system_vemix::set_syscall_result(const bool success, const uint32 result)
 }
 
 _forceinline
-uint32 system_vemix::handle_syscall(const CPU_Exception & __restrict ex) {
+uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 	xassert(processor_ != nullptr);
-	xassert(ex.m_ExceptionType == CPU_Exception::Type::Sys);
+	xassert(ex.m_ExceptionType == mips::CPU_Exception::Type::Sys);
 
 	// handle system call
 
@@ -116,10 +118,10 @@ uint32 system_vemix::handle_syscall(const CPU_Exception & __restrict ex) {
 				processor_->get_register<uint32>(reg++),
 				processor_->get_register<uint32>(reg++),
 				processor_->get_register<uint32>(reg++),
-				processor_->get_register<uint32>(reg++),
+				processor_->get_register<uint32>(reg  ),
 			};
 
-			std::printf("debug: [%08X, %08X, %08X, %08X, %08X]\n", args[0], args[1], args[2], args[3], args[4]);
+			fmt::println("debug: [{:08X}, {:08X}, {:08X}, {:08X}, {:08X}]", args[0], args[1], args[2], args[3], args[4]);
 
 			set_syscall_result(true, 0);
 		} break;
@@ -189,7 +191,7 @@ uint32 system_vemix::handle_syscall(const CPU_Exception & __restrict ex) {
 			// do nothing substantial for now, though we do need to actually handle this.
 			set_syscall_result(false, ENOSYS);
 		} break;
-		case __NR_writev: {
+		case __NR_writev: [[likely]] {
 			const uint32 fd = processor_->get_register<uint32>(4);
 			const uint32 iov = processor_->get_register<uint32>(5);
 			const uint32 iovcnt = processor_->get_register<uint32>(6);
@@ -240,7 +242,7 @@ uint32 system_vemix::handle_syscall(const CPU_Exception & __restrict ex) {
 						faulted = true;
 						break;
 					}
-					std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
+					std::ignore = std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
 				}
 
 				for (; offset < _iovec.iov_len; ++offset)
@@ -252,7 +254,7 @@ uint32 system_vemix::handle_syscall(const CPU_Exception & __restrict ex) {
 						faulted = true;
 						break;
 					}
-					std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
+					std::ignore = std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
 				}
 
 
@@ -307,10 +309,10 @@ uint32 system_vemix::handle_syscall(const CPU_Exception & __restrict ex) {
 		case __NR_exit:
 			execution_success_ = true;
 			execution_complete_ = true;
-			if (processor_->get_jit_type() != JitType::None) {
+			if (processor_->get_jit_type() != mips::JitType::None) {
 				return 1;
 			}
-			throw ExecutionCompleteException();
+			throw mips::ExecutionCompleteException();
 			break;
 		case __NR_set_thread_area:
 			// m_user_value
@@ -349,79 +351,82 @@ uint32 system_vemix::handle_unknown_syscall(const uint32 code, const uint32 addr
 	fmt::println("** Unknown System Call Code: {} @ 0x{:08X}", code, address);
 	execution_success_ = false;
 	execution_complete_ = true;
-	if (processor_->get_jit_type() != JitType::None) [[likely]]
+	if (processor_->get_jit_type() != mips::JitType::None) [[likely]]
 	{
 		return 1;
 	}
-	throw ExecutionFailException();
+	throw mips::ExecutionFailException();
 }
 _pragma_default_code
 
 _pragma_small_code
 _noinline _cold
-uint32 system_vemix::handle_sys_exception(const CPU_Exception & __restrict ex) {
-	xassert(ex.m_ExceptionType != CPU_Exception::Type::Sys);
+uint32 system_vemix::handle_sys_exception(const mips::CPU_Exception & __restrict ex) {
+	xassert(ex.m_ExceptionType != mips::CPU_Exception::Type::Sys);
 
-	const char * __restrict ex_name = "";
+	const char * __restrict ex_name = nullptr;
 	switch (ex.m_ExceptionType) {
-		case CPU_Exception::Type::Interrupt:
+		using enum mips::CPU_Exception::Type;
+		case Interrupt:
 			ex_name = "Interrupt"; break;
-		case CPU_Exception::Type::Mod:
+		case Mod:
 			ex_name = "Mod"; break;
-		case CPU_Exception::Type::TLBL:
+		case TLBL:
 			ex_name = "TLBL"; break;
-		case CPU_Exception::Type::TLBS:
+		case TLBS:
 			ex_name = "TLBS"; break;
-		case CPU_Exception::Type::AdEL:
+		case AdEL: [[likely]]
 			fmt::println("** Unhandled Address Load CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
-			throw ExecutionFailException();
-		case CPU_Exception::Type::AdES:
+			throw mips::ExecutionFailException();
+		case AdES: [[likely]]
 			fmt::println("** Unhandled Address Store CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
-			throw ExecutionFailException();
-		case CPU_Exception::Type::IBE:
+			throw mips::ExecutionFailException();
+		case IBE:
 			ex_name = "IBE"; break;
-		case CPU_Exception::Type::DBE:
+		case DBE:
 			ex_name = "DBE"; break;
-		case CPU_Exception::Type::Sys:
+		case Sys:
 			ex_name = "Sys"; break;
-		case CPU_Exception::Type::Bp:
+		case Bp:
 			ex_name = "Bp"; break;
-		case CPU_Exception::Type::RI:
+		case RI: [[likely]]
 			ex_name = "RI"; break;
-		case CPU_Exception::Type::CpU:
+		case CpU:
 			ex_name = "CpU"; break;
-		case CPU_Exception::Type::Ov:
+		case Ov:
 			ex_name = "Ov"; break;
-		case CPU_Exception::Type::Tr:
+		case Tr:
 			ex_name = "TR"; break;
-		case CPU_Exception::Type::FPE:
+		case FPE:
 			ex_name = "FPE"; break;
-		case CPU_Exception::Type::Impl1:
+		case Impl1:
 			ex_name = "Impl1"; break;
-		case CPU_Exception::Type::Impl2:
+		case Impl2:
 			ex_name = "Impl2"; break;
-		case CPU_Exception::Type::C2E:
+		case C2E:
 			ex_name = "C2E"; break;
-		case CPU_Exception::Type::TLBRI:
+		case TLBRI:
 			ex_name = "TLBRI"; break;
-		case CPU_Exception::Type::TLBXI:
+		case TLBXI:
 			ex_name = "TLBXI"; break;
-		case CPU_Exception::Type::MDMX:
+		case MDMX:
 			ex_name = "MDMX"; break;
-		case CPU_Exception::Type::WATCH:
+		case WATCH:
 			ex_name = "WATCH"; break;
-		case CPU_Exception::Type::MCheck:
+		case MCheck:
 			ex_name = "MCheck"; break;
-		case CPU_Exception::Type::Thread:
+		case Thread:
 			ex_name = "Thread"; break;
-		case CPU_Exception::Type::DPSPDis:
+		case DPSPDis:
 			ex_name = "DPSPDis"; break;
-		case CPU_Exception::Type::GE:
+		case GE:
 			ex_name = "GE"; break;
-		case CPU_Exception::Type::Prot:
+		case Prot:
 			ex_name = "Prot"; break;
-		case CPU_Exception::Type::CacheErr:
+		case CacheErr:
 			ex_name = "CacheErr"; break;
+		default: [[unlikely]]
+			ex_name = "Unknown"; break;
 	}
 
 	execution_success_ = false;
@@ -431,6 +436,6 @@ uint32 system_vemix::handle_sys_exception(const CPU_Exception & __restrict ex) {
 	}
 
 	fmt::println("** Unhandled {} CPU Exception: {:X} @ 0x{:08X}", ex_name, ex.m_Code, ex.m_InstructionAddress);
-	throw ExecutionFailException();
+	throw mips::ExecutionFailException();
 }
 _pragma_default_code

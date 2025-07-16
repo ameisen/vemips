@@ -13,6 +13,7 @@
 #include <map>
 
 #include "coprocessor/coprocessor.hpp"
+#include "jit/jit.hpp"
 #include "mips/mmu.hpp"
 
 // TODO : doesn't handle wraparound address properly.
@@ -23,12 +24,6 @@ namespace mips::instructions {
 
 class CodeGen;
 namespace mips {
-	enum class JitType : uint32 {
-		None,
-		Jit,
-		FunctionTable
-	};
-
 	class system;
 	class jit1;
 	class coprocessor;

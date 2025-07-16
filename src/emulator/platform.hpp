@@ -3,7 +3,8 @@
 #include "common.hpp"
 
 
-namespace mips::platform
+namespace vemips::platform
 {
 	uint64 get_host_frequency();
+	void set_process_high_priority();
 }

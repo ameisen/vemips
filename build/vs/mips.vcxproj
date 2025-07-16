@@ -325,6 +325,7 @@
     <ClInclude Include="..\..\src\mips\platform\platform.hpp" />
     <ClInclude Include="..\..\src\mips\platform\win32\host_mmu.hpp" />
     <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\jit.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\codegen.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit2\jit2.hpp" />
