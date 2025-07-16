@@ -176,7 +176,7 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 			cg.mov(cg.dword[cg.rbp + flags_offset], cg.ebx);
 			cg.mov(cg.dword[cg.rbp + dbt_offset], cg.esi);  // set it in the interpreter
 			cg.mov(cg.dword[cg.rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], cg.r15d);
-			cg.mov(cg.rax, int64(jit1_drop_signal));
+			cg.mov(cg.rax, intptr(jit1_drop_signal));
 			cg.jmp(cg.rax);
 		}
 
@@ -304,10 +304,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		
 		if (this_processor.ticked_ && this_processor.debugging_)
 		{
-			mov(rax, int64(&should_debug_break));
+			mov(rax, intptr(&should_debug_break));
 			mov(dword[rbp + pc_offset], int32(current_address));
-			mov(rcx, rbp);
-			add(rcx, -128);
+			lea(rcx, qword[rbp - 128]);
 			call(rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
@@ -316,10 +315,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 		else if (this_processor.debugging_)
 		{
-			mov(rax, int64(&should_debug_break));
+			mov(rax, intptr(&should_debug_break));
 			mov(dword[rbp + pc_offset], int32(current_address));
-			mov(rcx, rbp);
-			add(rcx, -128);
+			lea(rcx, qword[rbp - 128]);
 			call(rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
@@ -364,7 +362,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					if (this_processor.collect_stats_)
 					{
 						// dispatch a stat call.
-						mov(rcx, int64(instruction_info_ptr->Name));
+						set(rcx, intptr(instruction_info_ptr->Name));
 						call(intrinsics_.stats);
 					}
 
@@ -380,7 +378,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 							test(ebx, processor::flag::no_cti);
 							jz(no_ex);
-							mov(ecx, int32(current_address));
+							set(ecx, int32(current_address));
 							jmp(intrinsics_.ri, T_NEAR);
 							L(no_ex);
 						}
@@ -411,7 +409,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							if (this_processor.collect_stats_)
 							{
 								// dispatch a stat call.
-								mov(rcx, int64(instruction_info_ptr->Name));
+								set(rcx, intptr(instruction_info_ptr->Name));
 								call(intrinsics_.stats);
 							}
 							insert_procedure_ecx(current_address, uint64(instruction_info_ptr->Proc), instruction, *instruction_info_ptr);
@@ -431,7 +429,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							if (this_processor.collect_stats_)
 							{
 								// dispatch a stat call.
-								mov(rcx, int64(instruction_info_ptr->Name));
+								set(rcx, intptr(instruction_info_ptr->Name));
 								call(intrinsics_.stats);
 							}
 
@@ -692,7 +690,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 						if (this_processor.collect_stats_)
 						{
 							// dispatch a stat call.
-							mov(rcx, int64(instruction_info_ptr->Name));
+							set(rcx, intptr(instruction_info_ptr->Name));
 							call(intrinsics_.stats);
 						}
 
@@ -834,16 +832,24 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				jne(not_within);
 				and_(eax, (jit1::ChunkSize - 1));
 
-				mov(rcx, uint64(chunk_offset.data()));
-				mov(eax, dword[rcx + rax]);
-				mov(rcx, intrinsics_.chunk_start);
-				add(rax, rcx);
+				mov(eax, dword[rax + uintptr(chunk_offset.data())]);
+				auto&& chunk_start = intrinsics_.chunk_start.get();
+				if (chunk_start.getAddress())
+				{
+					lea(rax, dword[rax + uintptr(chunk_start.getAddress())]);
+				}
+				else 
+				{
+					// xbyak cannot handle `lea` with an unaddressed label
+					mov(rcx, intrinsics_.chunk_start);
+					add(rax, rcx);
+				}
 				jmp(rax);
 				L(not_within);
 
 				mov(rdx, rax);
-				mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-				mov(rcx, uint64(&jit_));
+				mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+				mov(rcx, uintptr(&jit_));
 				call(rax);
 				jmp(rax);
 				L(no_change);
@@ -867,6 +873,27 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		start_address += 4;
 	}
 
+	const auto write_edx_to_patch_target = [this](uint32& target)
+	{
+		intptr patch_target_address = intptr(&target);
+		if (
+			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
+			patch_target_address <= intptr(std::numeric_limits<int32>::max())
+		)
+		{
+			// xbyak cannot handle this sequence properly
+			// mov dword ptr [ds:patch_target_address], edx
+
+			db(0x89, 0x14, 0x25);
+			dd(uint32(patch_target_address));
+		}
+		else
+		{
+			mov(rcx, patch_target_address);
+			mov(dword[rcx], edx);
+		}
+	};
+
 	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
@@ -887,8 +914,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			dw(patch_suffix);         // jmp    rax
 		}
 
-		mov(rcx, int64(&patch_target));
-		mov(dword[rcx], edx);
+		write_edx_to_patch_target(patch_target);
 
 		return patch;
 	};
@@ -897,22 +923,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	{
 		auto &patch_pair = chunk.m_patches->back();
 		uint32 &patch_target = patch_pair.target;
-		intptr patch_target_address = intptr(&patch_target);
-		if (
-			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
-			patch_target_address <= intptr(std::numeric_limits<int32>::max())
-		)
-		{
-			// xbyak cannot handle this sequence properly
-			// mov dword ptr [ds:patch_target_address], edx
-			db(0x89, 0x14, 0x25);
-			dd(uint32(patch_target_address));
-		}
-		else
-		{
-			mov(rcx, int64(&patch_target));
-			mov(dword[rcx], edx);
-		}
+		write_edx_to_patch_target(patch_target);
 	};
 
 	const auto patch_epilog = [&](const Xbyak::Label &patch)
@@ -928,13 +939,13 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 	const auto patch = patch_preprolog(jit_.fetch_instruction(uint32(last_address + 1)));
 
-	mov(edx, uint32(last_address + 1));
+	set(edx, uint32(last_address + 1));
 
 	patch_prolog();
 
 	mov(dword[rbp + pc_offset], edx);
-	mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-	mov(rcx, uint64(&jit_));
+	set(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+	set(rcx, uintptr(&jit_));
 	call(rax);
 
 	patch_epilog(patch);
@@ -948,31 +959,31 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 		if (intrinsics_.ri.used) {
 			L(intrinsics_.ri);
-			mov(rax, uintptr(RI_Exception));
+			set(rax, uintptr(RI_Exception));
 			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.adel.used) {
 			L(intrinsics_.adel);
-			mov(rax, uintptr(AdEL_Exception));
+			set(rax, uintptr(AdEL_Exception));
 			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.ades.used) {
 			L(intrinsics_.ades);
-			mov(rax, uintptr(AdES_Exception));
+			set(rax, uintptr(AdES_Exception));
 			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.ov.used) {
 			L(intrinsics_.ov);
-			mov(rax, uintptr(OV_Exception));
+			set(rax, uintptr(OV_Exception));
 			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (intrinsics_.tr.used) {
 			L(intrinsics_.tr);
-			mov(rax, uintptr(TR_Exception));
+			set(rax, uintptr(TR_Exception));
 			mov(dword[rbp + pc_offset], ecx);
 			mov(ecx, edx);
 			jmp(intrinsic_ex_no_pc, T_SHORT);
@@ -985,8 +996,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			}
 			L(intrinsic_ex_no_pc);
 			call(save);
-			mov(rdx, rbp);
-			add(rdx, -128);
+			lea(rdx, qword[rbp - 128]);
 			add(rsp, 40);
 			jmp(rax);
 		}
@@ -1025,9 +1035,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			// dispatch a stat call.
 			if (intrinsics_.stats.used) {
 				L(intrinsics_.stats);
-				set(rax, uint64(increment_instruction_statistic));
-				mov(rdx, rbp);
-				add(rdx, -128);
+				set(rax, uintptr(increment_instruction_statistic));
+				lea(rdx, qword[rbp - 128]);
 				sub(rsp, 40);
 				call(rax);
 				add(rsp, 40);
@@ -1036,9 +1045,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 			if (intrinsics_.emulated_stats.used) {
 				L(intrinsics_.emulated_stats);
-				set(rax, uint64(increment_jit_emulated_instruction_statistic));
-				mov(rdx, rbp);
-				add(rdx, -128);
+				set(rax, uintptr(increment_jit_emulated_instruction_statistic));
+				lea(rdx, qword[rbp - 128]);
 				sub(rsp, 40);
 				call(rax);
 				add(rsp, 40);

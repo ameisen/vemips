@@ -10,6 +10,7 @@
 
 using namespace mips;
 
+#pragma region Boilerplate
 #define ProcInstructionDef(InsInstruction, InsOperFlags, InsOpMask, InsOpRef)																	  \
 struct PROC_ ## InsInstruction																																	 \
 {																																											\
@@ -99,9 +100,21 @@ namespace mips::instructions
 				//}
 
 				InsT::SubExecute(instruction, processor, coprocessor);
+
+				if constexpr ((InsT::Flags & OpFlags::WritesGPRegister) == OpFlags::WritesGPRegister)
+				{
+					// Clear zero register
+					processor.set_register(0, 0U);
+				}
 			}
 			catch (const CPU_Exception &ex)
 			{
+				if constexpr ((InsT::Flags & OpFlags::WritesGPRegister) == OpFlags::WritesGPRegister)
+				{
+					// Clear zero register
+					processor.set_register(0, 0U);
+				}
+
 				if (processor.get_jit_type() == JitType::Jit) [[likely]]
 				{
 					processor.set_trapped_exception(ex);
@@ -120,10 +133,11 @@ namespace mips::instructions
 			return true;
 		}
 	};
+	#pragma endregion Boilerplate
 
 	ProcInstructionDef(
 		ADD,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -133,7 +147,7 @@ namespace mips::instructions
 		GPRegister<11, 5> rd(instruction, processor);
 
 		const int64 result = int64(rs.value<int32>()) + rt.value<int32>();
-		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
+		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
@@ -145,7 +159,7 @@ namespace mips::instructions
 	/*
 	ProcInstructionDef(
 		ADDI,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00100000000000000000000000000000
 	) (const instruction_t instruction, processor& __restrict processor, coprocessor1& __restrict)
@@ -155,7 +169,7 @@ namespace mips::instructions
 		const int32 immediate = TinyInt<16>(instruction).sextend<int32>();
 
 		const int64 result = int64(rs.value<int32>()) + immediate;
-		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
+		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
@@ -166,7 +180,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ADDIU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00100100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -182,7 +196,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		MOVE,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000001111111111111111,
 		0b00100100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -197,7 +211,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ADDIUPC,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000110000000000000000000,
 		0b11101100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -212,7 +226,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ADDU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -227,7 +241,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ALIGN,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011100111111,
 		0b01111100000000000000001000100000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -243,7 +257,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ALUIPC,
-		(OpFlags::None),
+		(OpFlags::WritesGPRegister),
 		0b11111100000111110000000000000000,
 		0b11101100000111110000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -257,7 +271,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		AND,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -272,7 +286,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ANDI,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00110000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -287,7 +301,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		AUI,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00111100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -302,7 +316,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		AUIPC,
-		(OpFlags::None),
+		(OpFlags::WritesGPRegister),
 		0b11111100000111110000000000000000,
 		0b11101100000111100000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -371,7 +385,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BEQ,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b00010000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -396,7 +410,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BGEZ,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000111110000000000000000,
 		0b00000100000000010000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -420,7 +434,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BLEZALC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111111111000000000000000000000,
 		0b00011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -429,7 +443,7 @@ namespace mips::instructions
 		const int32 offset = TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 pc = processor.get_program_counter();
 		
-		if (rt.get_register() != 0) // BLEZALC
+		if (rt.get_register() != 0) [[likely]] // BLEZALC
 		{
 			processor.set_link(pc + 4);
 			if (rt.value<int32>() <= 0)
@@ -442,7 +456,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -452,7 +466,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP06,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b00011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -487,7 +501,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -497,7 +511,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BGTZALC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111111111000000000000000000000,
 		0b00011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -506,7 +520,7 @@ namespace mips::instructions
 		const int32 offset = TinyInt<18>(instruction << 2).sextend<int32>();
 		const uint32 pc = processor.get_program_counter();
 		
-		if (!rt.is_zero()) // BGTZALC
+		if (!rt.is_zero()) [[likely]] // BGTZALC
 		{
 			processor.set_link(pc + 4);
 			if (rt.value<int32>() > 0)
@@ -519,7 +533,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -529,7 +543,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP07,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b00011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -564,7 +578,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -574,7 +588,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP10,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b00100000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -624,7 +638,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -634,7 +648,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP30,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b01100000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -684,7 +698,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -694,7 +708,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BLEZC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111111111000000000000000000000,
 		0b01011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -715,7 +729,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -725,7 +739,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP26,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b01011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -759,7 +773,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -769,7 +783,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BGTZC,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111111111000000000000000000000,
 		0b01011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -790,7 +804,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -800,7 +814,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		POP27,
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b01011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -834,7 +848,7 @@ namespace mips::instructions
 				processor.set_no_cti();
 			}
 		}
-		else
+		else [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::RI, processor.get_program_counter() );
 		}
@@ -844,7 +858,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BEQZC, // POP66 where rs != 0
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b11011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -868,7 +882,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		JIC, // PO66 where rs == 0
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::ReadsGPRegister),
 		0b11111111111000000000000000000000,
 		0b11011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -885,7 +899,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BNEZC, // POP76 where rs != 0
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b11111000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -909,7 +923,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		JIALC, // POP76 where rs == 0
-		(OpFlags::ControlInstruction | OpFlags::CompactBranch),
+		(OpFlags::ControlInstruction | OpFlags::CompactBranch | OpFlags::ReadsGPRegister),
 		0b11111111111000000000000000000000,
 		0b11111000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -928,7 +942,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BGTZ,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000111110000000000000000,
 		0b00011100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -952,7 +966,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BITSWAP,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000011111111111,
 		0b01111100000000000000000000100000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -985,7 +999,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BLEZ,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000111110000000000000000,
 		0b00011000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1009,7 +1023,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BLTZ,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000111110000000000000000,
 		0b00000100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1033,7 +1047,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		BNE,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b00010100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1070,7 +1084,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		CACHE,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000100101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1088,7 +1102,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		CACHEE,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1106,7 +1120,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		CLO,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000111110000011111111111,
 		0b00000000000000000000000001100001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1114,23 +1128,16 @@ namespace mips::instructions
 		const GPRegister<21, 5> rs(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
-		uint32 ones = 32;
 		const uint32 source = rs.value<uint32>();
-		for (int i = 31; i >= 0; --i)
-		{
-			if (((source >> i) & 1) == 0)
-			{
-				ones = 31 - i;
-				break;
-			}
-		}
+
+		const uint32 ones = std::countr_one(source);
 
 		return write_result<>(rd, ones);
 	}
 
 	ProcInstructionDef(
 		CLZ,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000111110000011111111111,
 		0b00000000000000000000000001010000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1138,23 +1145,16 @@ namespace mips::instructions
 		const GPRegister<21, 5> rs(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
-		uint32 zeroes = 32;
 		const uint32 source = rs.value<uint32>();
-		for (int i = 31; i >= 0; --i)
-		{
-			if (((source >> i) & 1) != 0)
-			{
-				zeroes = 31 - i;
-				break;
-			}
-		}
+
+		const uint32 zeroes = std::countr_zero(source);
 
 		return write_result<>(rd, zeroes);
 	}
 
 	ProcInstructionDef(
 		DIV,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000010011010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1163,7 +1163,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
-		if (rt.value<int32>() == 0)
+		if (rt.value<int32>() == 0) [[unlikely]]
 		{
 			return write_result(rd, int32(0));  // UNPREDICTABLE
 		}
@@ -1175,7 +1175,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		MOD,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000011011010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1184,7 +1184,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
-		if (rt.value<int32>() == 0)
+		if (rt.value<int32>() == 0) [[unlikely]]
 		{
 			return write_result(rd, int32(0));  // UNPREDICTABLE
 		}
@@ -1196,7 +1196,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		DIVU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000010011011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1205,7 +1205,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
-		if (rt.value<uint32>() == 0)
+		if (rt.value<uint32>() == 0) [[unlikely]]
 		{
 			return write_result(rd, uint32(0));  // UNPREDICTABLE
 		}
@@ -1217,7 +1217,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		MODU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000011011011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1226,7 +1226,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
-		if (rt.value<uint32>() == 0)
+		if (rt.value<uint32>() == 0) [[unlikely]]
 		{
 			return write_result(rd, uint32(0));  // UNPREDICTABLE
 		}
@@ -1249,7 +1249,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		EXT,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000111111,
 		0b01111100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1259,7 +1259,7 @@ namespace mips::instructions
 		const uint32 msbd = TinyInt<5>(instruction >> 11).zextend<uint32>();
 		const uint32 lsb = TinyInt<5>(instruction >> 6).zextend<uint32>();
 
-		if (lsb + msbd > 31)
+		if (lsb + msbd > 31) [[unlikely]]
 		{
 			return write_result(rt, uint32(-1)); // UNPREDICTABLE
 		}
@@ -1273,7 +1273,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		INS,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000111111,
 		0b01111100000000000000000000000100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1283,7 +1283,7 @@ namespace mips::instructions
 		const uint32 msb = TinyInt<5>(instruction >> 11).zextend<uint32>();
 		const uint32 lsb = TinyInt<5>(instruction >> 6).zextend<uint32>();
 
-		if (lsb > msb)
+		if (lsb > msb) [[unlikely]]
 		{
 			return write_result(rt, uint32(-1)); // UNPREDICTABLE
 		}
@@ -1335,7 +1335,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		JALR,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000111110000000000111111,
 		0b00000000000000000000000000001001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1351,7 +1351,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		JR,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
 		0b11111100000111111111100000111111,
 		0b00000000000000000000000000001001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1365,7 +1365,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LB,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b10000000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1383,7 +1383,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBE,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1401,7 +1401,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBU,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b10010000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1419,7 +1419,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBUE,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1437,7 +1437,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LH,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b10000100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1455,7 +1455,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHE,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1473,7 +1473,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHU,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b10010100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1491,7 +1491,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHUE,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1509,7 +1509,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LL,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1530,7 +1530,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLE,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1551,7 +1551,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLWP,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1574,7 +1574,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLWPE,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001101110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1597,7 +1597,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LSA,
-		(OpFlags::None),
+		( OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011100111111,
 		0b00000000000000000000000000000101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1614,7 +1614,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LW,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b10001100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1632,7 +1632,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LWE,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1650,7 +1650,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LWPC,
-		(OpFlags::Load | OpFlags::Throws),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000110000000000000000000,
 		0b11101100000010000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1667,7 +1667,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		MUL,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000010011000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1683,7 +1683,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		MUH,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000011011000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1699,7 +1699,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		MULU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000010011001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1715,7 +1715,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		MUHU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000011011001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1754,7 +1754,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		NOR,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1770,7 +1770,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		OR,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1786,7 +1786,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ORI,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00110100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1813,7 +1813,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		PREF,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000110101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1830,7 +1830,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		PREFE,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000100011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1847,7 +1847,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		RDHWR,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000011000111111,
 		0b01111100000000000000000000111011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1865,6 +1865,8 @@ namespace mips::instructions
 				return write_result(rt, 0x100ul);
 			case (0ULL << 32) | 29U:
 				return write_result(rt, processor.user_value_);
+			default: [[unlikely]]
+				break;
 		}
 
 #pragma message("Implement when COP0 is finished")
@@ -1873,7 +1875,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ROTR, // specialization of SRL
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000000000111111,
 		0b00000000001000000000000000000010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1890,7 +1892,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		ROTRV, // specialization of SRLV
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000001000110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1908,7 +1910,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SB,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b10100000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1927,7 +1929,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SBE,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1946,7 +1948,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SC,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000100110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1969,7 +1971,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCE,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1992,7 +1994,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCWP,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001100110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2015,7 +2017,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCWPE,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001011110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2052,7 +2054,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SEB, // specialization of BSHFL
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000011111111111,
 		0b01111100000000000000010000100000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2067,7 +2069,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SEH, // specialization of BSHFL
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000011111111111,
 		0b01111100000000000000011000100000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2082,7 +2084,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SELEQZ,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000110101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2099,7 +2101,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SELNEZ,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000110111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2116,7 +2118,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SH,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b10100100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2135,7 +2137,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SHE,
-		(OpFlags::Store | OpFlags::Throws),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2166,7 +2168,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SLL,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000000000111111,
 		0b00000000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2182,7 +2184,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SLLV,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000000100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2199,7 +2201,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SLT,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000101010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2217,7 +2219,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SLTI,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00101000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2234,7 +2236,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SLTIU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00101100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2251,7 +2253,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SLTU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000101011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2269,7 +2271,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SRA,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000000000111111,
 		0b00000000000000000000000000000011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2285,7 +2287,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SRAV,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000000111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2302,7 +2304,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SRL,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000000000111111,
 		0b00000000000000000000000000000010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2318,7 +2320,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SRLV,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000000110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2345,7 +2347,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SUB,
-		(OpFlags::Throws),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2355,7 +2357,7 @@ namespace mips::instructions
 		GPRegister<11, 5> rd(instruction, processor);
 
 		const int64 result = int64(rs.value<int32>()) - rt.value<int32>();
-		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min())
+		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
@@ -2365,7 +2367,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SUBU,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2382,7 +2384,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SW,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b10101100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2401,7 +2403,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SWE,
-		(OpFlags::Store),
+		(OpFlags::Store | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2431,7 +2433,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SYNCI,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister),
 		0b11111100000111110000000000000000,
 		0b00000100000111110000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2461,7 +2463,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TEQ,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2470,7 +2472,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const uint32 code = TinyInt<10>(instruction >> 6).zextend<uint32>();
 
-		if (rs.value<int32>() == rt.value<int32>())
+		if (rs.value<int32>() == rt.value<int32>()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
@@ -2480,7 +2482,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TGE,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2489,7 +2491,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const uint32 code = TinyInt<10>(instruction >> 6).zextend<uint32>();
 
-		if (rs.value<int32>() >= rt.value<int32>())
+		if (rs.value<int32>() >= rt.value<int32>()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
@@ -2499,7 +2501,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TGEU,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2508,7 +2510,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const uint32 code = TinyInt<10>(instruction >> 6).zextend<uint32>();
 
-		if (rs.value<uint32>() >= rt.value<uint32>())
+		if (rs.value<uint32>() >= rt.value<uint32>()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
@@ -2518,7 +2520,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TLT,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110010
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2527,7 +2529,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const uint32 code = TinyInt<10>(instruction >> 6).zextend<uint32>();
 
-		if (rs.value<int32>() < rt.value<int32>())
+		if (rs.value<int32>() < rt.value<int32>()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
@@ -2537,7 +2539,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TLTU,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2546,7 +2548,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const uint32 code = TinyInt<10>(instruction >> 6).zextend<uint32>();
 
-		if (rs.value<uint32>() < rt.value<uint32>())
+		if (rs.value<uint32>() < rt.value<uint32>()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
@@ -2556,7 +2558,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		TNE,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000111111,
 		0b00000000000000000000000000110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2565,7 +2567,7 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const uint32 code = TinyInt<10>(instruction >> 6).zextend<uint32>();
 
-		if (rs.value<int32>() != rt.value<int32>())
+		if (rs.value<int32>() != rt.value<int32>()) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Tr, processor.get_program_counter(), code );
 		}
@@ -2575,7 +2577,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		WSBH,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111111111000000000011111111111,
 		0b01111100000000000000000010100000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2605,7 +2607,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		XOR,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000011111111111,
 		0b00000000000000000000000000100110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2621,7 +2623,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		XORI,
-		(OpFlags::None),
+		(OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
 		0b11111100000000000000000000000000,
 		0b00111000000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)

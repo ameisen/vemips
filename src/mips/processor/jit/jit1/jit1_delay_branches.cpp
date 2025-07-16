@@ -29,6 +29,8 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
 	const instructions::GPRegister<> r31 = {31U};
 
+	auto&& op_r31 = get_register_op32(r31);
+
 	const Xbyak::Label no_jump;
 
 	const auto set_cti_flag = [&]
@@ -60,7 +62,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		test(dword[r12 + ft_offset], 1); // ZF set to 1 if [ft] & 1 == 0
 		jnz(no_jump);
-		mov(esi, target_address);
+		set(esi, target_address);
 		or_(ebx, processor::flag::branch_delay);
 		L(no_jump);
 		set_cti_flag();
@@ -75,7 +77,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		const uint32 target_address = address + 4 + offset;
 		test(dword[r12 + ft_offset], 1); // ZF set to 1 if [ft] & 1 == 0
 		jz(no_jump);
-		mov(esi, target_address);
+		set(esi, target_address);
 		or_(ebx, processor::flag::branch_delay);
 		L(no_jump);
 		set_cti_flag();
@@ -87,8 +89,8 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		const uint32 target_address = address + 4 + immediate;
 		const uint32 link_address = address + 8;
 
-		mov(get_register_op32(r31), link_address);
-		mov(esi, target_address);
+		set(op_r31, link_address);
+		set(esi, target_address);
 		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BEQ))
@@ -97,30 +99,32 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		const uint32 target_address = address + 4 + immediate;
 
 		if (rs == rt)
 		{
-			mov(esi, target_address); // 0 == 0
+			set(esi, target_address); // 0 == 0
 			set_cti_delay_flag();
 		}
 		else
 		{
 			if (rs.is_zero())
 			{
-				cmp(get_register_op32(rt), 0);
+				cmp_ex(op_rt, 0);
 			}
 			else if (rt.is_zero())
 			{
-				cmp(get_register_op32(rs), 0);
+				cmp_ex(op_rs, 0);
 			}
 			else
 			{
-				mov(eax, get_register_op32(rs));
-				cmp(eax, get_register_op32(rt));
+				std::ignore = cmp_ex(op_rs, op_rt, eax);
 			}
 			jne(no_jump);
-			mov(esi, target_address);
+			set(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 			set_cti_flag();
@@ -133,16 +137,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		const uint32 target_address = address + 4 + immediate;
 
+		auto&& op_rs = get_register_op32(rs);
+
 		if (rs.is_zero()) // 0 >= 0
 		{
-			mov(esi, target_address);
+			set(esi, target_address);
 			set_cti_delay_flag();
 		}
 		else
 		{
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jl(no_jump);
-			mov(esi, target_address);
+			set(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 			set_cti_flag();
@@ -155,15 +161,17 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		const uint32 target_address = address + 4 + immediate;
 
+		auto&& op_rs = get_register_op32(rs);
+
 		if (rs.is_zero()) // 0 !> 0
 		{
 			//nop
 		}
 		else
 		{
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jle(no_jump);
-			mov(esi, target_address);
+			set(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
@@ -177,16 +185,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		const uint32 target_address = address + 4 + immediate;
 
+		auto&& op_rs = get_register_op32(rs);
+
 		if (rs.is_zero()) // 0 <= 0
 		{
-			mov(esi, target_address);
+			set(esi, target_address);
 			set_cti_delay_flag();
 		}
 		else
 		{
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jg(no_jump);
-			mov(esi, target_address);
+			set(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 
@@ -199,6 +209,8 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 
 		const uint32 target_address = address + 4 + immediate;
+		
+		auto&& op_rs = get_register_op32(rs);
 
 		if (rs.is_zero()) // 0 !< 0
 		{
@@ -206,9 +218,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		}
 		else
 		{
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jge(no_jump);
-			mov(esi, target_address);
+			set(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
@@ -223,6 +235,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		const uint32 target_address = address + 4 + immediate;
 
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rt = get_register_op32(rt);
+
 		if (rs == rt)
 		{
 			//nop
@@ -231,19 +246,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		{
 			if (rs.is_zero())
 			{
-				cmp(get_register_op32(rt), 0);
+				cmp_ex(op_rt, 0);
 			}
 			else if (rt.is_zero())
 			{
-				cmp(get_register_op32(rs), 0);
+				cmp_ex(op_rs, 0);
 			}
 			else
 			{
-				mov(eax, get_register_op32(rs));
-				cmp(eax, get_register_op32(rt));
+				std::ignore = cmp_ex(op_rs, op_rt, eax);
 			}
 			je(no_jump);
-			mov(esi, target_address);
+			set(esi, target_address);
 			or_(ebx, processor::flag::branch_delay);
 			L(no_jump);
 		}
@@ -256,7 +270,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		const uint32 target_address = (address & instructions::HighBits(4)) | instr_index;
 
-		mov(esi, target_address);
+		set(esi, target_address);
 		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JAL))
@@ -267,8 +281,8 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		const uint32 link_address = address + 8;
 
-		mov(get_register_op32(r31), link_address);
-		mov(esi, target_address);
+		set(op_r31, link_address);
+		set(esi, target_address);
 		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
@@ -278,19 +292,37 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 
 		const uint32 link_address = address + 8;
 
-		if (!rd.is_zero())
+		auto&& op_rs = get_register_op32(rs);
+		auto&& op_rd = get_register_op32(rd);
+
+		if (rs.is_zero()) [[unlikely]]
 		{
-			mov(get_register_op32(rd), link_address);
+			set(esi, 0);
 		}
-		mov(esi, get_register_op32(rs));
+		else
+		{
+			mov(esi, op_rs);
+		}
+		if (!rd.is_zero()) [[likely]]
+		{
+			set(op_rd, link_address);
+		}
 		set_cti_delay_flag();
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JR))
 	{
 		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
-		const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
-		mov(esi, get_register_op32(rs));
+		auto&& op_rs = get_register_op32(rs);
+
+		if (rs.is_zero()) [[unlikely]]
+		{
+			set(esi, 0);
+		}
+		else
+		{
+			mov(esi, op_rs);
+		}
 		set_cti_delay_flag();
 	}
 	else
@@ -326,6 +358,27 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
 	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
 
+	const auto write_edx_to_patch_target = [this](uint32& target)
+	{
+		intptr patch_target_address = intptr(&target);
+		if (
+			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
+			patch_target_address <= intptr(std::numeric_limits<int32>::max())
+		)
+		{
+			// xbyak cannot handle this sequence properly
+			// mov dword ptr [ds:patch_target_address], edx
+
+			db(0x89, 0x14, 0x25);
+			dd(uint32(patch_target_address));
+		}
+		else
+		{
+			mov(rcx, patch_target_address);
+			mov(dword[rcx], edx);
+		}
+	};
+
 	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
@@ -346,8 +399,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			dw(patch_suffix);
 		}
 
-		mov(rcx, int64(&patch_target));
-		mov(dword[rcx], edx);
+		write_edx_to_patch_target(patch_target);
 
 		return patch;
 	};
@@ -356,8 +408,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	{
 		auto &patch_pair = chunk.m_patches->back();
 		uint32 &patch_target = patch_pair.target;
-		mov(rcx, int64(&patch_target));
-		mov(dword[rcx], edx);
+		write_edx_to_patch_target(patch_target);
 	};
 
 	const auto patch_epilog = [&](const Xbyak::Label &patch)
@@ -609,12 +660,12 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			and_(ebx, ~processor::flag::branch_delay);
 			const auto patch = patch_preprolog(jit_.fetch_instruction(target_address));
 
-			mov(edx, target_address);
+			set(edx, target_address);
 
 			patch_prolog();
 
-			mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-			mov(rcx, uint64(&jit_));
+			set(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+			set(rcx, uintptr(&jit_));
 			call(rax);
 			patch_epilog(patch);
 			jmp(rax);
@@ -638,15 +689,23 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jne(not_within);
 			and_(eax, (jit1::ChunkSize - 1));
 
-			mov(rcx, uint64(chunk_offset.data()));
-			mov(eax, dword[rcx + rax]);
-			mov(rcx, intrinsics_.chunk_start);
-			add(rax, rcx);
+			mov(eax, dword[rax + uintptr(chunk_offset.data())]);
+			auto&& chunk_start = intrinsics_.chunk_start.get();
+			if (chunk_start.getAddress())
+			{
+				lea(rax, dword[rax + uintptr(chunk_start.getAddress())]);
+			}
+			else 
+			{
+				// xbyak cannot handle `lea` with an unaddressed label
+				mov(rcx, intrinsics_.chunk_start);
+				add(rax, rcx);
+			}
 			jmp(rax);
 			L(not_within);
 			mov(rdx, rax);
-			mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-			mov(rcx, uint64(&jit_));
+			set(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+			set(rcx, uintptr(&jit_));
 			call(rax);
 			jmp(rax);
 			L(no_branch);
@@ -657,8 +716,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
-			mov(eax, target_address);
-			mov(dword[rbp + pc_offset], eax);
+			mov(dword[rbp + pc_offset], target_address);
 
 			// what is the offset of the target address?
 			const uint32 target_offset = (target_address - chunk_begin) / 4u;
@@ -673,12 +731,11 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
-			mov(eax, target_address);
-			mov(dword[rbp + pc_offset], eax);
+			mov(edx, target_address);
+			mov(dword[rbp + pc_offset], edx);
 
-			mov(rdx, rax);
-			mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-			mov(rcx, uint64(&jit_));
+			mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+			mov(rcx, uintptr(&jit_));
 			call(rax);
 			jmp(rax);
 
@@ -701,15 +758,23 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jne(not_within);
 			and_(eax, (jit1::ChunkSize - 1));
 
-			mov(rcx, uint64(chunk_offset.data()));
-			mov(eax, dword[rcx + rax]);
-			mov(rcx, intrinsics_.chunk_start);
-			add(rax, rcx);
+			mov(eax, dword[rax + uintptr(chunk_offset.data())]);
+			auto&& chunk_start = intrinsics_.chunk_start.get();
+			if (chunk_start.getAddress())
+			{
+				lea(rax, dword[rax + uintptr(chunk_start.getAddress())]);
+			}
+			else 
+			{
+				// xbyak cannot handle `lea` with an unaddressed label
+				mov(rcx, intrinsics_.chunk_start);
+				add(rax, rcx);
+			}
 			jmp(rax);
 			L(not_within);
 			mov(rdx, rax);
-			mov(rax, std::bit_cast<uint64>(&jit1::get_instruction));
-			mov(rcx, uint64(&jit_));
+			mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
+			mov(rcx, uintptr(&jit_));
 			call(rax);
 			jmp(rax);
 			L(no_branch);

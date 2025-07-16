@@ -29,6 +29,27 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 
 	except_result exception_result = except_result::none;
 
+	const auto write_edx_to_patch_target = [this](uint32& target)
+	{
+		intptr patch_target_address = intptr(&target);
+		if (
+			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
+			patch_target_address <= intptr(std::numeric_limits<int32>::max())
+		)
+		{
+			// xbyak cannot handle this sequence properly
+			// mov dword ptr [ds:patch_target_address], edx
+
+			db(0x89, 0x14, 0x25);
+			dd(uint32(patch_target_address));
+		}
+		else
+		{
+			mov(rcx, patch_target_address);
+			mov(dword[rcx], edx);
+		}
+	};
+
 	const auto patch_preprolog = [&](auto patch_address) -> Xbyak::Label
 	{
 		// If execution gets past the chunk, we jump to the next chunk.
@@ -50,8 +71,7 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 			dw(patch_suffix);
 		}
 
-		mov(rcx, intptr(&patch_target));
-		mov(dword[rcx], edx);
+		write_edx_to_patch_target(patch_target);
 
 		return patch;
 	};
@@ -60,23 +80,7 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 	{
 		auto &patch_pair = chunk.m_patches->back();
 		uint32 &patch_target = patch_pair.target;
-		intptr patch_target_address = intptr(&patch_target);
-		if (
-			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
-			patch_target_address <= intptr(std::numeric_limits<int32>::max())
-		)
-		{
-			// xbyak cannot handle this sequence properly
-			// mov dword ptr [ds:patch_target_address], edx
-
-			db(0x89, 0x14, 0x25);
-			dd(uint32(patch_target_address));
-		}
-		else
-		{
-			mov(rcx, int64(&patch_target));
-			mov(dword[rcx], edx);
-		}
+		write_edx_to_patch_target(patch_target);
 	};
 
 	const auto patch_epilog = [&](const Xbyak::Label &patch)
@@ -747,7 +751,7 @@ std::pair<bool, Jit1_CodeGen::except_result> Jit1_CodeGen::write_compact_branch(
 	else
 	{
 		//terminate_instruction = true;
-		insert_procedure_ecx(address, uint64(instruction_info.Proc), instruction, instruction_info);
+		insert_procedure_ecx(address, uintptr(instruction_info.Proc), instruction, instruction_info);
 		exception_result = except_result::can_except;
 		return { true, exception_result };
 	}

@@ -37,3 +37,4 @@
 [submodule "ext/xbyak"]
 	path = ext/xbyak
 	url = https://github.com/vemips/xbyak.git
+	branch = vemips-7.27

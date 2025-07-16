@@ -29,21 +29,6 @@
     <ClInclude Include="..\..\src\mips\memory_source.hpp" />
     <ClInclude Include="..\..\src\mips\mips.hpp" />
     <ClInclude Include="..\..\src\mips\mips_common.hpp" />
-    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\avx_type.hpp">
-      <Filter>processor\jit\xbyak</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak.h">
-      <Filter>processor\jit\xbyak</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_bin2hex.h">
-      <Filter>processor\jit\xbyak</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_mnemonic.h">
-      <Filter>processor\jit\xbyak</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\mips\processor\jit\xbyak\xbyak_util.h">
-      <Filter>processor\jit\xbyak</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp">
       <Filter>processor\jit\jit1</Filter>
     </ClInclude>
@@ -147,9 +132,6 @@
     </Filter>
     <Filter Include="processor\jit\jit1">
       <UniqueIdentifier>{e7f77c18-3077-43e6-856b-2b153683671f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="processor\jit\xbyak">
-      <UniqueIdentifier>{5f325e9e-253e-426b-b045-90e8f3026194}</UniqueIdentifier>
     </Filter>
     <Filter Include="platform">
       <UniqueIdentifier>{2104b282-884e-4875-b2f4-0cec9ddcc66e}</UniqueIdentifier>

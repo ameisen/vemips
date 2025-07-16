@@ -45,7 +45,9 @@ namespace mips
 			SetNoCTI = (1U << 20),
 			Load = (1U << 21),
 			Store = (1U << 22),
-			COP1 = (1U << 23),
+			ReadsGPRegister = (1U << 23),
+			WritesGPRegister = (1U << 24),
+			COP1 = (1U << 25),
 		};
 
 		[[nodiscard]]

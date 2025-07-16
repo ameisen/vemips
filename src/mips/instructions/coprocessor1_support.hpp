@@ -37,21 +37,25 @@ namespace mips::instructions
 	constexpr uint32 ConvertSignalToPlatform(ExceptBits bits)
 	{
 #if FPU_EXCEPTION_SUPPORT
-		 if constexpr (
-			 uint32(ExceptBits::Inexact) == _EM_INEXACT &&
-			 uint32(ExceptBits::Underflow) == _EM_UNDERFLOW &&
-			 uint32(ExceptBits::Overflow) == _EM_OVERFLOW &&
-			 uint32(ExceptBits::DivZero) == _EM_ZERODIVIDE &&
-			 uint32(ExceptBits::InvalidOp) == _EM_INVALID
-			)
-			 return uint32(bits);
-		 else
+		if constexpr (
+			uint32(ExceptBits::Inexact) == _EM_INEXACT &&
+			uint32(ExceptBits::Underflow) == _EM_UNDERFLOW &&
+			uint32(ExceptBits::Overflow) == _EM_OVERFLOW &&
+			uint32(ExceptBits::DivZero) == _EM_ZERODIVIDE &&
+			uint32(ExceptBits::InvalidOp) == _EM_INVALID
+		)
+		{
+			return uint32(bits);
+		}
+		else
+		{
 			return
-					(((uint32(bits) & uint32(ExceptBits::Inexact)) != 0) ? _EM_INEXACT : 0) |
-					(((uint32(bits) & uint32(ExceptBits::Underflow)) != 0) ? _EM_UNDERFLOW : 0) |
-					(((uint32(bits) & uint32(ExceptBits::Overflow)) != 0) ? _EM_OVERFLOW : 0) |
-					(((uint32(bits) & uint32(ExceptBits::DivZero)) != 0) ? _EM_ZERODIVIDE : 0) |
-					(((uint32(bits) & uint32(ExceptBits::InvalidOp)) != 0) ? _EM_INVALID : 0);
+				(((uint32(bits) & uint32(ExceptBits::Inexact)) != 0) ? _EM_INEXACT : 0) |
+				(((uint32(bits) & uint32(ExceptBits::Underflow)) != 0) ? _EM_UNDERFLOW : 0) |
+				(((uint32(bits) & uint32(ExceptBits::Overflow)) != 0) ? _EM_OVERFLOW : 0) |
+				(((uint32(bits) & uint32(ExceptBits::DivZero)) != 0) ? _EM_ZERODIVIDE : 0) |
+				(((uint32(bits) & uint32(ExceptBits::InvalidOp)) != 0) ? _EM_INVALID : 0);
+		}
 #else
 		return 0;
 #endif
@@ -200,6 +204,8 @@ namespace mips::instructions
 					{
 						return std::numeric_limits<F>::max();
 					}
+				default:
+					xunreachable("rounding mode does not exist");
 			}
 
 			xassert(false);
@@ -217,14 +223,14 @@ namespace mips::instructions
 		None = uint32(0)
 	};
 
-	constexpr FormatBits operator | (FormatBits a, FormatBits b)
+	constexpr FormatBits operator | (const FormatBits a, const FormatBits b)
 	{
-		return FormatBits(uint32(a) | uint32(b));
+		return FormatBits(std::to_underlying(a) | std::to_underlying(b));
 	}
 
-	constexpr FormatBits operator & (FormatBits a, FormatBits b)
+	constexpr FormatBits operator & (const FormatBits a, const FormatBits b)
 	{
-		return FormatBits(uint32(a) & uint32(b));
+		return FormatBits(std::to_underlying(a) & std::to_underlying(b));
 	}
 
 	// Returns a 'DenormalState' value based upon an instruction's flags.
@@ -237,7 +243,7 @@ namespace mips::instructions
 			DenormalState::None;
 	}
 
-	inline DenormalState GetDenormalStateFromFCSR(coprocessor1::FCSR state)
+	inline DenormalState GetDenormalStateFromFCSR(const coprocessor1::FCSR state)
 	{
 		return state.FlushZero ? DenormalState::Flush : DenormalState::Save;;
 	}
@@ -598,7 +604,7 @@ namespace mips::instructions
 	// TODO set cause bits
 
 	template <OpFlags Flags>
-	void throw_signal(uint32 exStatus)
+	void throw_signal(const uint32 exStatus)
 	{
 #if FPU_EXCEPTION_SUPPORT
 		if (uint32(Flags & OpFlags::Signals_All))
@@ -705,7 +711,7 @@ namespace mips::instructions
 	{
 #if FPU_EXCEPTION_SUPPORT
 		const uint32 exStatus = _statusfp();
-		if (!ScriptMode && exStatus & (_SW_INEXACT | _SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID))
+		if (!ScriptMode && exStatus & (_SW_INEXACT | _SW_UNDERFLOW | _SW_OVERFLOW | _SW_ZERODIVIDE | _SW_INVALID)) [[unlikely]]
 		{
 			throw_signal<Flags>(exStatus);
 
@@ -790,15 +796,27 @@ namespace mips::instructions
 				ScopedFloatDenormalState<ShouldSetDenormal> _denormalState{ denormalState };
 				ScopedFloatRoundingState<ShouldSetRounding> _roundState{ roundingState };
 
-				if (!ScriptMode && uint32(InsT::Flags & OpFlags::Signals_All))
+				if constexpr (!ScriptMode && uint32(InsT::Flags & OpFlags::Signals_All))
 				{
 					_clearfp();
 				}
 #endif
 				InsT::template SubExecute<format_t>(instruction, processor, coprocessor);
+
+				if constexpr ((InsT::Flags & OpFlags::WritesGPRegister) == OpFlags::WritesGPRegister)
+				{
+					// Clear zero register
+					processor.set_register(0, 0U);
+				}
 			}
 			catch (const CPU_Exception &ex)
 			{
+				if constexpr ((InsT::Flags & OpFlags::WritesGPRegister) == OpFlags::WritesGPRegister)
+				{
+					// Clear zero register
+					processor.set_register(0, 0U);
+				}
+
 				if (processor.get_jit_type() == JitType::Jit) [[likely]]
 				{
 					processor.set_trapped_exception(ex);

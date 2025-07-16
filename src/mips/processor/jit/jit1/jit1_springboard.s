@@ -18,8 +18,7 @@ unwind_stack:
 	ret
 
 jit1_drop_signal PROC
-	lea rsp, signal_sp
-	mov rsp, qword ptr rsp
+	mov rsp, qword ptr [signal_sp]
 	jmp unwind_stack
 jit1_drop_signal endp
 
@@ -44,8 +43,7 @@ jit1_springboard PROC
 	xor esi, esi
 	xor ebx, ebx
 	;xor ebp, ebp
-	mov rbp, rdx
-	sub rbp, -128 ; 136
+	lea rbp, qword ptr [rdx + 128]
 
 	; r9 = parameter pack struct.
 	mov r12, qword ptr [r9 + 0]

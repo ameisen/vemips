@@ -749,7 +749,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		CTC1,
-		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None),
+		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::ReadsGPRegister),
 		0b11111111111000000000011111111111,
 		0b01000100110000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -768,7 +768,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		CFC1,
-		(OpFlags::ClearsCause | OpFlags::Throws | OpFlags::Signals_All | OpFlags::Denorm_None | OpFlags::Round_None),
+		(OpFlags::ClearsCause | OpFlags::Throws | OpFlags::Signals_All | OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::WritesGPRegister),
 		0b11111111111000000000011111111111,
 		0b01000100010000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -785,7 +785,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		MTC1,
-		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None),
+		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::ReadsGPRegister),
 		0b11111111111000000000011111111111,
 		0b01000100100000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -802,7 +802,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		MFC1,
-		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None),
+		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::WritesGPRegister),
 		0b11111111111000000000011111111111,
 		0b01000100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -819,7 +819,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		MTHC1,
-		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None),
+		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::ReadsGPRegister),
 		0b11111111111000000000011111111111,
 		0b01000100111000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -836,7 +836,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		MFHC1,
-		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None),
+		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::WritesGPRegister),
 		0b11111111111000000000011111111111,
 		0b01000100011000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1152,7 +1152,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		LDC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b11010100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1175,7 +1175,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		LWC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b11000100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1198,7 +1198,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		SDC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b11110100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1220,7 +1220,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		SWC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store | OpFlags::ReadsGPRegister),
 		0b11111100000000000000000000000000,
 		0b11100100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }

@@ -161,6 +161,94 @@ namespace mips
 			return true;
 		}
 
+		// returns `true` if temporary register was used
+		[[nodiscard]]
+		bool movsx_ex(
+			const Xbyak::Operand& dst,
+			const Xbyak::Operand& src,
+			const Xbyak::Reg& tmp
+		)
+		{
+			if (dst.isREG())
+			{
+				movsx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
+				return false;
+			}
+
+			movsx(tmp, src);
+			mov(dst, tmp);
+
+			return true;
+		}
+
+		// returns `true` if temporary register was used
+		[[nodiscard]]
+		bool movsx_ex(
+			const Xbyak::Operand& dst,
+			const Xbyak::Operand& src,
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+		)
+		{
+			if (dst.isREG())
+			{
+				movsx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
+				return false;
+			}
+
+			spill_tmp(tmp);
+			movsx(tmp, src);
+			mov(dst, tmp);
+			restore_tmp(tmp);
+
+			return true;
+		}
+
+		// returns `true` if temporary register was used
+		[[nodiscard]]
+		bool movzx_ex(
+			const Xbyak::Operand& dst,
+			const Xbyak::Operand& src,
+			const Xbyak::Reg& tmp
+		)
+		{
+			if (dst.isREG())
+			{
+				movzx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
+				return false;
+			}
+
+			movzx(tmp, src);
+			mov(dst, tmp);
+
+			return true;
+		}
+
+		// returns `true` if temporary register was used
+		[[nodiscard]]
+		bool movzx_ex(
+			const Xbyak::Operand& dst,
+			const Xbyak::Operand& src,
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+		)
+		{
+			if (dst.isREG())
+			{
+				movzx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
+				return false;
+			}
+
+			spill_tmp(tmp);
+			movzx(tmp, src);
+			mov(dst, tmp);
+			restore_tmp(tmp);
+
+			return true;
+		}
+
 		void cmp_ex(const Xbyak::Operand& operand, const uint32 immediate)
 		{
 			if (operand.isREG() && immediate == 0)
@@ -473,7 +561,7 @@ namespace mips
 
 		void write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update);
 
-		void insert_procedure_ecx(uint32 address, uint64 procedure, uint32 _ecx, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void insert_procedure_ecx(uint32 address, uintptr procedure, uint32 _ecx, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		enum class except_result : uint32
 		{

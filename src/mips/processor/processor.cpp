@@ -266,7 +266,7 @@ _forceinline void processor::execute_internal(const uint64 clocks) {
 	const mips::system* const __restrict guest_system = debugging ? guest_system_ : nullptr;
 
 	while _likely(!ticked || instruction_count_ < target_instructions_) [[likely]] {
-		registers_[0] = 0; // $0 is _always_ 0
+		xassert(registers_[0] == 0); // $0 is _always_ 0
 		for (coprocessor* __restrict cop : coprocessors_) {
 			if (cop) {
 				cop->clock();
@@ -325,7 +325,7 @@ bool processor::execute_explicit(const instructions::InstructionInfo* instructio
 		return false;
 	}
 
-	registers_[0] = 0; // $0 is _always_ 0
+	xassert(registers_[0] == 0); // $0 is _always_ 0
 	for (coprocessor* __restrict cop : coprocessors_) {
 		if (cop) {
 			cop->clock();

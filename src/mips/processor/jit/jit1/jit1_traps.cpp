@@ -20,8 +20,10 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __r
 
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
+	auto&& op_rs = get_register_op32(rs);
+	auto&& op_rt = get_register_op32(rt);
+
 	// tr ? [rs] == [rt]
-	mov(eax, int32(code));
 	if (rs == rt) [[unlikely]] {
 		set(ecx, address);
 		set(edx, code);
@@ -36,17 +38,16 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TEQ(jit1::ChunkOffset & __r
 		{
 			// 0 == rt
 			// rt == 0
-			cmp(get_register_op32(rt), 0);
+			cmp_ex(op_rt, 0);
 		}
 		else if (rt.is_zero())
 		{
 			// rs == 0
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 		}
 		else
 		{
-			mov(ecx, get_register_op32(rs));
-			cmp(ecx, get_register_op32(rt));
+			std::ignore = cmp_ex(op_rs, op_rt, ecx);
 		}
 		jne(no_trap, T_SHORT);
 
@@ -67,6 +68,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __r
 
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
+	auto&& op_rs = get_register_op32(rs);
+	auto&& op_rt = get_register_op32(rt);
+
 	// tr ? [rs] >= [rt]
 	if (rs == rt) [[unlikely]] {
 		set(ecx, address);
@@ -82,19 +86,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGE(jit1::ChunkOffset & __r
 		{
 			// 0 >= rt
 			// rt <= 0
-			cmp(get_register_op32(rt), 0);
+			cmp_ex(op_rt, 0);
 			jg(no_trap, T_SHORT);
 		}
 		else if (rt.is_zero())
 		{
 			// rs >= 0
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jl(no_trap, T_SHORT);
 		}
 		else
 		{
-			mov(ecx, get_register_op32(rs));
-			cmp(ecx, get_register_op32(rt));
+			std::ignore = cmp_ex(op_rs, op_rt, ecx);
 			jl(no_trap, T_SHORT);
 		}
 
@@ -114,6 +117,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __
 
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
+	auto&& op_rs = get_register_op32(rs);
+	auto&& op_rt = get_register_op32(rt);
+
 	// tr ? [rs] >= [rt]
 
 	if (rs == rt) [[unlikely]] {
@@ -130,19 +136,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TGEU(jit1::ChunkOffset & __
 		{
 			// 0 >= rt
 			// rt <= 0
-			cmp(get_register_op32(rt), 0);
+			cmp_ex(op_rt, 0);
 			ja(no_trap, T_SHORT);
 		}
 		else if (rt.is_zero())
 		{
 			// rs >= 0
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jb(no_trap, T_SHORT);
 		}
 		else
 		{
-			mov(ecx, get_register_op32(rs));
-			cmp(ecx, get_register_op32(rt));
+			std::ignore = cmp_ex(op_rs, op_rt, ecx);
 			jb(no_trap, T_SHORT);
 		}
 
@@ -162,6 +167,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __r
 
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
+	auto&& op_rs = get_register_op32(rs);
+	auto&& op_rt = get_register_op32(rt);
+
 	// tr ? [rs] < [rt]
 	if (rs == rt) {
 		// nop
@@ -174,19 +182,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLT(jit1::ChunkOffset & __r
 		{
 			// 0 < rt
 			// rt > 0
-			cmp(get_register_op32(rt), 0);
+			cmp_ex(op_rt, 0);
 			jle(no_trap, T_SHORT);
 		}
 		else if (rt.is_zero())
 		{
 			// rs < 0
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jge(no_trap, T_SHORT);
 		}
 		else
 		{
-			mov(ecx, get_register_op32(rs));
-			cmp(ecx, get_register_op32(rt));
+			std::ignore = cmp_ex(op_rs, op_rt, ecx);
 			jge(no_trap, T_SHORT);
 		}
 
@@ -206,6 +213,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __
 
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
+	auto&& op_rs = get_register_op32(rs);
+	auto&& op_rt = get_register_op32(rt);
+
 	// tr ? [rs] < [rt]
 	if (
 		rs == rt ||  // rs == rt != rs < rt
@@ -221,19 +231,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TLTU(jit1::ChunkOffset & __
 		{
 			// 0 < rt
 			// rt > 0
-			cmp(get_register_op32(rt), 0);
+			cmp_ex(op_rt, 0);
 			jbe(no_trap, T_SHORT);
 		}
 		else if (rt.is_zero())
 		{
 			// rs < 0
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 			jae(no_trap, T_SHORT);
 		}
 		else
 		{
-			mov(ecx, get_register_op32(rs));
-			cmp(ecx, get_register_op32(rt));
+			std::ignore = cmp_ex(op_rs, op_rt, ecx);
 			jae(no_trap, T_SHORT);
 		}
 		set(ecx, address);
@@ -252,6 +261,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __r
 
 	const uint32 code = instructions::TinyInt<10>(instruction >> 6).zextend<uint32>();
 
+	auto&& op_rs = get_register_op32(rs);
+	auto&& op_rt = get_register_op32(rt);
+
 	// tr ? [rs] != [rt]
 	if (rs == rt) {
 		// nop
@@ -264,17 +276,16 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_TNE(jit1::ChunkOffset & __r
 		{
 			// 0 != rt
 			// rt != 0
-			cmp(get_register_op32(rt), 0);
+			cmp_ex(op_rt, 0);
 		}
 		else if (rt.is_zero())
 		{
 			// rs != 0
-			cmp(get_register_op32(rs), 0);
+			cmp_ex(op_rs, 0);
 		}
 		else
 		{
-			mov(ecx, get_register_op32(rs));
-			cmp(ecx, get_register_op32(rt));
+			std::ignore = cmp_ex(op_rs, op_rt, ecx);
 		}
 		je(no_trap, T_SHORT);
 
@@ -337,13 +348,12 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 		guest && guest->get_capabilities().can_handle_syscalls_inline
 	)
 	{
-		mov(rax, uint64(do_syscall));
+		set(rax, uintptr(do_syscall));
 		mov(qword[rbp + ic_offset], rdi);
 		mov(dword[rbp + pc_offset], int32(address));
 		mov(dword[rbp + flags_offset], ebx);
-		mov(ecx, int32(code));
-		mov(rdx, rbp);
-		add(rdx, -128);
+		set(ecx, int32(code));
+		lea(rdx, qword[rbp - 128]);
 		call(rax);
 		mov(ebx, dword[rbp + flags_offset]);
 		test(eax, eax);
@@ -353,9 +363,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 	}
 	else
 	{
-		mov(ecx, code);
+		set(ecx, code);
 		mov(dword[rbp + pc_offset], int32(address));
-		mov(rax, uint64(SYS_Exception));
+		set(rax, uintptr(SYS_Exception));
 		jmp(intrinsic_ex, T_NEAR);
 
 		return except_result::always_throw | except_result::can_except;
@@ -367,9 +377,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_BREAK(jit1::ChunkOffset & _
 
 	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
 
-	mov(ecx, code);
+	set(ecx, code);
 	mov(dword[rbp + pc_offset], int32(address));
-	mov(rax, uint64(BP_Exception));
+	set(rax, uintptr(BP_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 
 	return except_result::always_throw;
@@ -380,9 +390,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SIGRIE(jit1::ChunkOffset & 
 
 	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
 
-	mov(ecx, code);
+	set(ecx, code);
 	mov(dword[rbp + pc_offset], int32(address));
-	mov(rax, uint64(RI_Exception));
+	set(rax, uintptr(RI_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 
 	return except_result::always_throw;
