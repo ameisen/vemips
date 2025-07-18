@@ -337,10 +337,6 @@ namespace {
 }
 
 Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex) {
-	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
-	static const int8 ic_offset = value_assert<int8>(offsetof(processor, instruction_count_) - 128);
-	static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
-
 	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
 
 	if (
@@ -349,13 +345,13 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 	)
 	{
 		set(rax, uintptr(do_syscall));
-		mov(qword[rbp + ic_offset], rdi);
-		mov(dword[rbp + pc_offset], int32(address));
-		mov(dword[rbp + flags_offset], ebx);
+		mov(qword[rbp + offsets.ic], rdi);
+		mov(dword[rbp + offsets.pc], int32(address));
+		mov(dword[rbp + offsets.flags], ebx);
 		set(ecx, int32(code));
 		lea(rdx, qword[rbp - 128]);
 		call(rax);
-		mov(ebx, dword[rbp + flags_offset]);
+		mov(ebx, dword[rbp + offsets.flags]);
 		test(eax, eax);
 		jnz(intrinsics_.save_return, T_NEAR);
 
@@ -364,7 +360,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 	else
 	{
 		set(ecx, code);
-		mov(dword[rbp + pc_offset], int32(address));
+		mov(dword[rbp + offsets.pc], int32(address));
 		set(rax, uintptr(SYS_Exception));
 		jmp(intrinsic_ex, T_NEAR);
 
@@ -373,12 +369,10 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 }
 
 Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_BREAK(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex) {
-	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
-
 	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
 
 	set(ecx, code);
-	mov(dword[rbp + pc_offset], int32(address));
+	mov(dword[rbp + offsets.pc], int32(address));
 	set(rax, uintptr(BP_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 
@@ -386,12 +380,10 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_BREAK(jit1::ChunkOffset & _
 }
 
 Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SIGRIE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex) {
-	static const int8 pc_offset = value_assert<int8>(offsetof(processor, program_counter_) - 128);
-
 	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
 
 	set(ecx, code);
-	mov(dword[rbp + pc_offset], int32(address));
+	mov(dword[rbp + offsets.pc], int32(address));
 	set(rax, uintptr(RI_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 

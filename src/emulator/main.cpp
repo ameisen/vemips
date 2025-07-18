@@ -19,10 +19,12 @@
 #endif
 
 
-namespace vemips
+namespace 
 {
 	template <typename TChar> requires (std::same_as<TChar, char> || std::same_as<TChar, wchar_t>)
 	static int main_impl(const std::span<const TChar*> args) {
+		using namespace vemips;
+
 		platform::set_process_high_priority();
 
 		auto parsed_argument_data = options::parse(args);
@@ -72,7 +74,7 @@ namespace vemips
 			system = std::make_unique<system_vemix>(sys_options, elf_binary);
 
 			fmt::println("Beginning Execution ---");
-			std::fflush(stdout);
+			std::ignore = std::fflush(stdout);
 			start_time = std::chrono::high_resolution_clock::now();
 			try {
 				for (;;) {
@@ -104,19 +106,19 @@ namespace vemips
 
 		const auto end_time = std::chrono::high_resolution_clock::now();
 		const auto duration = end_time - start_time;
-		const uint64 ns = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+		const uint64 ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+		const double seconds = std::chrono::duration_cast<std::chrono::duration<double>>(duration).count();
 
-		const double seconds = double(ns) / 1'000'000'000.0;
 		const double ips = double(instructions) / seconds;
-		const uint64 ips_rounded = size_t(round(ips));
+		const uint64 ips_rounded = uint64(std::rint(ips));
 
 		if (const uint64 cpu_frequency = platform::get_host_frequency(); cpu_frequency == 1) {
-			fmt::println("** Execution Duration: {} ms ({} ips)", ns / 1'000'000, ips_rounded);
+			fmt::println("** Execution Duration: {} ms ({} ips)", ms, ips_rounded);
 		}
 		else {
 			const double frequency_ratio = double(cpu_frequency * 1'000'000) / ips;
 
-			fmt::println("** Execution Duration: {} ms ({} ips - 1:{:.2f} guest/host)", ns / 1'000'000, ips_rounded, frequency_ratio);
+			fmt::println("** Execution Duration: {} ms ({} ips - 1:{:.2f} guest/host)", ms, ips_rounded, frequency_ratio);
 		}
 		fmt::println("** Instructions Executed: {}", instructions);
 
@@ -146,12 +148,12 @@ namespace vemips
 				std::ranges::stable_sort(instruction_stats, custom_comparator);
 
 				size_t max_len = 0;
-				for (const auto &stat_pair : instruction_stats) {
-					max_len = std::max(max_len, std::strlen(stat_pair.first));
+				for (const auto &name : instruction_stats | std::views::keys) {
+					max_len = std::max(max_len, std::strlen(name));
 				}
 
-				for (const auto &stat_pair : instruction_stats) {
-					fmt::println("{}{:<{}} - {}", tab, stat_pair.first, max_len, stat_pair.second);
+				for (const auto &[name, count] : instruction_stats) {
+					fmt::println("{}{:<{}} - {}", tab, name, max_len, count);
 				}
 			};
 
@@ -165,7 +167,7 @@ namespace vemips
 			}
 		}
 
-		std::getchar();
+		std::ignore = std::getchar();
 
 		return 0;
 	}
@@ -173,11 +175,11 @@ namespace vemips
 
 #ifdef UNICODE
 // ReSharper disable once IdentifierTypo
-int wmain(const int argc, const wchar_t* argv[]) {
-	return vemips::main_impl(std::span{ argv, argv + argc });
+int wmain(const int argc, const wchar_t* argv[]) {  // NOLINT(misc-use-internal-linkage)
+	return main_impl(std::span{ argv, argv + argc });
 }
 #else
 int main(const int argc, const char* argv[]) {
-	return vemips::main_impl(std::span{ argv, argv + argc });
+	return main_impl(std::span{ argv, argv + argc });
 }
 #endif

@@ -160,12 +160,13 @@ namespace mips {
 
 	template <typename T, typename U>
 	static constexpr inline T value_assert(U value) {
-		static constexpr const T min_value = std::numeric_limits<T>::min();
+		static constexpr const T min_value = std::numeric_limits<T>::lowest();
 		static constexpr const T max_value = std::numeric_limits<T>::max();
 
 		using signed_t = std::conditional_t<std::is_signed_v<T>, std::make_signed_t<U>, U>;
 		const signed_t signed_value = value;
-		xassert(signed_value >= min_value && signed_value <= max_value);
+		xassert(signed_value >= min_value);
+		xassert(signed_value <= max_value);
 		return T(signed_value);
 	}
 

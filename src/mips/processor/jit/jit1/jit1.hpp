@@ -66,8 +66,10 @@ namespace mips {
 			std::unique_ptr<std::list<patch>> m_patches;
 			uint32 m_offset = 0;
 			uint32 m_datasize = 0;
+#if 0
 			// TODO there are better ways to handle this that don't require reconfiguring the entire chunk.
 			bool m_has_fixups = false;
+#endif
 
 			// TODO : destructor
 			_nothrow void release() noexcept;

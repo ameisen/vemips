@@ -1082,6 +1082,14 @@ namespace mips::instructions
 		CPU_Exception::throw_helper( CPU_Exception::Type::Bp, processor.get_program_counter(), code );
 	}
 
+	enum class OpCacheType : uint8_t
+	{
+		Instruction = 0b00,
+		Data = 0b01,
+		Tertiary = 0b10,
+		Secondary = 0b11
+	};
+
 	ProcInstructionDef(
 		CACHE,
 		(OpFlags::ReadsGPRegister),
@@ -1090,12 +1098,67 @@ namespace mips::instructions
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
 		const GPRegister<21, 5> base(instruction, processor);
-		//const uint32 op = TinyInt<5>(instruction >> 16).zextend<uint32>();
-		const uint32 offset = TinyInt<9>(instruction >> 6).sextend<uint32>();
+		const OpCacheType op_cache = static_cast<OpCacheType>(TinyInt<2>(instruction >> 16).zextend<uint32>());
+		const uint32 op_code = TinyInt<3>(instruction >> 18).zextend<uint32>();
+		const uint32 offset = TinyInt<9>(instruction >> 7).sextend<uint32>();
 
 		const uint32 address = base.get_register() + offset;
 
 		processor.mem_poke<char>(address); // We still want to touch the address.
+
+		// We don't have anything to do with anything that's not the instruction cache
+		if (op_cache != OpCacheType::Instruction)
+		{
+			return true;
+		}
+
+		switch (op_code)
+		{
+			// Index Invalidate
+			case 0b000:
+			{
+				// invalidate
+			} break;
+
+			// Index Load Tag
+			case 0b001:
+			{
+				// read tag into TagLo/TagHi
+			} break;
+
+			// Index Store Tag
+			case 0b010:
+			{
+				// write tag from TagLo/TagHi
+			} break;
+
+			// Hit Invalidate
+			case 0b100:
+			{
+				// invalidate
+				// broadcast to all coherent caches
+			} break;
+
+			// Fill
+			case 0b101:
+			{
+				// Fill cache from specified address
+			} break;
+
+			// Hit Writeback
+			case 0b110:
+			{
+				// if block is valid and dirty, write block to memory
+				// broadcast to all coherent caches
+			} break;
+
+			// Fetch and Lock
+			case 0b111:
+			{
+				// if block does not contain address, fill from memory. Perform writeback if required.
+				// set to valid/locked.
+			} break;
+		}
 
 		return true;
 	}
@@ -1108,14 +1171,81 @@ namespace mips::instructions
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
 		const GPRegister<21, 5> base(instruction, processor);
-		//const uint32 op = TinyInt<5>(instruction >> 16).zextend<uint32>();
-		const uint32 offset = TinyInt<9>(instruction >> 6).sextend<uint32>();
+		const OpCacheType op_cache = static_cast<OpCacheType>(TinyInt<2>(instruction >> 16).zextend<uint32>());
+		const uint32 op_code = TinyInt<3>(instruction >> 18).zextend<uint32>();
+		const uint32 offset = TinyInt<9>(instruction >> 7).sextend<uint32>();
 
 		const uint32 address = base.get_register() + offset;
 
 		processor.mem_poke<char>(address); // We still want to touch the address.
 
+		// We don't have anything to do with anything that's not the instruction cache
+		if (op_cache != OpCacheType::Instruction)
+		{
+			return true;
+		}
+
+		switch (op_code)
+		{
+			// Index Invalidate
+			case 0b000:
+			{
+				// invalidate
+			} break;
+
+			// Index Load Tag
+			case 0b001:
+			{
+				// read tag into TagLo/TagHi
+			} break;
+
+			// Index Store Tag
+			case 0b010:
+			{
+				// write tag from TagLo/TagHi
+			} break;
+
+			// Hit Invalidate
+			case 0b100:
+			{
+				// invalidate
+				// broadcast to all coherent caches
+			} break;
+
+			// Fill
+			case 0b101:
+			{
+				// Fill cache from specified address
+			} break;
+
+			// Hit Writeback
+			case 0b110:
+			{
+				// if block is valid and dirty, write block to memory
+				// broadcast to all coherent caches
+			} break;
+
+			// Fetch and Lock
+			case 0b111:
+			{
+				// if block does not contain address, fill from memory. Perform writeback if required.
+				// set to valid/locked.
+			} break;
+		}
+
 		return true;
+	}
+
+	ProcInstructionDef(
+		GINVI,
+		(OpFlags::ReadsGPRegister),
+		0b111111'00000'1111111111111'11'111111,
+		0b011111'00000'0000000000000'00'111101,
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		const GPRegister<21, 5> rs(instruction, processor);
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter(), 0);
 	}
 
 	ProcInstructionDef(
@@ -1861,8 +1991,22 @@ namespace mips::instructions
 		const uint64 selected_reg = (uint64(selector) << 32) | reg_number;
 		switch (selected_reg)
 		{
-			case (0ULL << 32) | 1U:
+			case (0ULL << 32) | 0U: // CPUNum
+				return write_result(rt, 0);
+			case (0ULL << 32) | 1U: // SYNCI_Step
 				return write_result(rt, 0x100ul);
+			case (0ULL << 32) | 2U: // CC
+				// TODO : COP `Count` register
+				return write_result(rt, uint32(processor.get_instruction_count()));
+			case (0ULL << 32) | 3U: // CCRes
+				return write_result(rt, 1); // CC register increments every CPU cycle
+			case (0ULL << 32) | 4U: // PerfCtr
+				// TODO : figure out how to implement this
+				// It's defined here: https://training.mips.com/cps_mips/PDF/CM_Performance_Counters.pdf
+				// I'm not sure yet how this is supposed to work, though.
+				break;
+			case (0ULL << 32) | 5U: // XNP
+				return write_result(rt, 0); // TODO : set to 1 when LL/SC is properly-implemented
 			case (0ULL << 32) | 29U:
 				return write_result(rt, processor.user_value_);
 			default: [[unlikely]]
@@ -2444,6 +2588,11 @@ namespace mips::instructions
 		const uint32 address = base.value<uint32>() + offset;
 
 		processor.mem_poke<char>(address); // We still want to touch the address.
+
+		// TODO : operates on a cache line
+
+		// TODO : there must be a SYNC following this, followed by an instruction that clears hazards:
+		// * jalr.hb, jr.hb, deret, eret
 
 		return true;
 	}

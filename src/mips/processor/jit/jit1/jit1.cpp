@@ -168,13 +168,11 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 
 		Jit1_CodeGen cg{ *this, reinterpret_cast<uint8 *>(exec_data), global_exec_data_size };
 		{
-			static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
-			static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
-			static const int8 ic_offset =  value_assert<int8>(offsetof(processor, instruction_count_) - 128);
+			static constexpr const auto offsets = processor::recompiler_offsets<>::get<int8>();
 
-			cg.mov(cg.qword[cg.rbp + ic_offset], cg.rdi);		// save instruction count
-			cg.mov(cg.dword[cg.rbp + flags_offset], cg.ebx);
-			cg.mov(cg.dword[cg.rbp + dbt_offset], cg.esi);  // set it in the interpreter
+			cg.mov(cg.qword[cg.rbp + offsets.ic], cg.rdi);		// save instruction count
+			cg.mov(cg.dword[cg.rbp + offsets.flags], cg.ebx);
+			cg.mov(cg.dword[cg.rbp + offsets.dbt], cg.esi);  // set it in the interpreter
 			cg.mov(cg.dword[cg.rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], cg.r15d);
 			cg.mov(cg.rax, intptr(jit1_drop_signal));
 			cg.jmp(cg.rax);
@@ -229,22 +227,19 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	const uint32 base_address = start_address & ~(jit1::ChunkSize - 1);
 	const uint32 last_address = base_address + (jit1::ChunkSize - 1);
 
-	static const int8 flags_offset = value_assert<int8>(offsetof(processor, flags_) - 128);
-	static const int8 pc_offset =  value_assert<int8>(offsetof(processor, program_counter_) - 128);
-	static const int8 dbt_offset =  value_assert<int8>(offsetof(processor, branch_target_) - 128);
-	static const int8 ic_offset =  value_assert<int8>(offsetof(processor, instruction_count_) - 128);
-
 	constexpr uint32 chunk_start_offset = 0;
 
 	uint32 start_index = 0;
 	if (update)
 	{
+#if 0
 		if (chunk.m_has_fixups)
 		{
 			chunk.m_has_fixups = false;
 		}
+#endif
 		// Can't make this work with xbyak
-		/*
+#if 0
 		else
 		{
 			start_index = start_address - chunk.m_offset;
@@ -252,7 +247,12 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			// also shift the 'data' pointer to this offset.
 			chunk_start_offset = chunk_offset[start_index];
 		}
-		*/
+#endif
+
+		if (auto* patches = chunk.m_patches.get())
+		{
+			patches->clear();
+		}
 	}
 	else
 	{
@@ -282,7 +282,6 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		bool compact_branch = false;
 		bool delay_branch = false;
 		bool possible_after_delaybranch = false;
-		bool compact_branch_suffix_required = false;
 		bool store_handled = false;
 
 		const uint32 current_address = start_address;
@@ -292,6 +291,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		const instructions::InstructionInfo * __restrict instruction_info_ptr = nullptr;
 
 		except_result exception_result = except_result::none;
+
+		std::function<insert_function_type> insert_function;
+		insert_location insert_function_location = {};
 
 #if JIT_INSERT_IDENTIFIERS
 		const Xbyak::Label id_label;
@@ -305,7 +307,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		if (this_processor.ticked_ && this_processor.debugging_)
 		{
 			mov(rax, intptr(&should_debug_break));
-			mov(dword[rbp + pc_offset], int32(current_address));
+			mov(dword[rbp + offsets.pc], int32(current_address));
 			lea(rcx, qword[rbp - 128]);
 			call(rax);
 			test(eax, eax);
@@ -316,7 +318,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		else if (this_processor.debugging_)
 		{
 			mov(rax, intptr(&should_debug_break));
-			mov(dword[rbp + pc_offset], int32(current_address));
+			mov(dword[rbp + offsets.pc], int32(current_address));
 			lea(rcx, qword[rbp - 128]);
 			call(rax);
 			test(eax, eax);
@@ -396,7 +398,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					// TODO : temporary for debugging
 					if (false)
 					{
-						insert_procedure_ecx(current_address, uint64(instruction_info_ptr->Proc), instruction, *instruction_info_ptr);
+						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
 						exception_result = except_result::can_except;
 					}
 					else if (instructions::HasAnyFlags(instruction_info_ptr->OpFlags, instructions::OpFlags::Store))
@@ -412,7 +414,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 								set(rcx, intptr(instruction_info_ptr->Name));
 								call(intrinsics_.stats);
 							}
-							insert_procedure_ecx(current_address, uint64(instruction_info_ptr->Proc), instruction, *instruction_info_ptr);
+							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
 						}
 						else
 						{
@@ -433,14 +435,15 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 								call(intrinsics_.stats);
 							}
 
-							insert_procedure_ecx(current_address, uint64(instruction_info_ptr->Proc), instruction, *instruction_info_ptr);
+							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
 							exception_result = except_result::can_except;
 						}
 					}
 					else if (compact_branch)
 					{
 						std::tie(
-							compact_branch_suffix_required,
+							insert_function,
+							insert_function_location,
 							exception_result
 						) = write_compact_branch(chunk, chunk_offset, current_address, instruction, *instruction_info_ptr);
 					}
@@ -694,7 +697,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							call(intrinsics_.stats);
 						}
 
-						insert_procedure_ecx(current_address, uint64(instruction_info_ptr->Proc), instruction, *instruction_info_ptr);
+						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
 						exception_result = except_result::can_except;
 					}
 
@@ -757,6 +760,11 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			}
 		};
 
+		if (insert_function_location == insert_location::before_epilog)
+		{
+			insert_function(chunk, chunk_offset, current_address);
+		}
+
 		if (!terminate_instruction)
 		{
 			// TODO is this right? Will the program counter be correct?
@@ -778,84 +786,18 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				test(ebx, processor::flag::jit_mem_flush);
 				jnz(intrinsics_.store_flush, T_NEAR);
 			}
-			// Handle compact branch.
-			if (compact_branch && compact_branch_suffix_required)
+
+			if (insert_function_location == insert_location::before_exception_check)
 			{
-				// 8A 42 7F 84 C0 74 6A 48 FF 42 7F C6 42 7F 00 8B 42 7F B9 FF FF FF 7F 39 C8 72 2B 3D FF FF FF 7F 77 24 29 C8 48 B9 FF FF FF FF FF FF FF 7F 8B 04 01 48 B9 FF FF FF FF FF FF FF 7F 48 01 C8 45 31 C0 48 31 C9 FF E0 52 48 89 C2 48 83 EC 20 48 B8 FF FF FF FF FF FF FF 7F 48 B9 FF FF FF FF FF FF FF 7F FF D0 48 83 C4 20 5A 45 31 C0 48 31 C9 FF E0 
-				// mov al, byte [rdx + 0x7F]			  ; load [pcc_offset] (program counter changed)
-				// test al, al								 ; is pcc_offset 0?
-				// je no_change								; if so, jump past this routine
-				// inc qword [rdx + 0x7F]				  ; increment the [ic_offset] instruction counter
-				// mov byte [rdx + 0x7F], 0				; set [pcc_offset] to 0
-				// mov eax, dword [rdx + 0x7F]			; load [pc_offset] (program counter), zero extended, set by the compact branch instruction
-				//												 ; check first if this offset is within the current chunk.
-				// mov ecx, 0x7FFFFFFF					  ; load the [chunk base]
-				// cmp eax, ecx								; is the address below chunk base?
-				// jb not_within							  ; if so, skip to 'not_within'
-				// cmp eax, 0x7FFFFFFF					  ; is the address above [chunk last]? (chunk base + chunk size - 1) (because of 0x1'0000'0000)
-				// ja not_within							  ; if so, skip to 'not within'
-				//												 ; if we are jumping internally, we can hardcode the offset
-				// sub eax, ecx								; subtract chunk base from our address, giving us an offset within the chunk.
-				//												 ; this offset is 4-byte aligned, as are all instructions. Luckily, so is 'chunk_offset'.
-				// mov rcx, qword 0x7FFFFFFFFFFFFFFF	; load chunk_offset (uint32[])
-				// mov eax, dword [rcx + rax]			 ; load chunk_offset[rax] (rax vs eax doesn't matter here, the value is 32-bit zero-extended)
-				// mov rcx, qword 0x7FFFFFFFFFFFFFFF	; load chunk data pointer [pointer fixed up after generation of chunk]
-				// add qword rax, rcx						; add the actual offset to the chunk data pointer, which is our jump target
-				// xor r8d, r8d								; clear r8d (program counter delta)
-				// xor rcx, rcx								; zero rcx, as our JIT guarantees that it is 0 at the start of instructions.
-				// jmp rax									  ; jump to the local jump target
-				// not_within:								 ; otherwise, we are jumping to a remove jump target
-				// 
-				// push rdx									 ; push rdx [stores 'processor' pointer + 128, a value we must retain]
-				// mov rdx, rax								; move rax to rdx, which is the second argument in Win64 ABI
-				// sub rsp, 32								 ; push the home space required by the Win64 ABI
-				// mov rax, 0x7FFFFFFFFFFFFFFF			; load the address of [jit1::get_instruction]
-				// mov rcx, 0x7FFFFFFFFFFFFFFF			; load the [this] pointer into rcx, which is the first argument in Win64 ABI
-				// call rax									 ; call [jit1::get_instruction]
-				// add rsp, 32								 ; pop the home space
-				// pop rdx									  ; restore rdx
-				// xor r8d, r8d								; clear r8d (program counter delta)
-				// xor rcx, rcx								; zero rcx, as our JIT guarantees that it is 0 at the start of instructions.
-				// jmp rax									  ; jump to the remote jump target
-				// no_change:								  ; otherwise, the subroutine (unencoded) compact branch did not trigger a branch.
-				const Xbyak::Label no_change;
-				const Xbyak::Label not_within;
-
-				test(ebx, processor::flag::pc_changed);
-				jz(no_change);
-				and_(ebx, ~processor::flag::pc_changed);
-				mov(eax, dword[rbp + pc_offset]);
-
-				mov(ecx, eax);
-				and_(ecx, ~(jit1::ChunkSize - 1));
-				cmp(ecx, base_address);
-				jne(not_within);
-				and_(eax, (jit1::ChunkSize - 1));
-
-				mov(eax, dword[rax + uintptr(chunk_offset.data())]);
-				auto&& chunk_start = intrinsics_.chunk_start.get();
-				if (chunk_start.getAddress())
-				{
-					lea(rax, dword[rax + uintptr(chunk_start.getAddress())]);
-				}
-				else 
-				{
-					// xbyak cannot handle `lea` with an unaddressed label
-					mov(rcx, intrinsics_.chunk_start);
-					add(rax, rcx);
-				}
-				jmp(rax);
-				L(not_within);
-
-				mov(rdx, rax);
-				mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
-				mov(rcx, uintptr(&jit_));
-				call(rax);
-				jmp(rax);
-				L(no_change);
+				insert_function(chunk, chunk_offset, current_address);
 			}
 
 			exception_check_epilog();
+
+			if (insert_function_location == insert_location::before_delaybranch_check)
+			{
+				insert_function(chunk, chunk_offset, current_address);
+			}
 
 			if (possible_after_delaybranch)
 			{
@@ -864,8 +806,24 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 		else
 		{
+			if (insert_function_location == insert_location::before_exception_check)
+			{
+				insert_function(chunk, chunk_offset, current_address);
+			}
+
 			exception_check_epilog();
+
+			if (insert_function_location == insert_location::before_delaybranch_check)
+			{
+				insert_function(chunk, chunk_offset, current_address);
+			}
 		}
+
+		if (insert_function_location == insert_location::after_epilog)
+		{
+			insert_function(chunk, chunk_offset, current_address);
+		}
+
 #if JIT_INSTRUCTION_SEPARATE
 		nop(8, false);
 #endif
@@ -873,84 +831,12 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		start_address += 4;
 	}
 
-	const auto write_edx_to_patch_target = [this](uint32& target)
-	{
-		intptr patch_target_address = intptr(&target);
-		if (
-			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
-			patch_target_address <= intptr(std::numeric_limits<int32>::max())
-		)
-		{
-			// xbyak cannot handle this sequence properly
-			// mov dword ptr [ds:patch_target_address], edx
-
-			db(0x89, 0x14, 0x25);
-			dd(uint32(patch_target_address));
-		}
-		else
-		{
-			mov(rcx, patch_target_address);
-			mov(dword[rcx], edx);
-		}
-	};
-
-	const auto patch_preprolog = [&](auto address) -> Xbyak::Label
-	{
-		// If execution gets past the chunk, we jump to the next chunk.
-		// Start with a set of no-ops so that we have somewhere to write patch code.
-		auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
-		auto &patch_pair = chunk.m_patches->emplace_back(uint32(getSize()), 0);
-		uint32 &patch_target = patch_pair.target;
-
-		// patch no-op
-		if (address == nullptr) {
-			nop(12, true);
-		}
-		else {
-			static constexpr uint16 patch_prefix = 0xB848;
-			static constexpr uint16 patch_suffix = 0xE0FF;
-			dw(patch_prefix);         // movabs rax, 
-			dq(uint64(address));      //        address
-			dw(patch_suffix);         // jmp    rax
-		}
-
-		write_edx_to_patch_target(patch_target);
-
-		return patch;
-	};
-
-	const auto patch_prolog = [&]()
-	{
-		auto &patch_pair = chunk.m_patches->back();
-		uint32 &patch_target = patch_pair.target;
-		write_edx_to_patch_target(patch_target);
-	};
-
-	const auto patch_epilog = [&](const Xbyak::Label &patch)
-	{
-		static constexpr uint16 patch_prefix = 0xB848;
-		static constexpr uint16 patch_suffix = 0xE0FF;
-
-		mov(rcx, patch);
-		mov(word[rcx], int16_t(patch_prefix));
-		mov(qword[rcx + 2], rax);
-		mov(word[rcx + 10], int16_t(patch_suffix));
-	};
-
-	const auto patch = patch_preprolog(jit_.fetch_instruction(uint32(last_address + 1)));
-
-	set(edx, uint32(last_address + 1));
-
-	patch_prolog();
-
-	mov(dword[rbp + pc_offset], edx);
-	set(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
-	set(rcx, uintptr(&jit_));
-	call(rax);
-
-	patch_epilog(patch);
-
-	jmp(rax);
+	intrinsic_write_patch_jump(
+		chunk,
+		last_address + 1,
+		edx,
+		true
+	);
 
 	{
 		const Xbyak::Label save;
@@ -984,7 +870,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		if (intrinsics_.tr.used) {
 			L(intrinsics_.tr);
 			set(rax, uintptr(TR_Exception));
-			mov(dword[rbp + pc_offset], ecx);
+			mov(dword[rbp + offsets.pc], ecx);
 			mov(ecx, edx);
 			jmp(intrinsic_ex_no_pc, T_SHORT);
 		}
@@ -992,7 +878,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		if (isReferenced(intrinsic_ex) || isReferenced(intrinsic_ex_no_pc)) {
 			if (isReferenced(intrinsic_ex)) {
 				L(intrinsic_ex);
-				mov(dword[rbp + pc_offset], ecx);
+				mov(dword[rbp + offsets.pc], ecx);
 			}
 			L(intrinsic_ex_no_pc);
 			call(save);
@@ -1013,14 +899,14 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 		if (intrinsics_.save_return_eax_pc.used) {
 			L(intrinsics_.save_return_eax_pc);
-			mov(dword[rbp + pc_offset], eax);
+			mov(dword[rbp + offsets.pc], eax);
 			jmp(intrinsics_.save_return, T_SHORT);
 		}
 
 		L(save);
-		mov(qword[rbp + ic_offset], rdi);		// save instruction count
-		mov(dword[rbp + flags_offset], ebx);
-		mov(dword[rbp + dbt_offset], esi);  // set it in the interpreter
+		mov(qword[rbp + offsets.ic], rdi);		// save instruction count
+		mov(dword[rbp + offsets.flags], ebx);
+		mov(dword[rbp + offsets.dbt], esi);  // set it in the interpreter
 		mov(dword[rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], r15d);
 		ret();
 
@@ -1056,7 +942,16 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	}
 
 	xassert(!hasUndefinedLabel());
-	ready(PROTECT_RWE);
+	const bool has_patches = [&chunk]
+	{
+		if (auto* patches = chunk.m_patches.get())
+		{
+			return !patches->empty();
+		}
+
+		return false;
+	}();
+	ready(has_patches ? PROTECT_RWE : PROTECT_RE);
 	//chunk.m_datasize = getSize();
 	const uint8 * __restrict data = getCode();
 

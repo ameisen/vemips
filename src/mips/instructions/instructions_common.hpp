@@ -123,7 +123,7 @@ namespace mips
 			}
 		};
 
-		typedef uint64(*instructionexec_t) (instruction_t instruction, processor & __restrict processor);
+		using instructionexec_t = uintptr(*)(instruction_t instruction, processor & __restrict processor);
 
 		enum class instruction_type : uint8 {
 			normal = 0,

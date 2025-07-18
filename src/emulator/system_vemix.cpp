@@ -97,8 +97,7 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 	// 6
 	// 7
 	// new calls (musl)
-	const uint32 code = processor_->get_register<uint32>(2);
-	switch (code) {
+	switch (const uint32 code = processor_->get_register<uint32>(2)) {
 		case __NR_futex: {
 			// do nothing substantial for now, though we do need to actually handle this.
 			//const uint32 address = processor_->get_register<uint32>(4);
@@ -235,7 +234,7 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 				uint32 offset = 0;
 				for (; _iovec.iov_len - offset >= sizeof(uint64); offset += sizeof(uint64))
 				{
-					std::optional<uint64> c = processor_->try_mem_fetch<uint64>(_iovec.iov_base + offset);
+					const std::optional<uint64> c = processor_->try_mem_fetch<uint64>(_iovec.iov_base + offset);
 					if (!c.has_value()) [[unlikely]]
 					{
 						set_syscall_result(false, EFAULT);
@@ -247,7 +246,7 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 
 				for (; offset < _iovec.iov_len; ++offset)
 				{
-					std::optional<char> c = processor_->try_mem_fetch<char>(_iovec.iov_base + offset);
+					const std::optional<char> c = processor_->try_mem_fetch<char>(_iovec.iov_base + offset);
 					if (!c.has_value()) [[unlikely]]
 					{
 						set_syscall_result(false, EFAULT);

@@ -137,22 +137,28 @@ namespace mips {
 
 	public:
 #pragma region dynamic recompiler support
-		enum class offset_type : uint8
+		template <typename TType = int16>
+		requires (std::is_integral_v<TType>)
+		struct recompiler_offsets final
 		{
-			registers
-		};
+			// floating-point implementation and revision register
+			const TType fir       = value_assert<int16>(offsetof(coprocessor1, m_fir       ));
+			// floating-point control and status register
+			const TType fcsr      = value_assert<int16>(offsetof(coprocessor1, m_fcsr      ));
+			// registers
+			const TType registers = value_assert<int16>(offsetof(coprocessor1, m_registers ));
 
-		static constexpr intptr get_address_offset_static (const offset_type type)
-		{
-			switch (type)
+			template <typename TIntegerType>
+			requires (std::is_integral_v<TIntegerType>)
+			static constexpr recompiler_offsets<TIntegerType> get(const std::make_signed_t<TIntegerType> offset = -128)
 			{
-				case offset_type::registers:
-					return offsetof(coprocessor1, m_registers);
+				return {
+					.fir       = value_assert<TIntegerType>(recompiler_offsets{}.fir       + offset),
+					.fcsr      = value_assert<TIntegerType>(recompiler_offsets{}.fcsr      + offset),
+					.registers = value_assert<TIntegerType>(recompiler_offsets{}.registers + offset),
+				};
 			}
-
-			xassert(false);
-		}
-
+		};
 #pragma endregion
 	};
 }

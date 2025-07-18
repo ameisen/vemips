@@ -91,6 +91,10 @@ exec_job() {
 	echo ${@:2} "./interpreter.cpp" "-o" "MipsTest${1}"
 	rm -f "MipsTest${1}"
 	${@:2} "./interpreter.cpp" "-o" "MipsTest${1}"
+	
+	echo ${@:2} "./self_modifying_test.cpp" "-o" "self_modifying_test${1}"
+	rm -f "self_modifying_test${1}"
+	${@:2} "./self_modifying_test.cpp" "-o" "self_modifying_test${1}"
 }
 
 for a in "$@"; do

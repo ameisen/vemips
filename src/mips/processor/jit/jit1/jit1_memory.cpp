@@ -12,22 +12,22 @@
 
 using namespace mips;
 
-uintptr_t mem_write_jit(processor * __restrict proc, uint32 address, uint32 size) {
-	return proc->get_mem_write_jit(address, size);
+namespace
+{
+	static uintptr mem_write_jit(processor * const __restrict proc, const uint32 address, const uint32 size) {
+		return proc->get_mem_write_jit(address, size);
+	}
+
+	static uintptr mem_read_jit(processor * const __restrict proc, const uint32 address, const uint32 size) {
+		return proc->get_mem_read_jit(address, size);
+	}
+
+	static uint32 memory_touched_jit(processor * const __restrict proc, const uint32 address) {
+		return proc->jit1_->memory_touched(address) ? 1 : 0;
+	}
 }
 
-uintptr_t mem_read_jit(processor * __restrict proc, uint32 address, uint32 size) {
-	return proc->get_mem_read_jit(address, size);
-}
-
-uint32 memory_touched_jit(processor * __restrict proc, uint32 address) {
-	return proc->jit1_->memory_touched(address) ? 1 : 0;
-}
-
-bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
-	static const int8 memp_offset = value_assert<int8>(offsetof(processor, memory_ptr_) - 128);
-	static const int8 mems_offset = value_assert<int8>(offsetof(processor, memory_size_) - 128);
-
+bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 
@@ -95,9 +95,9 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 	}
 
 	if (mmu_type == mmu::emulated) {
-	const Xbyak::Label valid_ptr;
+		const Xbyak::Label valid_ptr;
 
-		set(rax, uintptr(mem_write_jit));
+		set(rax, reinterpret_cast<uintptr>(mem_write_jit));
 		lea(rcx, dword[rbp - 128]);
 		// 'rcx' is the first parameter (processor ptr)
 
@@ -133,8 +133,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 		L(valid_ptr);
 	}
 	else {
-		// This would be far faster if we could easily memory map. Then we could just wrap the address range around.
-		// So ist das Leben.
+		// This would be far faster if we could memory map easily. Then we could just wrap the address range around.
 		if (base.is_zero()) {
 			// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 			// Check for basic range things.
@@ -146,7 +145,8 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				// this checks if it is in range, or if it overflows and thus overwrites '0'
 				if (
 					(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
-					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x1'0000'0000ull)
+					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x1'0000'0000ull
+				)
 				{
 					set(eax, address);
 					set(ecx, start_address);
@@ -157,24 +157,23 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 			else if (mmu_type == mmu::host) {
 				// I'm going to do this the dumb way.
 				for (uint64 addr = start_address; addr < end_address; ++addr) {
-					if (addr == 0) {
+					if (
+						addr == 0 ||
+						(
+							jit_.processor_.stack_size_ &&
+							addr >= jit_.processor_.memory_size_ &&
+							addr < uint32(0x1'0000'0000ull - jit_.processor_.stack_size_)
+						)
+					) {
 						set(eax, address);
 						set(ecx, addr);
 						jmp(intrinsics_.ades, T_NEAR);
 						return false;
 					}
-					if (jit_.processor_.stack_size_) {
-						if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x1'0000'0000ull - jit_.processor_.stack_size_)) {
-							set(eax, address);
-							set(ecx, addr);
-							jmp(intrinsics_.ades, T_NEAR);
-							return false;
-						}
-					}
 				}
 			}
 
-			mov(rdx, qword[rbp + memp_offset]);
+			mov(rdx, qword[rbp + offsets.memory_ptr]);
 			set(eax, offset);
 		}
 		else {
@@ -215,13 +214,13 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 				L(no_ades);
 			}
 
-			mov(rdx, qword[rbp + memp_offset]);
+			mov(rdx, qword[rbp + offsets.memory_ptr]);
 		}
 		// rdx == address
 	}
 	if (mmu_type == mmu::emulated && !jit_.processor_.readonly_exec_) {
 		// If ROX isn't set, then we need to also dispatch a check for memory alteration. Yay.
-		set(rax, uintptr(memory_touched_jit));
+		set(rax, reinterpret_cast<uintptr>(memory_touched_jit));
 		lea(rcx, qword[rbp - 128]);
 		mov(edx, r13d);
 		call(rax);
@@ -400,9 +399,6 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint
 }
 
 bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
-	static const int8 memp_offset = value_assert<int8>(offsetof(processor, memory_ptr_) - 128);
-	static const int8 mems_offset = value_assert<int8>(offsetof(processor, memory_size_) - 128);
-
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -419,11 +415,11 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 
 	int32 nommu_offset = 0;
 
-	const auto get_address = [&](int32 offset, uint32 load_size) {
+	const auto get_address = [&](const int32 offset, const uint32 load_size) {
 		const Xbyak::Label valid_ptr;
 
 		if (mmu_type == mmu::emulated) {
-			set(rax, uintptr(mem_read_jit));
+			set(rax, reinterpret_cast<uintptr>(mem_read_jit));
 			lea(rcx, qword[rbp - 128]);
 			// 'rcx' is the first parameter (processor ptr)
 
@@ -476,7 +472,8 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					// this checks if it is in range, or if it overflows and thus overwrites '0'
 					if (
 						(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
-						(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(load_size)) > 0x100000000ull)
+						(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(load_size)) > 0x100000000ull
+					)
 					{
 						set(eax, address);
 						set(ecx, start_address);
@@ -487,24 +484,23 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				else if (mmu_type == mmu::host) {
 					// I'm going to do this the dumb way.
 					for (uint64 addr = start_address; addr < end_address; ++addr) {
-						if (addr == 0) {
+						if (
+							addr == 0 ||
+							(
+								jit_.processor_.stack_size_ &&
+								addr >= jit_.processor_.memory_size_ &&
+								addr < uint32(0x100000000 - jit_.processor_.stack_size_)
+							)
+						) {
 							set(eax, address);
 							set(ecx, addr);
 							jmp(intrinsics_.adel, T_NEAR);
 							return false;
 						}
-						if (jit_.processor_.stack_size_) {
-							if (addr >= jit_.processor_.memory_size_ && addr < uint32(0x100000000 - jit_.processor_.stack_size_)) {
-								set(eax, address);
-								set(ecx, addr);
-								jmp(intrinsics_.adel, T_NEAR);
-								return false;
-							}
-						}
 					}
 				}
 
-				mov(rdx, qword[rbp + memp_offset]);
+				mov(rdx, qword[rbp + offsets.memory_ptr]);
 				set(eax, offset);
 			}
 			else {
@@ -546,7 +542,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					L(no_adel);
 				}
 
-				mov(rdx, qword[rbp + memp_offset]);
+				mov(rdx, qword[rbp + offsets.memory_ptr]);
 			}
 			// rdx == address
 		}
@@ -668,7 +664,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 
 				const int8 rs_offset = rs.get_offset();
 
-				if (!get_address(uint32(address) + offset, 4)) {
+				if (!get_address(address + offset, 4)) {
 					return false;
 				}
 
@@ -798,7 +794,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 
 				const int8 rs_offset = rs.get_offset();
 
-				if (!get_address(uint32(address) + offset, 4)) {
+				if (!get_address(address + offset, 4)) {
 					return false;
 				}
 

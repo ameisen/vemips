@@ -21,12 +21,7 @@ namespace vemips::options
 
 	static void print_help();
 
-#if UNICODE
-	static constexpr const auto tstrcmp = &wcscmp;
-#else
-	static constexpr const auto tstrcmp = &std::strcmp;
-#endif
-
+	// ReSharper disable CppDeclaratorNeverUsed
 	#pragma warning(suppress : 4505)
 	static long long string_to_ll(const wchar_t * __restrict str, const int base = 10) {
 		return std::wcstoll(str, nullptr, base);
@@ -46,6 +41,7 @@ namespace vemips::options
 	static unsigned long long string_to_ull(const char * __restrict str, const int base = 10) {
 		return std::strtoull(str, nullptr, base);
 	}
+	// ReSharper restore CppDeclaratorNeverUsed
 
 	#pragma warning(suppress : 4505)
 	static char to_lower_char(const char c)
@@ -105,7 +101,7 @@ namespace vemips::options
 						if (value)
 						{
 							// todo : suboptimal
-							tstring value_str = tstring{value.value()};
+							const tstring value_str {value.value()};
 							return string_to_ll(value_str.c_str(), 0);
 						}
 
@@ -136,7 +132,7 @@ namespace vemips::options
 						if (value)
 						{
 							// todo : suboptimal
-							tstring value_str = tstring{value.value()};
+							const tstring value_str {value.value()};
 							return string_to_ll(value_str.c_str(), 0);
 						}
 
@@ -172,7 +168,7 @@ namespace vemips::options
 						if (value)
 						{
 							// todo : suboptimal
-							tstring value_str = tstring{value.value()};
+							const tstring value_str {value.value()};
 							return string_to_ll(value_str.c_str(), 0);
 						}
 
@@ -424,15 +420,17 @@ namespace vemips::options
 						return string_to_ull(args[i], 0);
 					}();
 
-					const auto bool_value = parse_value_bool(value);
-					if (bool_value && !*bool_value)
+					if (const auto bool_value = parse_value_bool(value))
 					{
-						ticks_v = 0;
-					}
-					else
-					{
-						fmt::println(stderr, TSTR("Error: Unexpected value following --ticks option: `{}`"), *value);
-						std::exit(1);
+						if (!*bool_value)
+						{
+							ticks_v = 0;
+						}
+						else [[unlikely]]
+						{
+							fmt::println(stderr, TSTR("Error: Unexpected value following --ticks option: `{}`"), *value);
+							std::exit(1);
+						}
 					}
 
 					argument_data.ticks = ticks_v;
@@ -482,8 +480,8 @@ namespace vemips::options
 			tstring_view arg = args[i];
 			std::optional<tstring_view> arg_value;
 
-			std::size_t colon_index = arg.find(TSTR(':'));
-			std::size_t equal_index = arg.find(TSTR('='));
+			const std::size_t colon_index = arg.find(TSTR(':'));
+			const std::size_t equal_index = arg.find(TSTR('='));
 			std::size_t delimiter_index;
 			if (colon_index == tstring_view::npos)
 			{

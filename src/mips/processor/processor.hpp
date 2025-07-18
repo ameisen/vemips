@@ -142,23 +142,43 @@ namespace mips {
 
 	public:
 #pragma region dynamic recompiler support
-		enum class offset_type
+		template <typename TType = int16>
+		requires (std::is_integral_v<TType>)
+		struct recompiler_offsets final
 		{
-			registers 
-		};
+			// flags
+			const TType flags       = value_assert<int16>(offsetof(processor, flags_             ));
+			// program counter
+			const TType pc          = value_assert<int16>(offsetof(processor, program_counter_   ));
+			// delay branch target
+			const TType dbt         = value_assert<int16>(offsetof(processor, branch_target_     ));
+			// instruction count
+			const TType ic          = value_assert<int16>(offsetof(processor, instruction_count_ ));
+			// registers
+			const TType registers   = value_assert<int16>(offsetof(processor, registers_         ));
+			// memory store address
+			const TType memory_ptr  = value_assert<int16>(offsetof(processor, memory_ptr_        ));
+			// memory store size
+			const TType memory_size = value_assert<int16>(offsetof(processor, memory_size_       ));
+			// user value
+			const TType user_value  = value_assert<int16>(offsetof(processor, user_value_        ));
 
-		static constexpr intptr get_address_offset_static (const offset_type type)
-		{
-			switch (type)
+			template <typename TIntegerType>
+			requires (std::is_integral_v<TIntegerType>)
+			static constexpr recompiler_offsets<TIntegerType> get(const std::make_signed_t<TIntegerType> offset = -128)
 			{
-				case offset_type::registers:
-					return offsetof(processor, registers_);
-
-				default:
-					xassert(false);
+				return {
+					.flags       = value_assert<TIntegerType>(recompiler_offsets{}.flags       + offset),
+					.pc          = value_assert<TIntegerType>(recompiler_offsets{}.pc          + offset),
+					.dbt         = value_assert<TIntegerType>(recompiler_offsets{}.dbt         + offset),
+					.ic          = value_assert<TIntegerType>(recompiler_offsets{}.ic          + offset),
+					.registers   = value_assert<TIntegerType>(recompiler_offsets{}.registers   + offset),
+					.memory_ptr  = value_assert<TIntegerType>(recompiler_offsets{}.memory_ptr  + offset),
+					.memory_size = value_assert<TIntegerType>(recompiler_offsets{}.memory_size + offset),
+					.user_value  = value_assert<TIntegerType>(recompiler_offsets{}.user_value  + offset),
+				};
 			}
-		}
-
+		};
 #pragma endregion
 	public:
 		void compare(const processor& __restrict other, uint32 /*previous_pc*/) const;

@@ -9,6 +9,7 @@
 #include "mips_common.hpp"
 #include "instructions/instructions_common.hpp"
 #include "mips/processor/jit/jit1/jit1.hpp"
+#include "mips/processor/processor.hpp"
 
 namespace mips
 {
@@ -23,6 +24,9 @@ namespace mips
 	class jit1;
 	class Jit1_CodeGen final : public Xbyak::CodeGenerator
 	{
+		static constexpr const auto offsets = processor::recompiler_offsets<>::get<int8>();
+		static constexpr const auto cop1_offsets = coprocessor1::recompiler_offsets<>::get<int16>();
+
 		std::array<Xbyak::Label, jit1::NumInstructionsChunk> instruction_offset_labels_;
 		struct {
 			struct intrinsic final {
@@ -74,7 +78,11 @@ namespace mips
 
 	public:
 
-		Jit1_CodeGen(jit1 & __restrict jit, uint8 *userptr, size_t usersz) : Xbyak::CodeGenerator(usersz, userptr), jit_(jit), address_(userptr) {}
+		Jit1_CodeGen(jit1 & __restrict jit, uint8 * const userptr, const size_t usersz)
+			: Xbyak::CodeGenerator(usersz, userptr)
+			, jit_(jit)
+			, address_(userptr)
+		{}
 		virtual ~Jit1_CodeGen() override = default;
 
 		uint8* get_address() const {
@@ -561,7 +569,7 @@ namespace mips
 
 		void write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update);
 
-		void insert_procedure_ecx(uint32 address, uintptr procedure, uint32 _ecx, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void insert_procedure_ecx(uint32 address, void* procedure, uint32 _ecx, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		enum class except_result : uint32
 		{
@@ -571,6 +579,17 @@ namespace mips
 			can_except    = 1U << 2, // may set exception
 			always_except = 1U << 3, // always set exception
 		};
+
+		enum class insert_location : uint32
+		{
+			none = 0U,
+			before_epilog,
+			before_exception_check,
+			before_delaybranch_check,
+			after_epilog
+		};
+
+		using insert_function_type = void(const jit1::Chunk& __restrict, const jit1::ChunkOffset& __restrict, uint32);
 
 		void write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
@@ -652,7 +671,7 @@ namespace mips
 		void write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		// returns 'true' if compact branch patch is needed.
-		std::pair<bool, except_result> write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		std::tuple<std::function<insert_function_type>, insert_location, except_result> write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		// returns 'true' if it was unhandled.
 		[[nodiscard]]
@@ -687,6 +706,14 @@ namespace mips
 		void test(const Xbyak::Operand& op, T imm) { Xbyak::CodeGenerator::test(op, std::underlying_type_t<T>(imm)); }
 
 		using Xbyak::CodeGenerator::test;
+
+		processor::flag intrinsic_set_cti_flag();
+		processor::flag intrinsic_set_delay_branch();
+
+		Xbyak::Label intrinsic_write_patch_prolog(const jit1::Chunk& __restrict chunk, void* patch_address, uint32 patch_target_address, const Xbyak::Reg& patch_target_address_reg);
+		void intrinsic_write_patch_epilog(const Xbyak::Label& patch);
+		void intrinsic_write_patch_jump(const jit1::Chunk& __restrict chunk, uint32 target_address, const Xbyak::Reg& patch_target_address_reg, bool set_pc);
+		void intrinsic_insert_jump(const jit1::Chunk& __restrict chunk, const jit1::ChunkOffset& __restrict chunk_offset, uint32 address, const Xbyak::Operand& target_address);
 	};
 
 	static constexpr Jit1_CodeGen::except_result operator | (const Jit1_CodeGen::except_result a, const Jit1_CodeGen::except_result b)
