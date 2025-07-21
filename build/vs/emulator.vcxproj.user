@@ -3,7 +3,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\self_modifying_test.bin</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-LLVM|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
@@ -19,6 +19,11 @@
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerCommandArguments>--jit1 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArguments>--jit0 D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\common</LocalDebuggerWorkingDirectory>

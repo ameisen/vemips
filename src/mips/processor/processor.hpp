@@ -11,6 +11,7 @@
 #include <memory>
 
 #include <map>
+#include <variant>
 
 #include "coprocessor/coprocessor.hpp"
 #include "jit/jit.hpp"
@@ -24,6 +25,7 @@ namespace mips::instructions {
 
 class CodeGen;
 namespace mips {
+	enum class memory_hazards : uint32;
 	class system;
 	class jit1;
 	class coprocessor;
@@ -102,24 +104,23 @@ namespace mips {
 	private:
 		uint64												instruction_count_ = 0;
 		uint64												target_instructions_ = std::numeric_limits<uint64>::max();
-		char*									memory_ptr_ = nullptr;
+		char*											memory_ptr_ = nullptr;
+		char*                                           shadow_memory_ptr_ = nullptr;
 		const uint32									memory_size_ = 0;
 		const uint32									stack_size_ = 0;
 
 	private:
 
-		const std::array<coprocessor* __restrict, num_coprocessors> coprocessors_ = { nullptr };
+		const std::array<std::unique_ptr<coprocessor>, num_coprocessors> coprocessors_;
 		memory_source  * const __restrict memory_source_ = nullptr;
 
 	public: // TODO : clean up later, though not using std::variant most likely (exception overhead)
-		union {
-			// TODO : wrap these in a lightweight variant
-			jit1 * __restrict								jit1_;
-			jit2 * __restrict								jit2_;
-		};
+		std::variant<
+			std::monostate,
+			jit1* __restrict,
+			jit2* __restrict
+		> jit_;
 	private:
-		const JitType											  jit_type_;
-
 		CPU_Exception									  trapped_exception_ = {};
 
 		const std::unique_ptr<statistics>  statistics_;
@@ -220,7 +221,15 @@ namespace mips {
 
 		[[nodiscard]]
 		JitType get_jit_type() const __restrict {
-			return jit_type_;
+
+			return std::visit(
+				overloads {
+					[](std::monostate) { return JitType::None; },
+					[](jit1* __restrict) { return JitType::Jit; },
+					[](jit2* __restrict) { return JitType::FunctionTable; },
+				},
+				jit_
+			);
 		}
 
 		void set_trapped_exception(const CPU_Exception & __restrict ex) {
@@ -231,6 +240,7 @@ namespace mips {
 		struct options final {
 			memory_source* __restrict mem_src = nullptr;
 			char* mem_ptr = nullptr;
+			char* shadow_mem_ptr = nullptr;
 			system* guest_system = nullptr;
 			JitType jit_type = JitType::Jit;
 			mips::mmu mmu_type = mips::mmu::emulated;
@@ -253,7 +263,7 @@ namespace mips {
 			copy_qualifiers_ptr<decltype(self), coprocessor>
 		{
 			xassert(idx < self.coprocessors_.size());
-			return self.coprocessors_[idx];
+			return self.coprocessors_[idx].get();
 		}
 
 		template <typename Self>
@@ -276,7 +286,7 @@ namespace mips {
 			Index < std::tuple_size_v<decltype(coprocessors_)>
 		)
 		{
-			_make_qual(coprocessor*) coprocessor = self.coprocessors_[Index];
+			_make_qual(coprocessor*) coprocessor = self.coprocessors_[Index].get();
 
 			if constexpr (Index == std::to_underlying(coprocessor::types::floating_point))
 			{
@@ -403,8 +413,24 @@ namespace mips {
 
 	private:
 		std::optional<uint32> mem_poke_host(uint32 address, uint32 size) const __restrict;
-		std::optional<uint32> mem_fetch_host(void* dst, uint32 address, uint32 size) const __restrict;
+		std::optional<uint32> mem_fetch_host_internal(const char* __restrict source, void* __restrict dst, uint32 address, uint32 size) const __restrict;
+		template <bool ForInstruction>
+		std::optional<uint32> mem_fetch_host(void* __restrict dst, const uint32 address, const uint32 size) const __restrict
+		{
+			return mem_fetch_host_internal(
+				ForInstruction ? shadow_memory_ptr_ : memory_ptr_,
+				dst,
+				address,
+				size
+			);
+		}
 		std::optional<uint32> mem_write_host(const void* src, uint32 address, uint32 size) const __restrict;
+
+		template <uint32 Size>
+		static bool zero_check_address(const uint32 address)
+		{
+			return int32(address) > -int32(Size - 1) && int32(address) < 1;
+		}
 
 	public:
 		template <typename T>
@@ -419,7 +445,7 @@ namespace mips {
 				return;
 			}
 			else {
-				if _unlikely(address == 0) [[unlikely]] {
+				if _unlikely(zero_check_address<sizeof(T)>(address)) [[unlikely]] {
 					CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, address );
 				}
 
@@ -448,11 +474,15 @@ namespace mips {
 				}
 				else
 				{
+					const uint32 stack_offset = mmu_type_ != mmu::host ? stack_size_ : 0;
+
 					for (uint32 i = 0; i < sizeof(T); ++i)
 					{
-						if (address >= memory_size_ || address == 0U)
+						const uint32 offset_address = address + i;
+
+						if (offset_address + stack_offset >= memory_size_ || offset_address == 0U)
 						{
-							CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, address );
+							CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, offset_address );
 						}
 					}
 				}
@@ -461,14 +491,14 @@ namespace mips {
 			}();
 		}
 
-		template <typename T>
+		template <typename T, bool ForInstruction>
 		[[nodiscard]]
 		std::expected<T, uint32> try_mem_fetch_except(uint32 address) const __restrict {
 			if (mmu_type_ == mmu::host) {
 				// TODO : handle literal edge case - overflows 32-bit address space
 				std::remove_const_t<T> result;
 				if (
-					const auto result_error = mem_fetch_host(&result, address, sizeof(T));
+					const auto result_error = mem_fetch_host<ForInstruction>(&result, address, sizeof(T));
 					result_error.has_value()
 				) [[unlikely]]
 				{
@@ -478,20 +508,26 @@ namespace mips {
 				return result;
 			}
 			else {
-				if _unlikely(address == 0) [[unlikely]] {
+				if _unlikely(zero_check_address<sizeof(T)>(address)) [[unlikely]] {
 					return std::unexpected(0U);
 				}
 
 				address += stack_size_;
 
 				if (mmu_type_ == mmu::emulated) {
-					const T* __restrict val_ptr = static_cast<const T * __restrict>(memory_source_->at(address, sizeof(T)));
+					const T* __restrict val_ptr = static_cast<const T * __restrict>(
+						ForInstruction ?
+							memory_source_->at_instruction(address, sizeof(T)) :
+							memory_source_->at(address, sizeof(T))
+					);
 					if _likely(val_ptr) [[likely]] {
 						return *val_ptr;
 					}
 				}
 				else if _likely(address < memory_size_) [[likely]] {
-					return *reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
+					return *reinterpret_cast<const T * __restrict>(
+						(ForInstruction ? shadow_memory_ptr_ : memory_ptr_) + address
+					);
 				}
 			}
 
@@ -508,11 +544,15 @@ namespace mips {
 				}
 				else
 				{
+					const uint32 stack_offset = mmu_type_ != mmu::host ? stack_size_ : 0;
+
 					for (uint32 i = 0; i < sizeof(T); ++i)
 					{
-						if (address >= memory_size_ || address == 0U)
+						const uint32 offset_address = address + i;
+
+						if (offset_address + stack_offset>= memory_size_ || offset_address == 0U)
 						{
-							return std::unexpected(address);
+							return std::unexpected(offset_address);
 						}
 					}
 				}
@@ -525,7 +565,7 @@ namespace mips {
 		[[nodiscard]]
 		std::optional<T> try_mem_fetch(const uint32 address) const __restrict {
 			if (
-				const auto result = try_mem_fetch_except<T>(address);
+				const auto result = try_mem_fetch_except<T, false>(address);
 				result.has_value()
 			)
 			{
@@ -541,7 +581,23 @@ namespace mips {
 		[[nodiscard]]
 		T mem_fetch(uint32 address) const __restrict {
 			if (
-				const auto result = try_mem_fetch_except<T>(address);
+				const auto result = try_mem_fetch_except<T, false>(address);
+				result.has_value()
+			) [[likely]]
+			{
+				return result.value();
+			}
+			else
+			{
+				CPU_Exception::throw_helper( CPU_Exception::Type::AdEL, program_counter_, result.error() );
+			}
+		}
+
+		template <typename T>
+		[[nodiscard]]
+		T mem_fetch_instruction(uint32 address) const __restrict {
+			if (
+				const auto result = try_mem_fetch_except<T, true>(address);
 				result.has_value()
 			) [[likely]]
 			{
@@ -560,7 +616,7 @@ namespace mips {
 				// TODO : handle literal edge case - overflows 32-bit address space
 				T result;
 				if (
-					const auto result_error = mem_fetch_host(&result, address, sizeof(T));
+					const auto result_error = mem_fetch_host<false>(&result, address, sizeof(T));
 					result_error.has_value()
 				) [[unlikely]]
 				{
@@ -570,7 +626,7 @@ namespace mips {
 				return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
 			}
 			else {
-				if _unlikely(address == 0) [[unlikely]] {
+				if _unlikely(zero_check_address<sizeof(T)>(address)) [[unlikely]] {
 					return nullptr;
 				}
 
@@ -595,17 +651,17 @@ namespace mips {
 				// TODO : handle literal edge case - overflows 32-bit address space
 				std::remove_const_t<T> result;
 				if (
-					const auto result_error = mem_fetch_host(&result, address, sizeof(T));
+					const auto result_error = mem_fetch_host<true>(&result, address, sizeof(T));
 					result_error.has_value()
 				) [[unlikely]]
 				{
 					return nullptr;
 				}
 
-				return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
+				return reinterpret_cast<const T * __restrict>(shadow_memory_ptr_ + address);
 			}
 			else {
-				if _unlikely(address == 0) [[unlikely]] {
+				if _unlikely(zero_check_address<sizeof(T)>(address)) [[unlikely]] {
 					return nullptr;
 				}
 
@@ -618,7 +674,7 @@ namespace mips {
 					}
 				}
 				else if _likely(address < memory_size_) [[likely]] {
-					return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
+					return reinterpret_cast<const T * __restrict>(shadow_memory_ptr_ + address);
 				}
 			}
 
@@ -641,7 +697,7 @@ namespace mips {
 				return {};
 			}
 			else {
-				if _unlikely(address == 0) [[unlikely]] {
+				if _unlikely(zero_check_address<sizeof(T)>(address)) [[unlikely]] {
 					return 0U;
 				}
 
@@ -672,11 +728,15 @@ namespace mips {
 				}
 				else
 				{
+					const uint32 stack_offset = mmu_type_ != mmu::host ? stack_size_ : 0;
+
 					for (uint32 i = 0; i < sizeof(T); ++i)
 					{
-						if (address >= memory_size_ || address == 0U)
+						const uint32 offset_address = address + 1;
+
+						if (offset_address + stack_offset >= memory_size_ || offset_address == 0U)
 						{
-							return address;
+							return offset_address;
 						}
 					}
 				}
@@ -725,36 +785,17 @@ namespace mips {
 		system* get_guest_system() const __restrict {
 			return guest_system_;
 		}
+
+		[[nodiscard]]
+		uint32 get_cache_line_size() const __restrict;
+
+		void invalidate_instruction_cache(uint32 guest_address);
+		void clear_memory_hazards(memory_hazards hazards);
+		bool handles_memory_hazards(memory_hazards hazards) const;
+		void clear_instruction_hazards();
 	};
 
-	static constexpr processor::flag operator & (processor::flag a, processor::flag b) {
-		using underlying_t = std::underlying_type_t<decltype(a)>;
-		return decltype(a)(underlying_t(a) & underlying_t(b));
-	}
-
-	static constexpr processor::flag operator | (processor::flag a, processor::flag b) {
-		using underlying_t = std::underlying_type_t<decltype(a)>;
-		return decltype(a)(underlying_t(a) | underlying_t(b));
-	}
-
-	static constexpr processor::flag operator &= (processor::flag& __restrict a, processor::flag b) {
-		using underlying_t = std::underlying_type_t<decltype(b)>;
-		return a = decltype(b)(underlying_t(a) & underlying_t(b));
-	}
-
-	static constexpr processor::flag operator |= (processor::flag& __restrict a, processor::flag b) {
-		using underlying_t = std::underlying_type_t<decltype(b)>;
-		return a = decltype(b)(underlying_t(a) | underlying_t(b));
-	}
-
-	static constexpr processor::flag operator ~ (processor::flag v) {
-		using underlying_t = std::underlying_type_t<decltype(v)>;
-		return decltype(v)(~underlying_t(v));
-	}
-
-	static constexpr bool operator ! (const processor::flag v) {
-		return v == processor::flag::none;
-	}
+	MAKE_BITFLAG_ENUM(processor::flag)
 
 	inline bool processor::get_flags(const flag bits) const __restrict {
 		return !!(flags_ & bits);

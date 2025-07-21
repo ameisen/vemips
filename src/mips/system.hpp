@@ -17,6 +17,7 @@ namespace mips {
 		processor * __restrict processor_ = nullptr;
 		memory_source * __restrict memory_source_ = nullptr;
 		std::vector<char> memory_;
+		std::optional<std::vector<char>> shadow_memory_;
 		platform::host_mmu *host_mmu_ = nullptr;
 		debugger* debugger_ = nullptr;
 		uint32 system_break_ = 0;
@@ -39,6 +40,7 @@ namespace mips {
 			bool instruction_cache : 1 = false;
 			bool debug : 1 = false;
 			bool debug_owned : 1 = false;
+			bool strict_noncoherence : 1 = false;
 
 			void validate() const;
 		};
@@ -90,6 +92,11 @@ namespace mips {
 		[[nodiscard]]
 		bool is_debugger_owned() const __restrict {
 			return options_.debug_owned;
+		}
+
+		[[nodiscard]]
+		bool has_strict_noncoherence() const __restrict {
+			return options_.strict_noncoherence;
 		}
 
 		[[nodiscard]]

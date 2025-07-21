@@ -398,7 +398,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					// TODO : temporary for debugging
 					if (false)
 					{
-						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
+						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
 						exception_result = except_result::can_except;
 					}
 					else if (instructions::HasAnyFlags(instruction_info_ptr->OpFlags, instructions::OpFlags::Store))
@@ -412,9 +412,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							{
 								// dispatch a stat call.
 								set(rcx, intptr(instruction_info_ptr->Name));
-								call(intrinsics_.stats);
+								call(intrinsics_.emulated_stats);
 							}
-							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
+							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
 						}
 						else
 						{
@@ -432,10 +432,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							{
 								// dispatch a stat call.
 								set(rcx, intptr(instruction_info_ptr->Name));
-								call(intrinsics_.stats);
+								call(intrinsics_.emulated_stats);
 							}
 
-							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
+							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
 							exception_result = except_result::can_except;
 						}
 					}
@@ -694,10 +694,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 						{
 							// dispatch a stat call.
 							set(rcx, intptr(instruction_info_ptr->Name));
-							call(intrinsics_.stats);
+							call(intrinsics_.emulated_stats);
 						}
 
-						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction, *instruction_info_ptr);
+						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
 						exception_result = except_result::can_except;
 					}
 
@@ -1151,10 +1151,21 @@ jit1::jit_instructionexec_t jit1::get_instruction(const uint32 address)
 	bool chunk_exists = true;
 
 #if USE_CACHE
-	if _likely(last_chunk_address_ == mapped_address) [[likely]]
+	const cache_element* cache = nullptr;
+
+	for (const auto& cached : last_cached)
 	{
-		chunk = last_chunk_;
-		chunk_offset = last_chunk_offset_;
+		if (cached.chunk_address_ == mapped_address)
+		{
+			cache = &cached;
+			break;
+		}
+	}
+
+	if _likely(cache) [[likely]]
+	{
+		chunk = cache->chunk_;
+		chunk_offset = cache->chunk_offset_;
 	}
 	else
 #endif
@@ -1177,15 +1188,17 @@ jit1::jit_instructionexec_t jit1::get_instruction(const uint32 address)
 
 		chunk = chunk_data.chunk.get();
 		chunk_offset = chunk_data.offset;
+
+#if USE_CACHE
+		last_cached[last_cached_index++ % last_cached.size()] = {
+			.chunk_ = chunk,
+			.chunk_offset_ = chunk_offset,
+			.chunk_address_ = mapped_address
+		};
+#endif
 	}
 
 	const uint32 address_offset = (address - mapped_address) / 4u;
-
-#if USE_CACHE
-	last_chunk_ = chunk;
-	last_chunk_offset_ = chunk_offset;
-	last_chunk_address_ = mapped_address;
-#endif
 
 	if (!chunk_exists) {
 		populate_chunk(*chunk_offset, *chunk, mapped_address, false);
@@ -1209,10 +1222,21 @@ jit1::jit_instructionexec_t jit1::fetch_instruction(const uint32 address)
 	ChunkOffset* __restrict chunk_offset;
 
 #if USE_CACHE
-	if _likely(last_chunk_address_ == mapped_address) [[likely]]
+	const cache_element* cache = nullptr;
+
+	for (const auto& cached : last_cached)
 	{
-		chunk = last_chunk_;
-		chunk_offset = last_chunk_offset_;
+		if (cached.chunk_address_ == mapped_address)
+		{
+			cache = &cached;
+			break;
+		}
+	}
+
+	if _likely(cache) [[likely]]
+	{
+		chunk = cache->chunk_;
+		chunk_offset = cache->chunk_offset_;
 	}
 	else
 #endif
@@ -1230,9 +1254,11 @@ jit1::jit_instructionexec_t jit1::fetch_instruction(const uint32 address)
 		chunk_offset = chunk_data.offset;
 
 #if USE_CACHE
-		last_chunk_ = chunk;
-		last_chunk_offset_ = chunk_offset;
-		last_chunk_address_ = mapped_address;
+		last_cached[last_cached_index++ % last_cached.size()] = {
+			.chunk_ = chunk,
+			.chunk_offset_ = chunk_offset,
+			.chunk_address_ = mapped_address
+		};
 #endif
 	}
 
@@ -1246,12 +1272,15 @@ jit1::Chunk * jit1::get_chunk(const uint32 address) const
 #if USE_CACHE
 	const uint32 mapped_address = address & ~(ChunkSize - 1);
 
-	if _likely(last_chunk_address_ == mapped_address) [[likely]]
+	for (const auto& cached : last_cached)
 	{
-		return last_chunk_;
+		if (cached.chunk_address_ == mapped_address)
+		{
+			return cached.chunk_;
+		}
 	}
-	else
 #endif
+
 	{
 		// Traverse the map to end up at the proper chunk.
 		/* This is only hit once ever in the current benchmark because the chunks are huge */

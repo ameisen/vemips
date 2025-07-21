@@ -1,4 +1,4 @@
-/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Jul 15 2025 19:49:01) */
+/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Jul 19 2025 20:20:05) */
 // ReSharper disable CppClangTidyClangDiagnosticUndefinedFuncTemplate CppClangTidyClangDiagnosticUnreachableCodeReturn IdentifierTypo CommentTypo CppUnreachableCode
 #include "pch.hpp"
 
@@ -127,14 +127,19 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_DIV ( "PROC_DIV", 1, &PROC_DIV_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_DIVU ( "PROC_DIVU", 1, &PROC_DIVU_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_EHB ( "PROC_EHB", 1, &PROC_EHB_NS::Execute, static_cast<instructions::OpFlags>(0x00000000), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_ERET ( "PROC_ERET", 1, &PROC_ERET_NS::Execute, static_cast<instructions::OpFlags>(0x00000002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_ERETNC ( "PROC_ERETNC", 1, &PROC_ERETNC_NS::Execute, static_cast<instructions::OpFlags>(0x00000002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_EXT ( "PROC_EXT", 1, &PROC_EXT_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_GINVI ( "PROC_GINVI", 1, &PROC_GINVI_NS::Execute, static_cast<instructions::OpFlags>(0x00800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_INS ( "PROC_INS", 1, &PROC_INS_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_J ( "PROC_J", 1, &PROC_J_NS::Execute, static_cast<instructions::OpFlags>(0x00160000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JAL ( "PROC_JAL", 1, &PROC_JAL_NS::Execute, static_cast<instructions::OpFlags>(0x00160000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JALR ( "PROC_JALR", 1, &PROC_JALR_NS::Execute, static_cast<instructions::OpFlags>(0x01960000), { .control = true }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JALR_HB ( "PROC_JALR_HB", 1, &PROC_JALR_HB_NS::Execute, static_cast<instructions::OpFlags>(0x01960000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JIALC ( "PROC_JIALC", 1, &PROC_JIALC_NS::Execute, static_cast<instructions::OpFlags>(0x008A0000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JIC ( "PROC_JIC", 1, &PROC_JIC_NS::Execute, static_cast<instructions::OpFlags>(0x008A0000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JR ( "PROC_JR", 1, &PROC_JR_NS::Execute, static_cast<instructions::OpFlags>(0x00960000), { .control = true }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JR_HB ( "PROC_JR_HB", 1, &PROC_JR_HB_NS::Execute, static_cast<instructions::OpFlags>(0x00960000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LB ( "PROC_LB", 1, &PROC_LB_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LBE ( "PROC_LBE", 1, &PROC_LBE_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LBU ( "PROC_LBU", 1, &PROC_LBU_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
@@ -151,9 +156,17 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LW ( "PROC_LW", 1, &PROC_LW_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LWE ( "PROC_LWE", 1, &PROC_LWE_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LWPC ( "PROC_LWPC", 1, &PROC_LWPC_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MFC0 ( "PROC_MFC0", 1, &PROC_MFC0_NS::Execute, static_cast<instructions::OpFlags>(0x01000002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MFC2 ( "PROC_MFC2", 1, &PROC_MFC2_NS::Execute, static_cast<instructions::OpFlags>(0x01000002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MFHC0 ( "PROC_MFHC0", 1, &PROC_MFHC0_NS::Execute, static_cast<instructions::OpFlags>(0x01000002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MFHC2 ( "PROC_MFHC2", 1, &PROC_MFHC2_NS::Execute, static_cast<instructions::OpFlags>(0x01000002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MOD ( "PROC_MOD", 1, &PROC_MOD_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MODU ( "PROC_MODU", 1, &PROC_MODU_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MOVE ( "PROC_MOVE", 1, &PROC_MOVE_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MTC0 ( "PROC_MTC0", 1, &PROC_MTC0_NS::Execute, static_cast<instructions::OpFlags>(0x00800002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MTC2 ( "PROC_MTC2", 1, &PROC_MTC2_NS::Execute, static_cast<instructions::OpFlags>(0x00800002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MTHC0 ( "PROC_MTHC0", 1, &PROC_MTHC0_NS::Execute, static_cast<instructions::OpFlags>(0x00800002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MTHC2 ( "PROC_MTHC2", 1, &PROC_MTHC2_NS::Execute, static_cast<instructions::OpFlags>(0x00800002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MUH ( "PROC_MUH", 1, &PROC_MUH_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MUHU ( "PROC_MUHU", 1, &PROC_MUHU_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_MUL ( "PROC_MUL", 1, &PROC_MUL_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
@@ -319,19 +332,143 @@ namespace mips::instructions {
 									return &StaticProc_PROC_POP26;
 								return nullptr;
 						}
+					case 0x1C000000:
+						switch(i & 0x03E00000) {
+							case 0x00000000:
+								return &StaticProc_PROC_BGTZALC;
+							default:
+								switch(i & 0xFC1F0000) {
+									case 0x1C000000:
+										return &StaticProc_PROC_BGTZ;
+									default:
+										if ((i & 0xFC000000) == 0x1C000000)
+											return &StaticProc_PROC_POP07;
+										return nullptr;
+								}
+								return nullptr;
+						}
+					case 0x18000000:
+						switch(i & 0x03E00000) {
+							case 0x00000000:
+								return &StaticProc_PROC_BLEZALC;
+							default:
+								switch(i & 0xFC1F0000) {
+									case 0x18000000:
+										return &StaticProc_PROC_BLEZ;
+									default:
+										if ((i & 0xFC000000) == 0x18000000)
+											return &StaticProc_PROC_POP06;
+										return nullptr;
+								}
+								return nullptr;
+						}
+					case 0x40000000:
+						switch(i & 0x03E007D8) {
+							case 0x00C00000:
+								return &StaticProc_PROC_MTHC0;
+							case 0x00800000:
+								return &StaticProc_PROC_MTC0;
+							case 0x00400000:
+								return &StaticProc_PROC_MFHC0;
+							case 0x00000000:
+								return &StaticProc_PROC_MFC0;
+							case 0x02000040:
+								return &StaticProc_PROC_ERETNC;
+							case 0x02000000:
+								return &StaticProc_PROC_ERET;
+							default:
+								return nullptr;
+						}
+					case 0x7C000000:
+						switch(i & 0x0000003F) {
+							case 0x00000025:
+								return &StaticProc_PROC_CACHE;
+							case 0x0000003D:
+								return &StaticProc_PROC_GINVI;
+							case 0x00000020:
+								switch(i & 0x03E007C0) {
+									case 0x00000080:
+										return &StaticProc_PROC_WSBH;
+									case 0x00000600:
+										return &StaticProc_PROC_SEH;
+									case 0x00000400:
+										return &StaticProc_PROC_SEB;
+									case 0x00000000:
+										return &StaticProc_PROC_BITSWAP;
+									default:
+										if ((i & 0xFC00073F) == 0x7C000220)
+											return &StaticProc_PROC_ALIGN;
+										return nullptr;
+								}
+							case 0x0000003B:
+								return &StaticProc_PROC_RDHWR;
+							case 0x0000001E:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										return &StaticProc_PROC_SCWPE;
+									default:
+										if ((i & 0xFC00007F) == 0x7C00001E)
+											return &StaticProc_PROC_SCE;
+										return nullptr;
+								}
+							case 0x00000026:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										return &StaticProc_PROC_SCWP;
+									default:
+										if ((i & 0xFC00007F) == 0x7C000026)
+											return &StaticProc_PROC_SC;
+										return nullptr;
+								}
+							case 0x0000002E:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										return &StaticProc_PROC_LLWPE;
+									default:
+										if ((i & 0xFC00007F) == 0x7C00002E)
+											return &StaticProc_PROC_LLE;
+										return nullptr;
+								}
+							case 0x00000036:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										return &StaticProc_PROC_LLWP;
+									default:
+										if ((i & 0xFC00007F) == 0x7C000036)
+											return &StaticProc_PROC_LL;
+										return nullptr;
+								}
+							case 0x0000002C:
+								return &StaticProc_PROC_LBE;
+							case 0x00000028:
+								return &StaticProc_PROC_LBUE;
+							case 0x0000002D:
+								return &StaticProc_PROC_LHE;
+							case 0x00000029:
+								return &StaticProc_PROC_LHUE;
+							case 0x0000002F:
+								return &StaticProc_PROC_LWE;
+							case 0x00000035:
+								return &StaticProc_PROC_PREF;
+							case 0x00000023:
+								return &StaticProc_PROC_PREFE;
+							case 0x0000001C:
+								return &StaticProc_PROC_SBE;
+							case 0x0000001D:
+								return &StaticProc_PROC_SHE;
+							case 0x0000001F:
+								return &StaticProc_PROC_SWE;
+							case 0x00000000:
+								return &StaticProc_PROC_EXT;
+							case 0x00000004:
+								return &StaticProc_PROC_INS;
+							default:
+								return nullptr;
+						}
 					case 0x00000000:
 						switch(i & 0x0000003F) {
 							case 0x0000000F:
 								return &StaticProc_PROC_SYNC;
-							case 0x00000009:
-								switch(i & 0x001FF800) {
-									case 0x00000000:
-										return &StaticProc_PROC_JR;
-									default:
-										if ((i & 0xFC1F003F) == 0x00000009)
-											return &StaticProc_PROC_JALR;
-										return nullptr;
-								}
 							case 0x00000021:
 								switch(i & 0x001F07C0) {
 									case 0x00000040:
@@ -339,6 +476,23 @@ namespace mips::instructions {
 									default:
 										if ((i & 0xFC0007FF) == 0x00000021)
 											return &StaticProc_PROC_ADDU;
+										return nullptr;
+								}
+							case 0x00000009:
+								switch(i & 0x001FFC00) {
+									case 0x00000400:
+										return &StaticProc_PROC_JR_HB;
+									case 0x00000000:
+										return &StaticProc_PROC_JR;
+									default:
+										switch(i & 0xFC1F043F) {
+											case 0x00000409:
+												return &StaticProc_PROC_JALR_HB;
+											case 0x00000009:
+												return &StaticProc_PROC_JALR;
+											default:
+												return nullptr;
+										}
 										return nullptr;
 								}
 							case 0x00000020:
@@ -652,87 +806,17 @@ namespace mips::instructions {
 									return &StaticProc_PROC_ADDIU;
 								return nullptr;
 						}
-					case 0x7C000000:
-						switch(i & 0x03E007FF) {
-							case 0x000000A0:
-								return &StaticProc_PROC_WSBH;
-							case 0x00000620:
-								return &StaticProc_PROC_SEH;
-							case 0x00000420:
-								return &StaticProc_PROC_SEB;
-							case 0x00000020:
-								return &StaticProc_PROC_BITSWAP;
+					case 0x48000000:
+						switch(i & 0x03E007F8) {
+							case 0x00E00000:
+								return &StaticProc_PROC_MTHC2;
+							case 0x00800000:
+								return &StaticProc_PROC_MTC2;
+							case 0x00600000:
+								return &StaticProc_PROC_MFHC2;
+							case 0x00000000:
+								return &StaticProc_PROC_MFC2;
 							default:
-								switch(i & 0xFC00003F) {
-									case 0x7C00003B:
-										return &StaticProc_PROC_RDHWR;
-									case 0x7C00001E:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												return &StaticProc_PROC_SCWPE;
-											default:
-												if ((i & 0xFC00007F) == 0x7C00001E)
-													return &StaticProc_PROC_SCE;
-												return nullptr;
-										}
-									case 0x7C000026:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												return &StaticProc_PROC_SCWP;
-											default:
-												if ((i & 0xFC00007F) == 0x7C000026)
-													return &StaticProc_PROC_SC;
-												return nullptr;
-										}
-									case 0x7C00002E:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												return &StaticProc_PROC_LLWPE;
-											default:
-												if ((i & 0xFC00007F) == 0x7C00002E)
-													return &StaticProc_PROC_LLE;
-												return nullptr;
-										}
-									case 0x7C000036:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												return &StaticProc_PROC_LLWP;
-											default:
-												if ((i & 0xFC00007F) == 0x7C000036)
-													return &StaticProc_PROC_LL;
-												return nullptr;
-										}
-									case 0x7C000020:
-										return &StaticProc_PROC_ALIGN;
-									case 0x7C000025:
-										return &StaticProc_PROC_CACHE;
-									case 0x7C00002C:
-										return &StaticProc_PROC_LBE;
-									case 0x7C000028:
-										return &StaticProc_PROC_LBUE;
-									case 0x7C00002D:
-										return &StaticProc_PROC_LHE;
-									case 0x7C000029:
-										return &StaticProc_PROC_LHUE;
-									case 0x7C00002F:
-										return &StaticProc_PROC_LWE;
-									case 0x7C000035:
-										return &StaticProc_PROC_PREF;
-									case 0x7C000023:
-										return &StaticProc_PROC_PREFE;
-									case 0x7C00001C:
-										return &StaticProc_PROC_SBE;
-									case 0x7C00001D:
-										return &StaticProc_PROC_SHE;
-									case 0x7C00001F:
-										return &StaticProc_PROC_SWE;
-									case 0x7C000000:
-										return &StaticProc_PROC_EXT;
-									case 0x7C000004:
-										return &StaticProc_PROC_INS;
-									default:
-										return nullptr;
-								}
 								return nullptr;
 						}
 					case 0x04000000:
@@ -769,36 +853,6 @@ namespace mips::instructions {
 									case 0xEC000000:
 										return &StaticProc_PROC_ADDIUPC;
 									default:
-										return nullptr;
-								}
-								return nullptr;
-						}
-					case 0x18000000:
-						switch(i & 0x03E00000) {
-							case 0x00000000:
-								return &StaticProc_PROC_BLEZALC;
-							default:
-								switch(i & 0xFC1F0000) {
-									case 0x18000000:
-										return &StaticProc_PROC_BLEZ;
-									default:
-										if ((i & 0xFC000000) == 0x18000000)
-											return &StaticProc_PROC_POP06;
-										return nullptr;
-								}
-								return nullptr;
-						}
-					case 0x1C000000:
-						switch(i & 0x03E00000) {
-							case 0x00000000:
-								return &StaticProc_PROC_BGTZALC;
-							default:
-								switch(i & 0xFC1F0000) {
-									case 0x1C000000:
-										return &StaticProc_PROC_BGTZ;
-									default:
-										if ((i & 0xFC000000) == 0x1C000000)
-											return &StaticProc_PROC_POP07;
 										return nullptr;
 								}
 								return nullptr;
@@ -911,19 +965,143 @@ namespace mips::instructions {
 									{ PROC_POP26_NS::Execute(i,p); return true; }
 								return false;
 						}
+					case 0x1C000000:
+						switch(i & 0x03E00000) {
+							case 0x00000000:
+								{ PROC_BGTZALC_NS::Execute(i,p); return true; }
+							default:
+								switch(i & 0xFC1F0000) {
+									case 0x1C000000:
+										{ PROC_BGTZ_NS::Execute(i,p); return true; }
+									default:
+										if ((i & 0xFC000000) == 0x1C000000)
+											{ PROC_POP07_NS::Execute(i,p); return true; }
+										return false;
+								}
+								return false;
+						}
+					case 0x18000000:
+						switch(i & 0x03E00000) {
+							case 0x00000000:
+								{ PROC_BLEZALC_NS::Execute(i,p); return true; }
+							default:
+								switch(i & 0xFC1F0000) {
+									case 0x18000000:
+										{ PROC_BLEZ_NS::Execute(i,p); return true; }
+									default:
+										if ((i & 0xFC000000) == 0x18000000)
+											{ PROC_POP06_NS::Execute(i,p); return true; }
+										return false;
+								}
+								return false;
+						}
+					case 0x40000000:
+						switch(i & 0x03E007D8) {
+							case 0x00C00000:
+								{ PROC_MTHC0_NS::Execute(i,p); return true; }
+							case 0x00800000:
+								{ PROC_MTC0_NS::Execute(i,p); return true; }
+							case 0x00400000:
+								{ PROC_MFHC0_NS::Execute(i,p); return true; }
+							case 0x00000000:
+								{ PROC_MFC0_NS::Execute(i,p); return true; }
+							case 0x02000040:
+								{ PROC_ERETNC_NS::Execute(i,p); return true; }
+							case 0x02000000:
+								{ PROC_ERET_NS::Execute(i,p); return true; }
+							default:
+								return false;
+						}
+					case 0x7C000000:
+						switch(i & 0x0000003F) {
+							case 0x00000025:
+								{ PROC_CACHE_NS::Execute(i,p); return true; }
+							case 0x0000003D:
+								{ PROC_GINVI_NS::Execute(i,p); return true; }
+							case 0x00000020:
+								switch(i & 0x03E007C0) {
+									case 0x00000080:
+										{ PROC_WSBH_NS::Execute(i,p); return true; }
+									case 0x00000600:
+										{ PROC_SEH_NS::Execute(i,p); return true; }
+									case 0x00000400:
+										{ PROC_SEB_NS::Execute(i,p); return true; }
+									case 0x00000000:
+										{ PROC_BITSWAP_NS::Execute(i,p); return true; }
+									default:
+										if ((i & 0xFC00073F) == 0x7C000220)
+											{ PROC_ALIGN_NS::Execute(i,p); return true; }
+										return false;
+								}
+							case 0x0000003B:
+								{ PROC_RDHWR_NS::Execute(i,p); return true; }
+							case 0x0000001E:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										{ PROC_SCWPE_NS::Execute(i,p); return true; }
+									default:
+										if ((i & 0xFC00007F) == 0x7C00001E)
+											{ PROC_SCE_NS::Execute(i,p); return true; }
+										return false;
+								}
+							case 0x00000026:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										{ PROC_SCWP_NS::Execute(i,p); return true; }
+									default:
+										if ((i & 0xFC00007F) == 0x7C000026)
+											{ PROC_SC_NS::Execute(i,p); return true; }
+										return false;
+								}
+							case 0x0000002E:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										{ PROC_LLWPE_NS::Execute(i,p); return true; }
+									default:
+										if ((i & 0xFC00007F) == 0x7C00002E)
+											{ PROC_LLE_NS::Execute(i,p); return true; }
+										return false;
+								}
+							case 0x00000036:
+								switch(i & 0x000007C0) {
+									case 0x00000040:
+										{ PROC_LLWP_NS::Execute(i,p); return true; }
+									default:
+										if ((i & 0xFC00007F) == 0x7C000036)
+											{ PROC_LL_NS::Execute(i,p); return true; }
+										return false;
+								}
+							case 0x0000002C:
+								{ PROC_LBE_NS::Execute(i,p); return true; }
+							case 0x00000028:
+								{ PROC_LBUE_NS::Execute(i,p); return true; }
+							case 0x0000002D:
+								{ PROC_LHE_NS::Execute(i,p); return true; }
+							case 0x00000029:
+								{ PROC_LHUE_NS::Execute(i,p); return true; }
+							case 0x0000002F:
+								{ PROC_LWE_NS::Execute(i,p); return true; }
+							case 0x00000035:
+								{ PROC_PREF_NS::Execute(i,p); return true; }
+							case 0x00000023:
+								{ PROC_PREFE_NS::Execute(i,p); return true; }
+							case 0x0000001C:
+								{ PROC_SBE_NS::Execute(i,p); return true; }
+							case 0x0000001D:
+								{ PROC_SHE_NS::Execute(i,p); return true; }
+							case 0x0000001F:
+								{ PROC_SWE_NS::Execute(i,p); return true; }
+							case 0x00000000:
+								{ PROC_EXT_NS::Execute(i,p); return true; }
+							case 0x00000004:
+								{ PROC_INS_NS::Execute(i,p); return true; }
+							default:
+								return false;
+						}
 					case 0x00000000:
 						switch(i & 0x0000003F) {
 							case 0x0000000F:
 								{ PROC_SYNC_NS::Execute(i,p); return true; }
-							case 0x00000009:
-								switch(i & 0x001FF800) {
-									case 0x00000000:
-										{ PROC_JR_NS::Execute(i,p); return true; }
-									default:
-										if ((i & 0xFC1F003F) == 0x00000009)
-											{ PROC_JALR_NS::Execute(i,p); return true; }
-										return false;
-								}
 							case 0x00000021:
 								switch(i & 0x001F07C0) {
 									case 0x00000040:
@@ -931,6 +1109,23 @@ namespace mips::instructions {
 									default:
 										if ((i & 0xFC0007FF) == 0x00000021)
 											{ PROC_ADDU_NS::Execute(i,p); return true; }
+										return false;
+								}
+							case 0x00000009:
+								switch(i & 0x001FFC00) {
+									case 0x00000400:
+										{ PROC_JR_HB_NS::Execute(i,p); return true; }
+									case 0x00000000:
+										{ PROC_JR_NS::Execute(i,p); return true; }
+									default:
+										switch(i & 0xFC1F043F) {
+											case 0x00000409:
+												{ PROC_JALR_HB_NS::Execute(i,p); return true; }
+											case 0x00000009:
+												{ PROC_JALR_NS::Execute(i,p); return true; }
+											default:
+												return false;
+										}
 										return false;
 								}
 							case 0x00000020:
@@ -1244,87 +1439,17 @@ namespace mips::instructions {
 									{ PROC_ADDIU_NS::Execute(i,p); return true; }
 								return false;
 						}
-					case 0x7C000000:
-						switch(i & 0x03E007FF) {
-							case 0x000000A0:
-								{ PROC_WSBH_NS::Execute(i,p); return true; }
-							case 0x00000620:
-								{ PROC_SEH_NS::Execute(i,p); return true; }
-							case 0x00000420:
-								{ PROC_SEB_NS::Execute(i,p); return true; }
-							case 0x00000020:
-								{ PROC_BITSWAP_NS::Execute(i,p); return true; }
+					case 0x48000000:
+						switch(i & 0x03E007F8) {
+							case 0x00E00000:
+								{ PROC_MTHC2_NS::Execute(i,p); return true; }
+							case 0x00800000:
+								{ PROC_MTC2_NS::Execute(i,p); return true; }
+							case 0x00600000:
+								{ PROC_MFHC2_NS::Execute(i,p); return true; }
+							case 0x00000000:
+								{ PROC_MFC2_NS::Execute(i,p); return true; }
 							default:
-								switch(i & 0xFC00003F) {
-									case 0x7C00003B:
-										{ PROC_RDHWR_NS::Execute(i,p); return true; }
-									case 0x7C00001E:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												{ PROC_SCWPE_NS::Execute(i,p); return true; }
-											default:
-												if ((i & 0xFC00007F) == 0x7C00001E)
-													{ PROC_SCE_NS::Execute(i,p); return true; }
-												return false;
-										}
-									case 0x7C000026:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												{ PROC_SCWP_NS::Execute(i,p); return true; }
-											default:
-												if ((i & 0xFC00007F) == 0x7C000026)
-													{ PROC_SC_NS::Execute(i,p); return true; }
-												return false;
-										}
-									case 0x7C00002E:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												{ PROC_LLWPE_NS::Execute(i,p); return true; }
-											default:
-												if ((i & 0xFC00007F) == 0x7C00002E)
-													{ PROC_LLE_NS::Execute(i,p); return true; }
-												return false;
-										}
-									case 0x7C000036:
-										switch(i & 0x000007C0) {
-											case 0x00000040:
-												{ PROC_LLWP_NS::Execute(i,p); return true; }
-											default:
-												if ((i & 0xFC00007F) == 0x7C000036)
-													{ PROC_LL_NS::Execute(i,p); return true; }
-												return false;
-										}
-									case 0x7C000020:
-										{ PROC_ALIGN_NS::Execute(i,p); return true; }
-									case 0x7C000025:
-										{ PROC_CACHE_NS::Execute(i,p); return true; }
-									case 0x7C00002C:
-										{ PROC_LBE_NS::Execute(i,p); return true; }
-									case 0x7C000028:
-										{ PROC_LBUE_NS::Execute(i,p); return true; }
-									case 0x7C00002D:
-										{ PROC_LHE_NS::Execute(i,p); return true; }
-									case 0x7C000029:
-										{ PROC_LHUE_NS::Execute(i,p); return true; }
-									case 0x7C00002F:
-										{ PROC_LWE_NS::Execute(i,p); return true; }
-									case 0x7C000035:
-										{ PROC_PREF_NS::Execute(i,p); return true; }
-									case 0x7C000023:
-										{ PROC_PREFE_NS::Execute(i,p); return true; }
-									case 0x7C00001C:
-										{ PROC_SBE_NS::Execute(i,p); return true; }
-									case 0x7C00001D:
-										{ PROC_SHE_NS::Execute(i,p); return true; }
-									case 0x7C00001F:
-										{ PROC_SWE_NS::Execute(i,p); return true; }
-									case 0x7C000000:
-										{ PROC_EXT_NS::Execute(i,p); return true; }
-									case 0x7C000004:
-										{ PROC_INS_NS::Execute(i,p); return true; }
-									default:
-										return false;
-								}
 								return false;
 						}
 					case 0x04000000:
@@ -1361,36 +1486,6 @@ namespace mips::instructions {
 									case 0xEC000000:
 										{ PROC_ADDIUPC_NS::Execute(i,p); return true; }
 									default:
-										return false;
-								}
-								return false;
-						}
-					case 0x18000000:
-						switch(i & 0x03E00000) {
-							case 0x00000000:
-								{ PROC_BLEZALC_NS::Execute(i,p); return true; }
-							default:
-								switch(i & 0xFC1F0000) {
-									case 0x18000000:
-										{ PROC_BLEZ_NS::Execute(i,p); return true; }
-									default:
-										if ((i & 0xFC000000) == 0x18000000)
-											{ PROC_POP06_NS::Execute(i,p); return true; }
-										return false;
-								}
-								return false;
-						}
-					case 0x1C000000:
-						switch(i & 0x03E00000) {
-							case 0x00000000:
-								{ PROC_BGTZALC_NS::Execute(i,p); return true; }
-							default:
-								switch(i & 0xFC1F0000) {
-									case 0x1C000000:
-										{ PROC_BGTZ_NS::Execute(i,p); return true; }
-									default:
-										if ((i & 0xFC000000) == 0x1C000000)
-											{ PROC_POP07_NS::Execute(i,p); return true; }
 										return false;
 								}
 								return false;

@@ -346,7 +346,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 	{
 		set(rax, uintptr(do_syscall));
 		mov(qword[rbp + offsets.ic], rdi);
-		mov(dword[rbp + offsets.pc], int32(address));
+		mov(dword[rbp + offsets.pc], address);
 		mov(dword[rbp + offsets.flags], ebx);
 		set(ecx, int32(code));
 		lea(rdx, qword[rbp - 128]);
@@ -360,7 +360,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 	else
 	{
 		set(ecx, code);
-		mov(dword[rbp + offsets.pc], int32(address));
+		mov(dword[rbp + offsets.pc], address);
 		set(rax, uintptr(SYS_Exception));
 		jmp(intrinsic_ex, T_NEAR);
 
@@ -372,7 +372,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_BREAK(jit1::ChunkOffset & _
 	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
 
 	set(ecx, code);
-	mov(dword[rbp + offsets.pc], int32(address));
+	mov(dword[rbp + offsets.pc], address);
 	set(rax, uintptr(BP_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 
@@ -383,7 +383,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SIGRIE(jit1::ChunkOffset & 
 	const uint32 code = instructions::TinyInt<20>(instruction >> 6).zextend<uint32>();
 
 	set(ecx, code);
-	mov(dword[rbp + offsets.pc], int32(address));
+	mov(dword[rbp + offsets.pc], address);
 	set(rax, uintptr(RI_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 

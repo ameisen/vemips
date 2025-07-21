@@ -65,6 +65,9 @@
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1_branch_common.hpp">
       <Filter>processor\jit\jit1</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\mips\instructions\instructions_support.hpp">
+      <Filter>instructions</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\mips\pch.cpp" />
@@ -121,6 +124,9 @@
     </ClCompile>
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_branch_common.cpp">
       <Filter>processor\jit\jit1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\instructions\instructions_support.cpp">
+      <Filter>instructions</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

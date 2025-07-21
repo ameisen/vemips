@@ -268,6 +268,8 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 		const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 
+		const uint8 hint = instructions::TinyInt<5>(instruction >> 6).zextend<uint8>();
+
 		const uint32 link_address = address + 8;
 
 		auto&& op_rs = get_register_op32(rs);
@@ -286,10 +288,17 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 			set(op_rd, link_address);
 		}
 		intrinsic_set_delay_branch();
+
+		if ((hint & 0b10000U) != 0U)
+		{
+			intrinsic_clear_hazards(address);
+		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JR))
 	{
 		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
+
+		const uint8 hint = instructions::TinyInt<5>(instruction >> 6).zextend<uint8>();
 
 		auto&& op_rs = get_register_op32(rs);
 
@@ -302,11 +311,16 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 			mov(esi, op_rs);
 		}
 		intrinsic_set_delay_branch();
+
+		if ((hint & 0b10000U) != 0U)
+		{
+			intrinsic_clear_hazards(address);
+		}
 	}
 	else
 	{
 		xwarn(false, "delay branch implementation missing");
-		insert_procedure_ecx(address, std::bit_cast<void*>(instruction_info.Proc), instruction, instruction_info);
+		insert_procedure_ecx(address, std::bit_cast<void*>(instruction_info.Proc), instruction);
 		return except_result::can_except;
 	}
 

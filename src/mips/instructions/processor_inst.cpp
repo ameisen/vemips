@@ -8,6 +8,8 @@
 
 #include <limits>
 
+#include "instructions_support.hpp"
+
 using namespace mips;
 
 #pragma region Boilerplate
@@ -25,16 +27,21 @@ struct PROC_ ## InsInstruction																																	 \
 	template <typename reg_t, typename format_t>																											  \
 	static _forceinline bool write_result(reg_t &dest, format_t value)																				\
 	{																																										\
+		_block_forceinline \
 		return PROC_Helper::_write_result<reg_t, format_t, Flags>(dest, value);																	  \
 	}																																										\
 };																																										  \
 namespace PROC_ ## InsInstruction ## _NS																														\
 {																																											\
-	uint64 Execute(const instruction_t instruction, processor & __restrict processor)																	 \
+	_flatten _forceinline uint64 Execute(const instruction_t instruction, processor & __restrict processor)																	 \
 	{																																										\
-		set_current_coprocessor(processor.get_coprocessor(1));																							 \
+		_block_forceinline \
+		auto&& coprocessor = processor.get_coprocessor<1>(); \
+		_block_forceinline \
+		set_current_coprocessor(coprocessor);																							 \
+		_block_forceinline \
 		PROC_Helper::Execute<PROC_ ## InsInstruction >(																									  \
-			instruction, processor, *(coprocessor1 * __restrict)processor.get_coprocessor(1)													  \
+			instruction, processor, *coprocessor													  \
 		);																																								  \
 		return 0;																																						 \
 	}																																										\
@@ -99,11 +106,13 @@ namespace mips::instructions
 				//	((coprocessor1::FCSR &)coprocessor.get_FCSR()).Cause = 0;
 				//}
 
+				_block_forceinline
 				InsT::SubExecute(instruction, processor, coprocessor);
 
 				if constexpr ((InsT::Flags & OpFlags::WritesGPRegister) == OpFlags::WritesGPRegister)
 				{
 					// Clear zero register
+					_block_forceinline
 					processor.set_register(0, 0U);
 				}
 			}
@@ -112,11 +121,13 @@ namespace mips::instructions
 				if constexpr ((InsT::Flags & OpFlags::WritesGPRegister) == OpFlags::WritesGPRegister)
 				{
 					// Clear zero register
+					_block_forceinline
 					processor.set_register(0, 0U);
 				}
 
 				if (processor.get_jit_type() == JitType::Jit) [[likely]]
 				{
+					_block_forceinline
 					processor.set_trapped_exception(ex);
 				}
 				else
@@ -1240,7 +1251,7 @@ namespace mips::instructions
 		GINVI,
 		(OpFlags::ReadsGPRegister),
 		0b111111'00000'1111111111111'11'111111,
-		0b011111'00000'0000000000000'00'111101,
+		0b011111'00000'0000000000000'00'111101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
 		const GPRegister<21, 5> rs(instruction, processor);
@@ -1373,7 +1384,8 @@ namespace mips::instructions
 		0b00000000000000000000000011000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		// do nothing. We have no hazards.
+		processor.clear_memory_hazards(memory_hazards::all_data);
+		processor.clear_instruction_hazards();
 		return true;
 	}
 
@@ -1466,8 +1478,8 @@ namespace mips::instructions
 	ProcInstructionDef(
 		JALR,
 		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
-		0b11111100000111110000000000111111,
-		0b00000000000000000000000000001001
+		0b111111'00000'11111'00000'1'0000'111111,
+		0b000000'00000'00000'00000'0'0000'001001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
 		const GPRegister<21, 5> rs(instruction, processor);
@@ -1480,10 +1492,25 @@ namespace mips::instructions
 	}
 
 	ProcInstructionDef(
+		JALR_HB,
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		0b111111'00000'11111'00000'1'0000'111111,
+		0b000000'00000'00000'00000'1'0000'001001
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor1)
+	{
+		const bool result = PROC_JALR::SubExecute(instruction, processor, coprocessor1);
+
+		processor.clear_memory_hazards(memory_hazards::all_data);
+		processor.clear_instruction_hazards();
+
+		return result;
+	}
+
+	ProcInstructionDef(
 		JR,
 		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
-		0b11111100000111111111100000111111,
-		0b00000000000000000000000000001001
+		0b111111'00000'1111111111'1'0000'111111,
+		0b000000'00000'0000000000'0'0000'001001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
 		const GPRegister<21, 5> rs(instruction, processor);
@@ -1491,6 +1518,21 @@ namespace mips::instructions
 		processor.delay_branch(rs.value<uint32>());
 
 		return true;
+	}
+
+	ProcInstructionDef(
+		JR_HB,
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
+		0b111111'00000'1111111111'1'0000'111111,
+		0b000000'00000'0000000000'1'0000'001001
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor1)
+	{
+		const bool result = PROC_JR::SubExecute(instruction, processor, coprocessor1);
+
+		processor.clear_memory_hazards(memory_hazards::all_data);
+		processor.clear_instruction_hazards();
+
+		return result;
 	}
 
 	ProcInstructionDef(
@@ -1987,27 +2029,31 @@ namespace mips::instructions
 		const uint32 selector = TinyInt<3>(instruction >> 6).zextend<uint32>();
 		const uint32 reg_number = rd.get_register();
 
-		// only handle 0:1 and 0:29, as MUSL uses that.
-		const uint64 selected_reg = (uint64(selector) << 32) | reg_number;
-		switch (selected_reg)
+		const auto make_case = [](const uint32 _register, const uint32 _selector)
 		{
-			case (0ULL << 32) | 0U: // CPUNum
+			return (uint64(_selector) << 32) | _register;
+		};
+
+		// only handle 0:1 and 0:29, as MUSL uses that.
+		switch (const uint64 selected_reg = make_case(reg_number, selector))
+		{
+			case make_case(0, 0): // CPUNum
 				return write_result(rt, 0);
-			case (0ULL << 32) | 1U: // SYNCI_Step
-				return write_result(rt, 0x100ul);
-			case (0ULL << 32) | 2U: // CC
+			case make_case(1, 0): // SYNCI_Step
+				return write_result(rt, processor.get_cache_line_size());
+			case make_case(2, 0): // CC
 				// TODO : COP `Count` register
 				return write_result(rt, uint32(processor.get_instruction_count()));
-			case (0ULL << 32) | 3U: // CCRes
+			case make_case(3, 0): // CCRes
 				return write_result(rt, 1); // CC register increments every CPU cycle
-			case (0ULL << 32) | 4U: // PerfCtr
+			case make_case(4, 0): // PerfCtr
 				// TODO : figure out how to implement this
 				// It's defined here: https://training.mips.com/cps_mips/PDF/CM_Performance_Counters.pdf
 				// I'm not sure yet how this is supposed to work, though.
 				break;
-			case (0ULL << 32) | 5U: // XNP
+			case make_case(5, 0): // XNP
 				return write_result(rt, 0); // TODO : set to 1 when LL/SC is properly-implemented
-			case (0ULL << 32) | 29U:
+			case make_case(29, 0):
 				return write_result(rt, processor.user_value_);
 			default: [[unlikely]]
 				break;
@@ -2321,6 +2367,9 @@ namespace mips::instructions
 		GPRegister<11, 5> rd(instruction, processor);
 		const uint32 sa = TinyInt<5>(instruction >> 6).zextend<uint32>();
 
+		// this would be EHB, which is handled by another case
+		_assume(!(rt.is_zero() && rd.is_zero() && sa == 0b00011));
+
 		const uint32 result = rt.value<uint32>() << sa;
 
 		return write_result(rd, result);
@@ -2569,9 +2618,17 @@ namespace mips::instructions
 		(OpFlags::None),
 		0b11111111111111111111100000111111,
 		0b00000000000000000000000000001111
-	) (const instruction_t, processor & __restrict, coprocessor1 & __restrict)
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		// Do Nothing
+		const uint8 stype = TinyInt<5>(instruction >> 6).zextend<uint8>();
+
+		const mips::memory_hazards hazards = instructions::parse_sync_type(stype);
+
+		if (hazards != memory_hazards::none) [[likely]]
+		{
+			processor.clear_memory_hazards(hazards);
+		}
+
 		return true;
 	}
 
@@ -2588,6 +2645,8 @@ namespace mips::instructions
 		const uint32 address = base.value<uint32>() + offset;
 
 		processor.mem_poke<char>(address); // We still want to touch the address.
+
+		processor.invalidate_instruction_cache(address);
 
 		// TODO : operates on a cache line
 
@@ -2784,5 +2843,251 @@ namespace mips::instructions
 		const uint32 result = rs.value<uint32>() ^ offset;
 
 		return write_result(rt, result);
+	}
+
+	// TODO : move to cop0
+	ProcInstructionDef(
+		MFC0,
+		(OpFlags::WritesGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010000'00000'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		// TODO : if we ever support non-r6, it is undefined if we don't implement said register. R6 defines it as zero.
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+	}
+
+	// TODO : move to cop0
+	ProcInstructionDef(
+		MFHC0,
+		(OpFlags::WritesGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010000'00010'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		// TODO : if we ever support non-r6, it is undefined if we don't implement said register. R6 defines it as zero.
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+	}
+
+	// TODO : move to cop0
+	ProcInstructionDef(
+		MTC0,
+		(OpFlags::ReadsGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010000'00100'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+	}
+
+	// TODO : move to cop0
+	ProcInstructionDef(
+		MTHC0,
+		(OpFlags::ReadsGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010000'00110'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+	}
+
+	// TODO : move to cop0
+	ProcInstructionDef(
+		ERET,
+		(OpFlags::Throws),
+		0b111111'1'111111111111111111'1'011000,
+		0b010000'1'000000000000000000'0'000000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+
+		// otherwise, we would have done a hazard clear
+		#if 0
+		processor.clear_memory_hazards(processor::memory_hazards::all);
+		processor.clear_instruction_hazards();
+		#endif
+	}
+
+	// TODO : move to cop0
+	ProcInstructionDef(
+		ERETNC,
+		(OpFlags::Throws),
+		0b111111'1'111111111111111111'1'011000,
+		0b010000'1'000000000000000000'1'000000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+
+		// otherwise, we would have done a hazard clear
+		#if 0
+		processor.clear_memory_hazards(processor::memory_hazards::all_data);
+		processor.clear_instruction_hazards();
+		#endif
+	}
+
+	// TODO : move to cop2
+	ProcInstructionDef(
+		MFC2,
+		(OpFlags::WritesGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010010'00000'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		// TODO : if we ever support non-r6, it is undefined if we don't implement said register. R6 defines it as zero.
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+	}
+
+	// TODO : move to cop2
+	ProcInstructionDef(
+		MFHC2,
+		(OpFlags::WritesGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010010'00011'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		// TODO : if we ever support non-r6, it is undefined if we don't implement said register. R6 defines it as zero.
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+	}
+
+	// TODO : move to cop2
+	ProcInstructionDef(
+		MTC2,
+		(OpFlags::ReadsGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010010'00100'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+	}
+
+	// TODO : move to cop2
+	ProcInstructionDef(
+		MTHC2,
+		(OpFlags::ReadsGPRegister | OpFlags::Throws),
+		0b111111'11111'00000'00000'11111111'000,
+		0b010010'00111'00000'00000'00000000'000
+	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
+	{
+		#if 0
+		const GPRegister<11, 5> rd(instruction, processor);
+		GPRegister<16, 5> rt(instruction, processor);
+		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
+
+		uint32 result = 0;
+
+		switch (rd.value<uint32>())
+		{
+			
+		}
+
+		return write_result(rt, result);
+		#endif
+
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
 	}
 }

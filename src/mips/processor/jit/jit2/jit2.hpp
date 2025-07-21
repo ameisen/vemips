@@ -138,5 +138,11 @@ namespace mips {
 		size_t get_max_instruction_size() const __restrict {
 			return m_largest_instruction;
 		}
+
+		[[nodiscard]]
+		// ReSharper disable once CppMemberFunctionMayBeStatic
+		uint32 get_chunk_size() const __restrict {
+			return ChunkSize;
+		}
 	};
 }

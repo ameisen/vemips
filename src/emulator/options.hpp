@@ -62,6 +62,7 @@ namespace vemips::options
 		bool disable_cti = false;
 		bool instruction_cache = true;
 		bool use_rox = false;
+		bool strict_noncoherence = false;
 	};
 
 #ifndef EMSCRIPTEN

@@ -60,7 +60,8 @@ namespace
 				.ticked = argument_data.ticks != 0,
 				.instruction_cache = argument_data.instruction_cache,
 				.debug = argument_data.debug.enabled,
-				.debug_owned = argument_data.debug.enabled
+				.debug_owned = argument_data.debug.enabled,
+				.strict_noncoherence = argument_data.strict_noncoherence
 			};
 			try {
 				sys_options.validate();

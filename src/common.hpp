@@ -18,6 +18,7 @@
 #	pragma warning(push, 0)
 #endif
 #define FMT_HEADER_ONLY 1
+#include <variant>
 #include <fmt/format.h>
 #ifdef UNICODE
 #	include <fmt/xchar.h>
@@ -59,6 +60,7 @@
 #	define _cold __attribute__((__cold__))
 #	define _flatten __attribute__((__flatten__))
 #	define _result_noalias __declspec(restrict)
+#	define _block_forceinline [[msvc::forceinline_calls]]
 
 #elif defined(_MSC_VER)
 #	define _unpredictable(expr) (expr)
@@ -86,8 +88,9 @@
 #	define _pragma_default_code _Pragma("optimize(\"\", on)")
 #	define _hot
 #	define _cold
-#	define _flatten
+#	define _flatten [[msvc::flatten]]
 #	define _result_noalias __declspec(restrict)
+#	define _block_forceinline [[msvc::forceinline_calls]]
 
 #elif defined(__GNUC__)
 # error GCC unimplemented
@@ -631,7 +634,115 @@ namespace mips {
 			true
 		};
 	}
+
+	template <typename T>
+	requires (std::is_nothrow_convertible_v<T, bool>)
+	static T& value_or(T& value, T& else_value)
+	{
+		return static_cast<bool>(value) ?
+			value :
+			else_value;
+	}
+
+	template <typename T, typename... Tt>
+	requires (
+		std::is_nothrow_convertible_v<T, bool> &&
+		std::is_nothrow_convertible_v<Tt..., T>
+	)
+	static T& value_or(T& value, T& else_value, Tt&&... else_values)
+	{
+		return static_cast<bool>(value) ?
+			value :
+			value_or(else_value, std::forward<Tt>(else_values)...);
+	}
+
+	template <typename T, typename TConverter>
+	requires (
+		std::is_nothrow_convertible_v<T, bool> &&
+		std::is_nothrow_invocable_v<TConverter>
+	)
+	static T& value_or(T& value, TConverter&& else_getter)
+	{
+		return static_cast<bool>(value) ?
+			value :
+			else_getter();
+	}
+
+	template<typename... Ts>
+	struct overloads : Ts... { using Ts::operator()...; };
+
+	#if 0
+	template<typename TReturn, typename... Ts>
+	struct overloads_no_monostate : Ts... {
+		using Ts::operator()...;
+		_forceinline
+		_nothrow TReturn operator ()(std::monostate) noexcept { return {}; }
+	};
+
+	template<typename TReturn, typename... TFunc> overloads_no_monostate(TFunc...) -> overloads_no_monostate<TReturn, TFunc...>;
+	#endif
+
+	static constexpr uint64 next_pow2(const uint32 value)
+	{
+		uint64 v = value;
+
+		v |= v >> 1;
+		v |= v >> 2;
+		v |= v >> 4;
+		v |= v >> 8;
+		v |= v >> 16;
+		v |= v >> 32;
+		v++;
+
+		return v;
+	}
+
+	static constexpr uint64 round_up_pow2(const uint32 value)
+	{
+		uint64 v = value;
+
+		v--;
+		v |= v >> 1;
+		v |= v >> 2;
+		v |= v >> 4;
+		v |= v >> 8;
+		v |= v >> 16;
+		v |= v >> 32;
+		v++;
+
+		return v;
+	}
 }
+
+#define MAKE_BITFLAG_ENUM(enum_type) \
+	static constexpr enum_type operator & (const enum_type a, const enum_type b) { \
+		using underlying_t = std::underlying_type_t<decltype(a)>; \
+		return decltype(a)(underlying_t(a) & underlying_t(b)); \
+	} \
+ \
+	static constexpr enum_type operator | (const enum_type a, const enum_type b) { \
+		using underlying_t = std::underlying_type_t<decltype(a)>; \
+		return decltype(a)(underlying_t(a) | underlying_t(b)); \
+	} \
+ \
+	static constexpr enum_type operator &= (enum_type& __restrict a, const enum_type b) { \
+		using underlying_t = std::underlying_type_t<decltype(b)>; \
+		return a = decltype(b)(underlying_t(a) & underlying_t(b)); \
+	} \
+ \
+	static constexpr enum_type operator |= (enum_type& __restrict a, const enum_type b) { \
+		using underlying_t = std::underlying_type_t<decltype(b)>; \
+		return a = decltype(b)(underlying_t(a) | underlying_t(b)); \
+	} \
+ \
+	static constexpr enum_type operator ~ (const enum_type v) { \
+		using underlying_t = std::underlying_type_t<decltype(v)>; \
+		return decltype(v)(~underlying_t(v)); \
+	} \
+ \
+	static constexpr bool operator ! (const enum_type v) { \
+		return v == enum_type::none; \
+	}
 
 #define _make_qual(type) copy_qualifiers<decltype(self), type>
 

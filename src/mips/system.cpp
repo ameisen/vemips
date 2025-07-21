@@ -19,18 +19,46 @@ namespace {
 
 class sys_memory_source final : public mips::memory_source {
 	std::vector<char> m_Memory;
+	std::optional<std::vector<char>> m_ShadowMemory; // used for instructions
 	std::vector<mips::processor *> m_RegisteredProcessors;
 	std::vector<std::pair<uint32, uint32>> m_ExecutableBlocks;
 public:
-	explicit sys_memory_source(const uint32 size) : m_Memory(size) {}
+	explicit sys_memory_source(const bool with_shadow_memory, const uint32 size)
+		: m_Memory(size)
+	{
+		if (with_shadow_memory)
+		{
+			m_ShadowMemory = std::vector<char>(size);
+		}
+	}
 	virtual ~sys_memory_source() override = default;
 
+private:
+	_forceinline
+	const void* at_impl(const std::vector<char>& memory, const uint32 offset, const uint32 size) const
+	{
+		const size_t end_offset = size_t(offset) + size;
+		if _unlikely(end_offset > uint32(memory.size())) [[unlikely]] {
+			return nullptr;
+		}
+		return memory.data() + offset;
+	}
+
+public:
 	virtual void * get_ptr() override {
 		return m_Memory.data();
 	}
 
 	virtual const void * get_ptr() const override {
 		return m_Memory.data();
+	}
+
+	virtual void * get_shadow_ptr() override {
+		return m_ShadowMemory.value_or(m_Memory).data();
+	}
+
+	virtual const void * get_shadow_ptr() const override {
+		return m_ShadowMemory.value_or(m_Memory).data();
 	}
 
 	virtual uint32 get_size() const override {
@@ -57,26 +85,27 @@ public:
 	}
 
 	virtual const void * at(const uint32 offset, const uint32 size) const override {
-		const size_t end_offset = size_t(offset) + size;
-		if _unlikely(end_offset > uint32(m_Memory.size())) [[unlikely]] {
-			return nullptr;
-		}
-		return m_Memory.data() + offset;
+		return at_impl(m_Memory, offset, size);
+	}
+	virtual const void * at_instruction(const uint32 offset, const uint32 size) const override {
+		return at_impl(m_ShadowMemory.value_or(m_Memory), offset, size);
 	}
 	virtual const void * at_exec(const uint32 offset, const uint32 size) const override {
+		auto&& memory = m_ShadowMemory.value_or(m_Memory);
+
 		const size_t end_offset = size_t(offset) + size;
-		if _unlikely(end_offset > uint32(m_Memory.size())) [[unlikely]] {
+		if _unlikely(end_offset > uint32(memory.size())) [[unlikely]] {
 			return nullptr;
 		}
 		if (!m_ExecutableBlocks.empty()) {
 			for (auto&& exec_block : m_ExecutableBlocks) {
 				if (offset >= exec_block.first && end_offset <= exec_block.second) {
-					return m_Memory.data() + offset;
+					return memory.data() + offset;
 				}
 			}
 		}
 		else {
-			return m_Memory.data() + offset;
+			return memory.data() + offset;
 		}
 		return nullptr;
 	}
@@ -170,13 +199,16 @@ void mips::system::options::validate() const {
 
 void system::initialize(const elf::binary & __restrict binary) {
 	char * __restrict mem_data;
+	char * __restrict shadow_mem_data;
 	uint32 mem_size;
 	if (options_.mmu_type == mmu::emulated) {
 		mem_data = (char *)memory_source_->get_ptr();
+		shadow_mem_data = (char *)memory_source_->get_shadow_ptr();
 		mem_size = memory_source_->get_size();
 	}
 	else {
 		mem_data = memory_.data();
+		shadow_mem_data = shadow_memory_.has_value() ? shadow_memory_->data() : nullptr;
 		mem_size = uint32(memory_.size());
 	}
 
@@ -184,6 +216,7 @@ void system::initialize(const elf::binary & __restrict binary) {
 	if (options_.mmu_type == mmu::host) {
 		stack_offset = 0;
 		mem_data = (char *)host_mmu_->get_pointer();
+		shadow_mem_data = (char *)host_mmu_->get_shadow_pointer();
 		mem_size = options_.total_memory;
 	}
 
@@ -320,6 +353,11 @@ void system::initialize(const elf::binary & __restrict binary) {
 		stack_start -= stack_offset;
 	}
 	processor_->set_register<uint32>(29, uint32(stack_start));
+
+	if (shadow_mem_data)
+	{
+		memcpy(shadow_mem_data, mem_data, mem_size);
+	}
 }
 
 system::system(capabilities&& capabilities, const options & __restrict init_options, const elf::binary & __restrict binary)
@@ -341,24 +379,30 @@ system::system(capabilities&& capabilities, const options & __restrict init_opti
 
 	switch (init_options.mmu_type) {
 	case mmu::emulated:
-		memory_source_ = new sys_memory_source(init_options.total_memory);
+		memory_source_ = new sys_memory_source(init_options.strict_noncoherence, init_options.total_memory);
 		cpu_options.mem_src = memory_source_;
 		break;
 	case mmu::host:
-		host_mmu_ = new platform::host_mmu(init_options.total_memory, init_options.stack_memory);
+		host_mmu_ = new platform::host_mmu(init_options.strict_noncoherence, init_options.total_memory, init_options.stack_memory);
 		cpu_options.mem_ptr = (char*)host_mmu_->get_pointer();
+		cpu_options.shadow_mem_ptr = (char*)host_mmu_->get_shadow_pointer();
 		cpu_options.mem_size = init_options.total_memory;
 		break;
 	default:
 		memory_.resize(init_options.total_memory);
 		cpu_options.mem_ptr = memory_.data();
+		if (init_options.strict_noncoherence)
+		{
+			shadow_memory_.emplace().resize(init_options.total_memory);	
+			cpu_options.shadow_mem_ptr = shadow_memory_->data();
+		}
 		cpu_options.mem_size = uint32(memory_.size());
 		break;
 	}
 
 	processor_ = new processor(cpu_options);
 	initialize(binary);
-	if (init_options.read_only_exec) {
+	if (init_options.read_only_exec && memory_source_) {
 		memory_source_->set_executable_memory(binary);
 	}
 

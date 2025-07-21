@@ -1,5 +1,5 @@
 #pragma once
-/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Jul 15 2025 19:49:01) */
+/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Jul 19 2025 20:20:05) */
 // ReSharper disable CppClangTidyClangDiagnosticUnreachableCodeReturn IdentifierTypo CommentTypo
 #include "mips/mips_common.hpp"
 
@@ -99,14 +99,19 @@ namespace mips::instructions {
 	namespace PROC_DIV_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_DIVU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_EHB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_ERET_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_ERETNC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_EXT_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_GINVI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_INS_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_J_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_JAL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_JALR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_JALR_HB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_JIALC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_JIC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_JR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_JR_HB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_LB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_LBE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_LBU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
@@ -123,9 +128,17 @@ namespace mips::instructions {
 	namespace PROC_LW_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_LWE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_LWPC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MFC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MFC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MFHC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MFHC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_MOD_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_MODU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_MOVE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MTC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MTC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MTHC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	namespace PROC_MTHC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_MUH_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_MUHU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
 	namespace PROC_MUL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
@@ -308,14 +321,19 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_DIV; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_DIVU; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_EHB; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_ERET; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_ERETNC; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_EXT; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_GINVI; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_INS; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_J; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_JAL; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_JALR; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_JALR_HB; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_JIALC; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_JIC; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_JR; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_JR_HB; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_LB; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_LBE; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_LBU; 
@@ -332,9 +350,17 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_LW; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_LWE; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_LWPC; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MFC0; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MFC2; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MFHC0; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MFHC2; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MOD; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MODU; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MOVE; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MTC0; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MTC2; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MTHC0; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MTHC2; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MUH; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MUHU; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_MUL; 

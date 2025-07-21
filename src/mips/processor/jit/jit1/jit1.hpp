@@ -202,15 +202,18 @@ namespace mips {
 		instruction_cache_t lookup_cache_;
 		processor& __restrict processor_;
 		#if USE_CACHE
-		Chunk * __restrict last_chunk_ = nullptr;
-		ChunkOffset * __restrict last_chunk_offset_ = nullptr;
+		struct cache_element final
+		{
+			Chunk * __restrict chunk_ = nullptr;
+			ChunkOffset * __restrict chunk_offset_ = nullptr;
+			uint32 chunk_address_ = uint32(-1);
+		};
+		std::array<cache_element, 6> last_cached;
+		uint32 last_cached_index = 0;
 		#endif
 		Chunk* __restrict flush_chunk_ = nullptr;
 		size_t largest_instruction_ = 0;
 		std::shared_ptr<char[]> global_exec_data;
-		#if USE_CACHE
-		uint32 last_chunk_address_ = uint32(-1);
-		#endif
 		uint32 current_executing_chunk_address_ = 0;
 		uint32 flush_address_ = 0;
 
@@ -228,6 +231,12 @@ namespace mips {
 		[[nodiscard]]
 		size_t get_max_instruction_size() const __restrict {
 			return largest_instruction_;
+		}
+
+		[[nodiscard]]
+		// ReSharper disable once CppMemberFunctionMayBeStatic
+		uint32 get_chunk_size() const __restrict {
+			return ChunkSize;
 		}
 
 	private:

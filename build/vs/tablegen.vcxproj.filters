@@ -36,6 +36,9 @@
     <ClCompile Include="..\..\src\tablegen\tablegen.cpp" />
     <ClCompile Include="..\..\src\tablegen\writers.cpp" />
     <ClCompile Include="..\..\src\tablegen\tablegen.pch.cpp" />
+    <ClCompile Include="..\..\src\mips\instructions\instructions_support.cpp">
+      <Filter>mips\instructions</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\mips\instructions\coprocessor1_inst.hpp">
@@ -72,5 +75,8 @@
     <ClInclude Include="..\..\src\tablegen\options.hpp" />
     <ClInclude Include="..\..\src\tablegen\tablegen.pch.hpp" />
     <ClInclude Include="..\..\src\tablegen\writers.hpp" />
+    <ClInclude Include="..\..\src\mips\instructions\instructions_support.hpp">
+      <Filter>mips\instructions</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

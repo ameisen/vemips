@@ -23,7 +23,7 @@ namespace
 	}
 
 	static uint32 memory_touched_jit(processor * const __restrict proc, const uint32 address) {
-		return proc->jit1_->memory_touched(address) ? 1 : 0;
+		return std::get<jit1* __restrict>(proc->jit_)->memory_touched(address) ? 1 : 0;
 	}
 }
 
@@ -184,32 +184,47 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 			else
 			{
 				mov(eax, op_base);
-			if (offset) {
-				add(eax, offset);
-			}
+				if (offset) {
+					add(eax, offset);
+				}
 			}
 			// error checking
 			if (mmu_type == mmu::none) {
 				const Xbyak::Label ades;
+
 				mov(edx, eax);
+				if (jit_.processor_.stack_size_)
+				{
+					// zero test
+					lea(edx, dword[eax - 1]);
+					add(edx, store_size);
+					jo(ades, T_SHORT);
 
-				// zero test
-				lea(ecx, dword[eax - 1]);
-				add(ecx, store_size);
-				jo(ades, T_SHORT);
-
-				// Offset for stack
-				if (jit_.processor_.stack_size_) {
+					// Offset for stack
+					mov(ecx, eax);
 					add(eax, jit_.processor_.stack_size_);
-				}
 
-				// check for range
-				cmp(eax, uint32((jit_.processor_.memory_size_ - store_size) - offset));
+					// check for range
+					cmp(eax, uint32((jit_.processor_.memory_size_ - store_size) - offset));
+				}
+				else
+				{
+					// check for range
+					const int64 pow2_memsize = int64(next_pow2(jit_.processor_.memory_size_));
+					const int32 addend = int32(pow2_memsize + (store_size - 1));
+					const int32 cmpand = int32(pow2_memsize + store_size);
+					add(edx, addend);
+					cmp(edx, cmpand);
+					jae(ades, T_SHORT);
+				}
 				const Xbyak::Label no_ades;
 				jbe(no_ades, T_SHORT);
 				L(ades);
 				set(eax, address);
-				mov(ecx, ebx);
+				if (!jit_.processor_.stack_size_)
+				{
+					mov(ecx, eax);
+				}
 				jmp(intrinsics_.ades, T_NEAR);
 				L(no_ades);
 			}
@@ -433,12 +448,12 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				{
 					mov(edx, op_base);
 
-				if (offset != 0) {
-					add(edx, offset);
+					if (offset != 0) {
+						add(edx, offset);
+					}
 				}
 			}
-				}
-				else {
+			else {
 				set(edx, offset);
 			}
 
@@ -459,8 +474,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			L(valid_ptr);
 		}
 		else {
-			// This would be far faster if we could easily memory map. Then we could just wrap the address range around.
-			// So ist das Leben.
+			// This would be far faster if we could memory map easily. Then we could just wrap the address range around.
 			if (base.is_zero()) {
 				// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 				// Check for basic range things.
@@ -511,23 +525,23 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				else
 				{
 					mov(eax, op_base);
-				if (offset) {
-					add(eax, offset);
-				}
+					if (offset) {
+						add(eax, offset);
+					}
 				}
 				// error checking
 				if (mmu_type == mmu::none) {
 					const Xbyak::Label adel;
 
-					mov(edx, eax);
-
 					// zero test
-					lea(ecx, dword[eax - 1]);
-					add(ecx, load_size);
+					lea(edx, dword[eax - 1]);
+					add(edx, load_size);
 					jo(adel, T_SHORT);
 
 					// Offset for stack
-					if (jit_.processor_.stack_size_) {
+					if (jit_.processor_.stack_size_)
+					{
+						mov(ecx, eax);
 						add(eax, jit_.processor_.stack_size_);
 					}
 
@@ -537,7 +551,10 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					jbe(no_adel, T_SHORT);
 					L(adel);
 					set(eax, address);
-					mov(ecx, edx);
+					if (!jit_.processor_.stack_size_)
+					{
+						mov(ecx, eax);
+					}
 					jmp(intrinsics_.adel, T_NEAR);
 					L(no_adel);
 				}

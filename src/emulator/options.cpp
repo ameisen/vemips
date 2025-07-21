@@ -90,7 +90,7 @@ namespace vemips::options
 	}
 
 #ifndef EMSCRIPTEN
-	static std::array<option, 16> get_options ()
+	static std::array<option, 17> get_options ()
 	{
 		return {
 			option{
@@ -241,6 +241,20 @@ namespace vemips::options
 					}
 
 					argument_data.use_rox = b_value;
+				}
+			},
+			{
+				{TSTR("--strict-noncoherence")},
+				TSTR("Toggles instructions being read from shadow memory, simulating non-coherent instruction caches."),
+				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict, std::optional<tstring_view>&& value) {
+					bool b_value = true;
+
+					if (const auto bool_value = parse_value_bool(value))
+					{
+						b_value = *bool_value;
+					}
+
+					argument_data.strict_noncoherence = b_value;
 				}
 			},
 			{

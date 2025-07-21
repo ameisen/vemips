@@ -111,7 +111,7 @@ namespace mips
 		{
 			mov(dword[rbp + offsets.pc], patch_target_address_reg);
 		}
-		if (edx != patch_target_address_reg)
+		if (!is_same(edx, patch_target_address_reg))
 		{
 			mov(edx, eax);
 		}
@@ -166,7 +166,7 @@ namespace mips
 
 		const Xbyak::Label not_within;
 
-		if (target_address != ecx)
+		if (!is_same(target_address, ecx))
 		{
 			mov(ecx, target_address);
 		}

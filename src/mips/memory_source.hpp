@@ -16,6 +16,7 @@ namespace mips {
 		virtual bool is_readable(uint32 offset) const __restrict = 0;
 		virtual bool is_writable(uint32 offset) const __restrict = 0;
 		virtual const void * at(uint32 offset, uint32 size) const __restrict = 0;
+		virtual const void * at_instruction(uint32 offset, uint32 size) const __restrict = 0;
 		virtual const void * at_exec(uint32 offset, uint32 size) const __restrict = 0;
 		virtual void * write_at(uint32 offset, uint32 size) __restrict = 0;
 
@@ -24,6 +25,8 @@ namespace mips {
 
 		virtual void * get_ptr() = 0;
 		virtual const void * get_ptr() const = 0;
+		virtual void * get_shadow_ptr() = 0;
+		virtual const void * get_shadow_ptr() const = 0;
 		virtual uint32 get_size() const = 0;
 
 		virtual void set_executable_memory(const elf::binary & __restrict binary) __restrict = 0;

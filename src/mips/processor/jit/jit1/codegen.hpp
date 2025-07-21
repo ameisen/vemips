@@ -569,7 +569,7 @@ namespace mips
 
 		void write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update);
 
-		void insert_procedure_ecx(uint32 address, void* procedure, uint32 _ecx, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void insert_procedure_ecx(uint32 address, void* procedure, uint32 _ecx);
 
 		enum class except_result : uint32
 		{
@@ -714,6 +714,8 @@ namespace mips
 		void intrinsic_write_patch_epilog(const Xbyak::Label& patch);
 		void intrinsic_write_patch_jump(const jit1::Chunk& __restrict chunk, uint32 target_address, const Xbyak::Reg& patch_target_address_reg, bool set_pc);
 		void intrinsic_insert_jump(const jit1::Chunk& __restrict chunk, const jit1::ChunkOffset& __restrict chunk_offset, uint32 address, const Xbyak::Operand& target_address);
+
+		void intrinsic_clear_hazards(uint32 address);
 	};
 
 	static constexpr Jit1_CodeGen::except_result operator | (const Jit1_CodeGen::except_result a, const Jit1_CodeGen::except_result b)
@@ -724,5 +726,19 @@ namespace mips
 	static constexpr Jit1_CodeGen::except_result operator & (const Jit1_CodeGen::except_result a, const Jit1_CodeGen::except_result b)
 	{
 		return Jit1_CodeGen::except_result(std::to_underlying(a) & std::to_underlying(b));
+	}
+
+	static bool is_same(const Xbyak::Reg& a, const Xbyak::Reg& b)
+	{
+		return a.getIdx() == b.getIdx();
+	}
+
+	static bool is_same(const Xbyak::Operand& a, const Xbyak::Operand& b)
+	{
+		if (a.isREG() && b.isREG())
+		{
+			return is_same(a.getReg(), b.getReg());
+		}
+		return a == b;
 	}
 }
