@@ -11,7 +11,7 @@
 #include "instructions/instructions.hpp"
 #include "instructions/instructions_common.hpp"
 #include "instructions/instructions_table.hpp"
-#include "platform/platform.hpp"
+#include "platform/platform_headers.hpp"
 #include "processor/processor.hpp"
 
 using namespace mips;
@@ -166,6 +166,8 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 			&free_executable
 		};
 
+		const Xbyak::Label call_instruction_hazard;
+
 		Jit1_CodeGen cg{ *this, reinterpret_cast<uint8 *>(exec_data), global_exec_data_size };
 		{
 			static constexpr const auto offsets = processor::recompiler_offsets<>::get<int8>();
@@ -176,9 +178,38 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 			cg.mov(cg.dword[cg.rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], cg.r15d);
 			cg.mov(cg.rax, intptr(jit1_drop_signal));
 			cg.jmp(cg.rax);
+			{
+				const Xbyak::Label no_redirect;
+
+				// ecx = current address
+				// rax = call address
+				// rdx = return address - not a true call, this is intended to be jumped to
+				// r9  = argument
+				cg.L(call_instruction_hazard);
+				cg.push(cg.rdx);
+				cg.mov(cg.qword[cg.rbp + offsets.ic], cg.rdi);
+				cg.mov(cg.dword[cg.rbp + offsets.pc], cg.ecx);
+				cg.mov(cg.dword[cg.rbp + offsets.flags], cg.ebx);
+				cg.lea(cg.rdx, cg.qword[cg.rbp - 128]);
+				cg.mov(cg.rcx, cg.r9);
+				cg.call(cg.rax);
+				cg.test(cg.rax, cg.rax);
+				cg.jz(no_redirect);
+				{
+					// If we reach here, we altered the current chunk, meaning we need to jump to a different offset.
+					cg.inc(cg.rdi);
+					cg.add(cg.rsp, sizeof(void*));
+					cg.jmp(cg.rax);
+				}
+				cg.L(no_redirect);
+				cg.pop(cg.rax);
+				cg.jmp(cg.rax);
+			}
 		}
 
 		cg.ready();
+
+		call_instruction_hazard_ptr_ = call_instruction_hazard.getAddress();
 
 		_clear_cache(exec_data, exec_data + cg.getSize());
 	}
@@ -282,6 +313,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		bool compact_branch = false;
 		bool delay_branch = false;
 		bool possible_after_delaybranch = false;
+		bool possible_after_delaybranch_hazard = false;
 		bool store_handled = false;
 
 		const uint32 current_address = start_address;
@@ -306,10 +338,9 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		
 		if (this_processor.ticked_ && this_processor.debugging_)
 		{
-			mov(rax, intptr(&should_debug_break));
-			mov(dword[rbp + offsets.pc], int32(current_address));
+			mov(dword[rbp + offsets.pc], current_address);
 			lea(rcx, qword[rbp - 128]);
-			call(rax);
+			std::ignore = call_ex(std::bit_cast<void*>(&should_debug_break), rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
 			cmp(rdi, r14);
@@ -317,18 +348,17 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 		else if (this_processor.debugging_)
 		{
-			mov(rax, intptr(&should_debug_break));
-			mov(dword[rbp + offsets.pc], int32(current_address));
+			mov(dword[rbp + offsets.pc], current_address);
 			lea(rcx, qword[rbp - 128]);
-			call(rax);
+			std::ignore = call_ex(std::bit_cast<void*>(&should_debug_break), rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
 		}
 		else if (this_processor.ticked_)
 		{
 			// check if we are already at our tick count.
+			mov(eax, current_address);
 			cmp(rdi, r14);
-			mov(eax, int32(current_address));
 			je(intrinsics_.save_return_eax_pc, T_NEAR);
 		}
 
@@ -337,8 +367,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			const size_t ins_start_size = getSize();
 
 			// Also fetch previous instruction.
-			const instruction_t * __restrict prev_ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4);
-			if (prev_ptr)
+			if (const instruction_t * __restrict prev_ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4))
 			{
 				prev_instruction = *prev_ptr;
 				prev_instruction_info_ptr = mips::FindExecuteInstruction(prev_instruction);
@@ -350,6 +379,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				if (prev_instruction_info_ptr && instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::DelayBranch))
 				{
 					possible_after_delaybranch = true;
+					possible_after_delaybranch_hazard = instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::Hazard);
 				}
 			}
 
@@ -380,7 +410,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 							test(ebx, processor::flag::no_cti);
 							jz(no_ex);
-							set(ecx, int32(current_address));
+							set(ecx, current_address);
 							jmp(intrinsics_.ri, T_NEAR);
 							L(no_ex);
 						}
@@ -398,8 +428,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					// TODO : temporary for debugging
 					if (false)
 					{
-						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
-						exception_result = except_result::can_except;
+						exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 					}
 					else if (instructions::HasAnyFlags(instruction_info_ptr->OpFlags, instructions::OpFlags::Store))
 					{
@@ -414,7 +443,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 								set(rcx, intptr(instruction_info_ptr->Name));
 								call(intrinsics_.emulated_stats);
 							}
-							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
+							exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 						}
 						else
 						{
@@ -435,7 +464,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 								call(intrinsics_.emulated_stats);
 							}
 
-							insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
+							exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 							exception_result = except_result::can_except;
 						}
 					}
@@ -599,6 +628,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					{
 						write_PROC_SEH(chunk_offset, current_address, instruction, *instruction_info_ptr);
 					}
+					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_EHB))
+					{
+						write_PROC_EHB(chunk_offset, current_address, instruction, *instruction_info_ptr);
+					}
 					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SLL))
 					{
 						write_PROC_SLL(chunk_offset, current_address, instruction, *instruction_info_ptr);
@@ -688,6 +721,14 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					{
 						write_PROC_LSA(chunk_offset, current_address, instruction, *instruction_info_ptr);
 					}
+					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_CLZ))
+					{
+						write_PROC_CLZ(chunk_offset, current_address, instruction, *instruction_info_ptr);
+					}
+					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_CLO))
+					{
+						write_PROC_CLO(chunk_offset, current_address, instruction, *instruction_info_ptr);
+					}
 					else
 					{
 						if (this_processor.collect_stats_)
@@ -697,8 +738,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							call(intrinsics_.emulated_stats);
 						}
 
-						insert_procedure_ecx(current_address, instruction_info_ptr->Proc, instruction);
-						exception_result = except_result::can_except;
+						exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 					}
 
 					cti = instruction_info_ptr->Flags.control;
@@ -706,7 +746,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 				else
 				{
 					// RI
-					set(ecx, int32(current_address));
+					set(ecx, current_address);
 					jmp(intrinsics_.ri, T_NEAR);
 					exception_result = except_result::always_throw;
 				}
@@ -714,7 +754,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			else
 			{
 				// AdEL
-				set(ecx, int32(current_address));
+				set(ecx, current_address);
 				jmp(intrinsics_.adel, T_NEAR);
 				exception_result = except_result::always_throw;
 			}
@@ -739,7 +779,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 
 		bool can_throw = (exception_result & (except_result::can_except | except_result::always_except)) != except_result::none;
-		bool terminate_instruction = (exception_result & (except_result::always_except | except_result::always_throw)) != except_result::none;
+		bool terminate_instruction = (exception_result & (except_result::always_except | except_result::always_throw | except_result::always_exits)) != except_result::none;
 
 		const auto exception_check_epilog = [&]
 		{
@@ -767,26 +807,6 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 		if (!terminate_instruction)
 		{
-			// TODO is this right? Will the program counter be correct?
-			if (alters_memory && !store_handled)
-			{
-				// Presently stores are all subroutine calls, which save pc.
-
-				// 8A 42 7F 84 C0 74 10 49 FF C0 4C 01 42 7F 41 C1 E0 02 44 01 42 7F C3 
-				// 8A 42 7F 84 C0 74 08 49 FF C0 44 01 42 7F C3 
-				// mov al, byte [rdx + 0x7F]
-				// test al, al
-				// je no_flush
-				// inc r8
-				// add qword [rdx + 0x7F], r8 ; ic_offset
-				// shl r8d, 2
-				// add dword [rdx + 0x7F], r8d ; pc_offset
-				// ret
-				// no_flush:
-				test(ebx, processor::flag::jit_mem_flush);
-				jnz(intrinsics_.store_flush, T_NEAR);
-			}
-
 			if (insert_function_location == insert_location::before_exception_check)
 			{
 				insert_function(chunk, chunk_offset, current_address);
@@ -801,7 +821,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 			if (possible_after_delaybranch)
 			{
-				handle_delay_branch(chunk, chunk_offset, current_address - 4, prev_instruction, *prev_instruction_info_ptr);
+				handle_delay_branch(chunk, chunk_offset, current_address - 4, prev_instruction, *prev_instruction_info_ptr, possible_after_delaybranch_hazard);
 			}
 		}
 		else
@@ -887,11 +907,6 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			jmp(rax);
 		}
 
-		if (intrinsics_.store_flush.used) {
-			L(intrinsics_.store_flush);
-			jmp(intrinsics_.save_return, T_SHORT);
-		}
-
 		if (intrinsics_.check_ex.used) {
 			L(intrinsics_.check_ex);
 			jmp(intrinsics_.save_return, T_SHORT);
@@ -921,20 +936,18 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			// dispatch a stat call.
 			if (intrinsics_.stats.used) {
 				L(intrinsics_.stats);
-				set(rax, uintptr(increment_instruction_statistic));
 				lea(rdx, qword[rbp - 128]);
 				sub(rsp, 40);
-				call(rax);
+				std::ignore = call_ex(&increment_instruction_statistic, rax);
 				add(rsp, 40);
 				ret();
 			}
 
 			if (intrinsics_.emulated_stats.used) {
 				L(intrinsics_.emulated_stats);
-				set(rax, uintptr(increment_jit_emulated_instruction_statistic));
 				lea(rdx, qword[rbp - 128]);
 				sub(rsp, 40);
-				call(rax);
+				std::ignore = call_ex(&increment_jit_emulated_instruction_statistic, rax);
 				add(rsp, 40);
 				ret();
 			}
@@ -982,68 +995,6 @@ void jit1::populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restr
 	}
 	Jit1_CodeGen cg{ *this, chunk.m_data, chunk.m_datasize };
 	cg.write_chunk(chunk_offset, chunk, start_address, update);
-}
-
-// TODO may also need to update the _following_ chunk if we are altering the last instruction of this chunk.
-bool jit1::memory_touched(const uint32 address)
-{
-	// Presume this is a sorted vector by address. We want to find a chunk that contains this address, if there is one.
-	// TODO replace this with log n binary search.
-
-	const uint32 mapped_address = address & ~(ChunkSize - 1);
-
-	if (Chunk * __restrict dirty_chunk = get_chunk(address))
-	{
-		const uint32 adjusted_address = address & ~((1 << 2) - 1);
-		if (mapped_address == (current_executing_chunk_address_& ~(ChunkSize - 1)))
-		{
-			flush_address_ = adjusted_address;
-			processor_.set_flags(processor::flag::jit_mem_flush);
-			flush_chunk_ = dirty_chunk;
-			return true;
-		}
-		else
-		{
-			populate_chunk(*(dirty_chunk->m_chunk_offset), *dirty_chunk, adjusted_address, true);
-			if (
-				const auto next_address = adjusted_address + 4u;
-				next_address == dirty_chunk->m_offset + ChunkSize
-			)
-			{
-				// At the end of the chunk. Also update next chunk if it exists.
-				if (memory_touched(next_address) && next_address == mapped_address)
-				{
-					return true;
-				}
-			}
-		}
-	}
-	return false;
-	/*
-	for (Chunk *chunk : m_Chunks)
-	{
-		if (chunk->m_offset == mapped_address)
-		{
-			const uint32 adjusted_address = address & ~((1 << 2) - 1);
-			if (mapped_address == (m_CurrentExecutingChunkAddress& ~(ChunkSize - 1)))
-			{
-				m_FlushAddress = adjusted_address;
-				processor_.m_jit_meta = 1;
-				m_FlushChunk = chunk;
-			}
-			else
-			{
-				populate_chunk(*(chunk->m_chunk_offset), *chunk, adjusted_address, true);
-				if (adjusted_address + 4 == chunk->m_offset + ChunkSize)
-				{
-					// At the end of the chunk. Also update next chunk if it exists.
-					memory_touched(adjusted_address + 4);
-				}
-			}
-			break;
-		}
-	}
-	*/
 }
 
 namespace
@@ -1120,17 +1071,6 @@ void jit1::execute_instruction(const uint32 address)
 		}
 		else {
 			ExecutionFailException::throw_helper();
-		}
-	}
-	if _unlikely(processor.get_flags(processor::flag::jit_mem_flush)) [[unlikely]]
-	{
-		populate_chunk(*flush_chunk_->m_chunk_offset, *flush_chunk_, flush_address_, true);
-		if (
-			const uint32 next_flush_address = flush_address_ + 4; 
-			next_flush_address == flush_chunk_->m_offset + ChunkSize
-		)
-		{
-			memory_touched(next_flush_address);
 		}
 	}
 	if (processor.get_flags(processor::flag::trapped_exception))

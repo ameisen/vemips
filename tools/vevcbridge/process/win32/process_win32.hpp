@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "platform/platform.hpp"
+#include "platform/platform_headers.hpp"
 
 namespace buildcarbide::process {
 	class process final {

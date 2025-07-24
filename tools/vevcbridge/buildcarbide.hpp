@@ -20,7 +20,7 @@
 // ReSharper disable once CppInconsistentNaming
 #define check(condition) carbide_check(condition)
 
-#include "platform/platform.hpp"
+#include "platform/platform_headers.hpp"
 #include "libfmt.hpp"
 
 namespace buildcarbide {

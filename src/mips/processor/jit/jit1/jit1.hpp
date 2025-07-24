@@ -6,6 +6,7 @@
 #include "common.hpp"
 
 #include <unordered_map>
+#include <bit>
 #include <array>
 #include "mips_common.hpp"
 #include <cassert>
@@ -33,12 +34,36 @@ namespace {
 		static inline bool is_instruction(const instruction_info &lhs, const instruction_info &rhs) {
 			return &lhs == &rhs;
 		}
+
+		struct hazard_barrier_instruction final
+		{
+			bool is_instruction = false;
+			bool is_hazard_barrier = false;
+
+			hazard_barrier_instruction(const bool _is_instruction, const bool _is_hazard_barrier)
+				: is_instruction(_is_instruction || _is_hazard_barrier)
+				, is_hazard_barrier(_is_hazard_barrier)
+			{}
+
+			operator bool() const
+			{
+				return is_instruction;
+			}
+		};
 	}
 }
 
 #define IS_INSTRUCTION(instr, ref) \
 	[&]() -> bool { \
 		return _detail::is_instruction(mips::instructions::StaticProc_ ## ref, instr); \
+	}()
+
+#define IS_INSTRUCTION_HB(instr, ref) \
+	[&]() -> _detail::hazard_barrier_instruction { \
+		return { \
+			_detail::is_instruction(mips::instructions::StaticProc_ ## ref, instr), \
+			_detail::is_instruction(mips::instructions::StaticProc_ ## ref ## _HB, instr) \
+		}; \
 	}()
 
 namespace mips {
@@ -50,7 +75,7 @@ namespace mips {
 	public:
 		static constexpr const size_t MaxChunkRealSize = std::max(ChunkSize / 0x100, 1U) * 8192;
 	private:
-		static constexpr const size_t ChunkSizeLog2 = log2_ceil(ChunkSize);
+		static constexpr const size_t ChunkSizeLog2 = std::bit_width(ChunkSize - 1UZ);
 		static constexpr const size_t RemainingLog2 = 32 - ChunkSizeLog2 - 8 - 8;
 		static constexpr const size_t NumInstructionsChunk = ChunkSize / 4;
 		using ChunkOffset = std::array<uint32, NumInstructionsChunk>;
@@ -58,6 +83,10 @@ namespace mips {
 			struct patch final {
 				uint32 offset;
 				uint32 target;
+				enum class types : uint8
+				{
+					full
+				} type;
 			};
 
 			ChunkOffset * __restrict m_chunk_offset = nullptr;
@@ -226,7 +255,6 @@ namespace mips {
 		jit_instructionexec_t get_instruction(uint32 address);
 		jit_instructionexec_t fetch_instruction(uint32 address);
 		Chunk * get_chunk(uint32 address) const;
-		bool memory_touched(uint32 address);
 
 		[[nodiscard]]
 		size_t get_max_instruction_size() const __restrict {
@@ -239,7 +267,13 @@ namespace mips {
 			return ChunkSize;
 		}
 
-	private:
+		[[nodiscard]]
+		static uint32 get_static_chunk_size()
+		{
+			return ChunkSize;
+		}
 
+	private:
+		const void* call_instruction_hazard_ptr_ = nullptr;
 	};
 }

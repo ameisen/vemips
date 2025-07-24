@@ -1,5 +1,6 @@
 #include "pch.hpp"
 
+#define NOMINMAX 1
 #undef WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <PowrProf.h>

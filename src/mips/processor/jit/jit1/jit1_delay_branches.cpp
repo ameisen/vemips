@@ -263,7 +263,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		set(esi, target_address);
 		intrinsic_set_delay_branch();
 	}
-	else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
+	else if (auto&& jalr = IS_INSTRUCTION_HB(instruction_info, PROC_JALR))
 	{
 		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 		const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
@@ -287,14 +287,12 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		{
 			set(op_rd, link_address);
 		}
-		intrinsic_set_delay_branch();
 
-		if ((hint & 0b10000U) != 0U)
-		{
-			intrinsic_clear_hazards(address);
-		}
+		xassert(jalr.is_hazard_barrier == (hint == 0b10000U));
+
+		intrinsic_set_delay_branch(jalr.is_hazard_barrier);
 	}
-	else if (IS_INSTRUCTION(instruction_info, PROC_JR))
+	else if (auto&& jr = IS_INSTRUCTION_HB(instruction_info, PROC_JR))
 	{
 		const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 
@@ -310,18 +308,15 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 		{
 			mov(esi, op_rs);
 		}
-		intrinsic_set_delay_branch();
 
-		if ((hint & 0b10000U) != 0U)
-		{
-			intrinsic_clear_hazards(address);
-		}
+		xassert(jr.is_hazard_barrier == (hint == 0b10000U));
+
+		intrinsic_set_delay_branch(jr.is_hazard_barrier);
 	}
 	else
 	{
 		xwarn(false, "delay branch implementation missing");
-		insert_procedure_ecx(address, std::bit_cast<void*>(instruction_info.Proc), instruction);
-		return except_result::can_except;
+		return insert_procedure_check_hazard(address, instruction_info, instruction);
 	}
 
 	return except_result::none;
@@ -333,9 +328,9 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 //	 far_branch,				 // Branches outside this chunk
 //	 indeterminate			  // Branches to an unknown location
 // };
-void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const bool hazard)
 {
-	branch_type branch_type;
+	branch_type branch_type = branch_type::none;
 	uint32 target_address = 0;
 
 	const uint32 this_address = address + 4;
@@ -345,33 +340,19 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	const uint32 next_chunk = chunk_last + 1;
 	const uint32 this_offset = (this_address - chunk_begin) / 4u;
 
-	const auto write_edx_to_patch_target = [this](uint32& target)
-	{
-		intptr patch_target_address = intptr(&target);
-		if (
-			patch_target_address >= intptr(std::numeric_limits<int32>::lowest()) &&
-			patch_target_address <= intptr(std::numeric_limits<int32>::max())
-		)
-		{
-			// xbyak cannot handle this sequence properly
-			// mov dword ptr [ds:patch_target_address], edx
-
-			db(0x89, 0x14, 0x25);
-			dd(uint32(patch_target_address));
-		}
-		else
-		{
-			mov(rcx, patch_target_address);
-			mov(dword[rcx], edx);
-		}
-	};
-
 	const auto safe_jmp = [&](const Xbyak::Label &target_label, const uint32 instruction_offset)
 	{
+		const bool can_be_short =
+			(
+				instruction_offset <= this_offset &&
+				(chunk_offset[this_offset] - chunk_offset[instruction_offset]) <= 128
+			) ||
+			(instruction_offset - this_offset) <= MaxShortJumpLookAhead;
+
 		const LabelType label_type =
-			((instruction_offset <= this_offset && (chunk_offset[this_offset] - chunk_offset[instruction_offset]) <= 128) || (instruction_offset - this_offset) <= MaxShortJumpLookAhead) ?
-			T_AUTO :
-			T_NEAR;
+			can_be_short ?
+				T_AUTO :
+				T_NEAR;
 
 		jmp(target_label, label_type);
 	};
@@ -380,155 +361,56 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 	{
 		const int32 offset = instructions::TinyInt<18>(instruction << 2U).sextend<int32>();
 		target_address = address + 4 + offset;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, COP1_BC1NEZ_v))
 	{
 		const int32 offset = instructions::TinyInt<18>(instruction << 2U).sextend<int32>();
 		target_address = address + 4 + offset;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BAL))
 	{
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		target_address = address + 4 + immediate;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BEQ))
 	{
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		target_address = address + 4 + immediate;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGEZ))
 	{
 		const int32 immediate = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		target_address = address + 4 + immediate;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BGTZ))
 	{
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		target_address = address + 4 + offset;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLEZ))
 	{
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		target_address = address + 4 + offset;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BLTZ))
 	{
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		target_address = address + 4 + offset;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_BNE))
 	{
 		const int32 offset = instructions::TinyInt<18>(instruction << 2).sextend<int32>();
 		target_address = address + 4 + offset;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_J))
 	{
 		const uint32 instr_index = instructions::TinyInt<28>(instruction << 2).zextend<uint32>();
-		target_address =  (address & instructions::HighBits(4)) | instr_index;;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
+		target_address =  (address & instructions::HighBits(4)) | instr_index;
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JAL))
 	{
 		const uint32 instr_index = instructions::TinyInt<28>(instruction << 2).zextend<uint32>();
-		target_address =  (address & instructions::HighBits(4)) | instr_index;;
-
-		if (chunk_begin <= target_address && chunk_last >= target_address)
-		{
-			branch_type = branch_type::near_branch;
-		}
-		else
-		{
-			branch_type = branch_type::far_branch;
-		}
+		target_address =  (address & instructions::HighBits(4)) | instr_index;
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JALR))
 	{
@@ -541,15 +423,6 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		else
 		{
 			target_address = 0;
-
-			if (chunk_begin <= target_address && chunk_last >= target_address)
-			{
-				branch_type = branch_type::near_branch;
-			}
-			else
-			{
-				branch_type = branch_type::far_branch;
-			}
 		}
 	}
 	else if (IS_INSTRUCTION(instruction_info, PROC_JR))
@@ -563,15 +436,6 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		else
 		{
 			target_address = 0;
-
-			if (chunk_begin <= target_address && chunk_last >= target_address)
-			{
-				branch_type = branch_type::near_branch;
-			}
-			else
-			{
-				branch_type = branch_type::far_branch;
-			}
 		}
 	}
 	else
@@ -580,18 +444,62 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		branch_type = branch_type::indeterminate_unhandled;
 	}
 
+	if (branch_type == branch_type::none)
+	{
+		if (chunk_begin <= target_address && chunk_last >= target_address)
+		{
+			branch_type = branch_type::near_branch;
+		}
+		else
+		{
+			branch_type = branch_type::far_branch;
+		}
+	}
+
+	// In the case where the hazard flush doesn't clear the current chunk, it will continue execution as normal.
+	// In the case where it does, it will change the program counter to our target.
+	// TODO: This is actually slightly suboptimal for the `near_branch`-case, as it adds an additional `jmp`.
+	const auto insert_hazard = [&] (const int32 target)
+	{
+		if (!hazard)
+		{
+			return;
+		}
+		const Xbyak::Label no_hazard;
+		test(ebx, processor::flag::instruction_hazard);
+		jz(no_hazard);
+		//std::ignore = flush_pc(eax, instruction_offset);
+		intrinsic_clear_hazards(this_offset, target);
+		L(no_hazard);
+	};
+
+	const auto insert_hazard_reg = [&] (const Xbyak::Reg& target)
+	{
+		if (!hazard)
+		{
+			return;
+		}
+		const Xbyak::Label no_hazard;
+		test(ebx, processor::flag::instruction_hazard);
+		jz(no_hazard);
+		//std::ignore = flush_pc(eax, instruction_offset);
+		intrinsic_clear_hazards(this_offset, target);
+		L(no_hazard);
+	};
+
 	switch (branch_type)
 	{
 		case branch_type::near_branch:						// Branches within this chunk
 		{
 			const Xbyak::Label no_branch;
 			test(ebx, processor::flag::branch_delay);
-			je(no_branch);
+			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
 			// what is the offset of the target address?
 			const uint32 target_offset = (target_address - chunk_begin) / 4u;
 			const auto& target_label = get_instruction_offset_label(target_offset);
 			xor_(esi, esi);
+			insert_hazard(target_address);
 			safe_jmp(target_label, target_offset);
 			L(no_branch);
 		} break;
@@ -599,11 +507,11 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		{
 			const Xbyak::Label no_branch;
 			test(ebx, processor::flag::branch_delay);
-			je(no_branch);
+			jz(no_branch);
 			xor_(esi, esi);
 			and_(ebx, ~processor::flag::branch_delay);
+			insert_hazard(target_address);
 			intrinsic_write_patch_jump(chunk, target_address, edx, false);
-
 			L(no_branch);
 		} break;
 		case branch_type::indeterminate:					 // Branches to an unknown location
@@ -612,10 +520,11 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			const Xbyak::Label not_within;
 
 			test(ebx, processor::flag::branch_delay);
-			je(no_branch);
+			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
 			mov(eax, esi);
 			xor_(esi, esi);
+			insert_hazard_reg(eax);
 
 			mov(ecx, eax);
 			and_(ecx, ~(jit1::ChunkSize - 1));
@@ -638,9 +547,8 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jmp(rax);
 			L(not_within);
 			mov(rdx, rax);
-			set(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
 			set(rcx, uintptr(&jit_));
-			call(rax);
+			std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
 			jmp(rax);
 			L(no_branch);
 		} break;
@@ -650,6 +558,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
+			insert_hazard(target_address);
 			mov(dword[rbp + offsets.pc], target_address);
 
 			// what is the offset of the target address?
@@ -665,12 +574,12 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
+			insert_hazard(target_address);
 			mov(edx, target_address);
 			mov(dword[rbp + offsets.pc], edx);
 
-			mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
 			mov(rcx, uintptr(&jit_));
-			call(rax);
+			std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
 			jmp(rax);
 
 			L(no_branch);
@@ -684,6 +593,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
 			mov(eax, dword[rbp + offsets.dbt]);
+			insert_hazard_reg(eax);
 			mov(dword[rbp + offsets.pc], eax);
 
 			mov(ecx, eax);
@@ -707,11 +617,14 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jmp(rax);
 			L(not_within);
 			mov(rdx, rax);
-			mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
 			mov(rcx, uintptr(&jit_));
-			call(rax);
+			std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
 			jmp(rax);
 			L(no_branch);
 		} break;
+		case branch_type::none:
+			xunreachable("none should not be reachable");
 	}
+
+	insert_hazard(this_offset + 4);
 }

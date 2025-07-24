@@ -10,7 +10,7 @@
 #include "elf/elf.hpp"
 #include "mips/system.hpp"
 #include "mips/coprocessor/coprocessor1/coprocessor1.hpp"
-#include "platform/platform.hpp"
+#include "platform/platform_headers.hpp"
 
 #include <WS2tcpip.h>
 #include <WinSock2.h>

@@ -92,8 +92,8 @@ namespace
 				throw;
 			}
 		}
-		catch (const std::runtime_error& exception) {
-			fmt::println(stderr, "\n** Error: {}", exception.what());
+		catch (const std::exception& exception) {
+			fmt::println(stderr, "\n** Internal Error: {}", exception.what());
 		}
 		catch (mips::ExecutionCompleteException) {
 			fmt::println("\n** 'main' return detected - execution terminated");
@@ -102,7 +102,7 @@ namespace
 			fmt::println(stderr, "\n** Unhandled CPU exception - execution terminated");
 		}
 		catch (...) {
-			fmt::println(stderr, "\n** Error");
+			fmt::println(stderr, "\n** Unknown Internal Error");
 		}
 
 		const auto end_time = std::chrono::high_resolution_clock::now();

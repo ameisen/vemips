@@ -82,6 +82,8 @@ namespace mips {
 		FCSR												m_fcsr;
 
 	public:
+		using coprocessor::get_processor;
+
 		_nothrow FIR & get_FIR() noexcept {
 			return m_fir;
 		}

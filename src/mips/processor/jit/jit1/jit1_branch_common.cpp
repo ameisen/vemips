@@ -22,14 +22,19 @@ namespace mips
 		return flag;
 	}
 
-	processor::flag Jit1_CodeGen::intrinsic_set_delay_branch()
+	processor::flag Jit1_CodeGen::intrinsic_set_delay_branch(const bool hazard_barrier)
 	{
-		const processor::flag flags = processor::flag::branch_delay |
+		processor::flag flags = processor::flag::branch_delay |
 			(
 				jit_.processor_.disable_cti_ ?
 					processor::flag::none :
 					processor::flag::no_cti
 			);
+
+		if (hazard_barrier)
+		{
+			flags |= processor::flag::instruction_hazard;
+		}
 
 		xassert(flags != processor::flag::none);
 		or_(ebx, flags);
@@ -39,7 +44,6 @@ namespace mips
 
 	Xbyak::Label Jit1_CodeGen::intrinsic_write_patch_prolog(const jit1::Chunk& __restrict chunk, void* const patch_address, const uint32 patch_target_address, const Xbyak::Reg& patch_target_address_reg)
 	{
-		// If execution gets past the chunk, we jump to the next chunk.
 		// Start with a set of no-ops so that we have somewhere to write patch code.
 		const auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
 		xassert(getSize() <= std::numeric_limits<uint32>::max());
@@ -58,16 +62,20 @@ namespace mips
 		}
 
 		const uint32 patch_offset = uint32(getSize());
-		auto &patch_pair = chunk.m_patches->emplace_back(patch_offset, 0);
+		auto &patch_pair = chunk.m_patches->emplace_back(patch_offset, 0, jit1::Chunk::patch::types::full);
 		uint32 &patch_target = patch_pair.target;
 
 		// TODO : highly unsafe presently, though OK for now since it's in a std::list. This address cannot move.
 		{
 			intptr patch_target_ptr_address = intptr(&patch_target);
-			if (
-				patch_target_ptr_address >= intptr(std::numeric_limits<int32>::lowest()) &&
-				patch_target_ptr_address <= intptr(std::numeric_limits<int32>::max())
-			)
+
+			const intptr diff = patch_target_ptr_address - intptr(get_current_address());
+
+			if (in_range<int32>(diff))
+			{
+				mov(dword[rip + diff], edx);
+			}
+			else if (in_range<int32>(patch_target_ptr_address))
 			{
 				putSeg(ds);
 				mov(dword[&patch_target], edx);  // NOLINT(performance-no-int-to-ptr)
@@ -88,6 +96,8 @@ namespace mips
 	{
 		static constexpr uint16 patch_prefix = 0xB848;
 		static constexpr uint16 patch_suffix = 0xE0FF;
+
+		auto* address = patch.getAddress();
 
 		mov(rcx, patch);
 		mov(word[rcx], int16_t(patch_prefix));
@@ -115,9 +125,8 @@ namespace mips
 		{
 			mov(edx, eax);
 		}
-		set(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
 		set(rcx, std::bit_cast<uintptr>(&jit));
-		call(rax);
+		std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
 		intrinsic_write_patch_epilog(patch);
 		jmp(rax);
 	}
@@ -192,9 +201,8 @@ namespace mips
 		L(not_within);
 
 		mov(rdx, rax);
-		mov(rax, std::bit_cast<uintptr>(&jit1::get_instruction));
-		mov(rcx, uintptr(&jit_));
-		call(rax);
+		set(rcx, uintptr(&jit_));
+		std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
 		
 		jmp(rax);
 	}

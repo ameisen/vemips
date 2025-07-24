@@ -10,12 +10,7 @@
 #include "project/project.hpp"
 #include "toolchain/clang.hpp"
 
-#define PLATFORM_HEADER_WITH_SHELL 1
-// ReSharper disable once IdentifierTypo
-#define PLATFORM_HEADER_WITH_SHLOBJ 1
 #include "platform/platform_headers.hpp"
-#undef PLATFORM_HEADER_WITH_SHLOBJ
-#undef PLATFORM_HEADER_WITH_SHELL
 
 #include "tinyxml2.h"
 

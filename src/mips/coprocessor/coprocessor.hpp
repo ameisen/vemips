@@ -42,6 +42,11 @@ namespace mips {
 		virtual _nothrow ~coprocessor() noexcept = default;
 
 		virtual _nothrow void clock() __restrict noexcept = 0;
+
+		processor& get_processor() const __restrict
+		{
+			return m_processor;
+		}
 	};
 }
 

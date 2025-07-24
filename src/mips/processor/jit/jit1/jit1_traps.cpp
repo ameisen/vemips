@@ -344,13 +344,12 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 		guest && guest->get_capabilities().can_handle_syscalls_inline
 	)
 	{
-		set(rax, uintptr(do_syscall));
 		mov(qword[rbp + offsets.ic], rdi);
 		mov(dword[rbp + offsets.pc], address);
 		mov(dword[rbp + offsets.flags], ebx);
-		set(ecx, int32(code));
+		set(ecx, code);
 		lea(rdx, qword[rbp - 128]);
-		call(rax);
+		std::ignore = call_ex(&do_syscall, rax);
 		mov(ebx, dword[rbp + offsets.flags]);
 		test(eax, eax);
 		jnz(intrinsics_.save_return, T_NEAR);
@@ -361,7 +360,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 	{
 		set(ecx, code);
 		mov(dword[rbp + offsets.pc], address);
-		set(rax, uintptr(SYS_Exception));
+		set(rax, uintptr(&SYS_Exception));
 		jmp(intrinsic_ex, T_NEAR);
 
 		return except_result::always_throw | except_result::can_except;
@@ -373,7 +372,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_BREAK(jit1::ChunkOffset & _
 
 	set(ecx, code);
 	mov(dword[rbp + offsets.pc], address);
-	set(rax, uintptr(BP_Exception));
+	set(rax, uintptr(&BP_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 
 	return except_result::always_throw;
@@ -384,7 +383,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SIGRIE(jit1::ChunkOffset & 
 
 	set(ecx, code);
 	mov(dword[rbp + offsets.pc], address);
-	set(rax, uintptr(RI_Exception));
+	set(rax, uintptr(&RI_Exception));
 	jmp(intrinsic_ex, T_NEAR);
 
 	return except_result::always_throw;

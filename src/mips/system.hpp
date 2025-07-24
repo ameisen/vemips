@@ -4,7 +4,7 @@
 #include "mips/mips.hpp"
 #include "elf/elf.hpp"
 #include "mips/mmu.hpp"
-#include "mips/platform/platform.hpp"
+#include "mips/platform/platform_headers.hpp"
 #include "mips/debugger.hpp"
 
 namespace mips {

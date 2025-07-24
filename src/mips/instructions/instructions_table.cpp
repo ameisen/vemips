@@ -1,4 +1,4 @@
-/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Jul 19 2025 20:20:05) */
+/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Jul 21 2025 18:53:48) */
 // ReSharper disable CppClangTidyClangDiagnosticUndefinedFuncTemplate CppClangTidyClangDiagnosticUnreachableCodeReturn IdentifierTypo CommentTypo CppUnreachableCode
 #include "pch.hpp"
 
@@ -126,20 +126,20 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_CLZ ( "PROC_CLZ", 1, &PROC_CLZ_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_DIV ( "PROC_DIV", 1, &PROC_DIV_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_DIVU ( "PROC_DIVU", 1, &PROC_DIVU_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
-	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_EHB ( "PROC_EHB", 1, &PROC_EHB_NS::Execute, static_cast<instructions::OpFlags>(0x00000000), { .control = false }, instruction_type::normal);
-	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_ERET ( "PROC_ERET", 1, &PROC_ERET_NS::Execute, static_cast<instructions::OpFlags>(0x00000002), { .control = false }, instruction_type::normal);
-	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_ERETNC ( "PROC_ERETNC", 1, &PROC_ERETNC_NS::Execute, static_cast<instructions::OpFlags>(0x00000002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_EHB ( "PROC_EHB", 1, &PROC_EHB_NS::Execute, static_cast<instructions::OpFlags>(0x0C000000), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_ERET ( "PROC_ERET", 1, &PROC_ERET_NS::Execute, static_cast<instructions::OpFlags>(0x0C000002), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_ERETNC ( "PROC_ERETNC", 1, &PROC_ERETNC_NS::Execute, static_cast<instructions::OpFlags>(0x0C000002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_EXT ( "PROC_EXT", 1, &PROC_EXT_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_GINVI ( "PROC_GINVI", 1, &PROC_GINVI_NS::Execute, static_cast<instructions::OpFlags>(0x00800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_INS ( "PROC_INS", 1, &PROC_INS_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_J ( "PROC_J", 1, &PROC_J_NS::Execute, static_cast<instructions::OpFlags>(0x00160000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JAL ( "PROC_JAL", 1, &PROC_JAL_NS::Execute, static_cast<instructions::OpFlags>(0x00160000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JALR ( "PROC_JALR", 1, &PROC_JALR_NS::Execute, static_cast<instructions::OpFlags>(0x01960000), { .control = true }, instruction_type::normal);
-	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JALR_HB ( "PROC_JALR_HB", 1, &PROC_JALR_HB_NS::Execute, static_cast<instructions::OpFlags>(0x01960000), { .control = true }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JALR_HB ( "PROC_JALR_HB", 1, &PROC_JALR_HB_NS::Execute, static_cast<instructions::OpFlags>(0x0D960000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JIALC ( "PROC_JIALC", 1, &PROC_JIALC_NS::Execute, static_cast<instructions::OpFlags>(0x008A0000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JIC ( "PROC_JIC", 1, &PROC_JIC_NS::Execute, static_cast<instructions::OpFlags>(0x008A0000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JR ( "PROC_JR", 1, &PROC_JR_NS::Execute, static_cast<instructions::OpFlags>(0x00960000), { .control = true }, instruction_type::normal);
-	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JR_HB ( "PROC_JR_HB", 1, &PROC_JR_HB_NS::Execute, static_cast<instructions::OpFlags>(0x00960000), { .control = true }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_JR_HB ( "PROC_JR_HB", 1, &PROC_JR_HB_NS::Execute, static_cast<instructions::OpFlags>(0x0C960000), { .control = true }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LB ( "PROC_LB", 1, &PROC_LB_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LBE ( "PROC_LBE", 1, &PROC_LBE_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_LBU ( "PROC_LBU", 1, &PROC_LBU_NS::Execute, static_cast<instructions::OpFlags>(0x01A00002), { .control = false }, instruction_type::normal);
@@ -217,7 +217,7 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_SUBU ( "PROC_SUBU", 1, &PROC_SUBU_NS::Execute, static_cast<instructions::OpFlags>(0x01800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_SW ( "PROC_SW", 1, &PROC_SW_NS::Execute, static_cast<instructions::OpFlags>(0x00C00000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_SWE ( "PROC_SWE", 1, &PROC_SWE_NS::Execute, static_cast<instructions::OpFlags>(0x00C00000), { .control = false }, instruction_type::normal);
-	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_SYNC ( "PROC_SYNC", 1, &PROC_SYNC_NS::Execute, static_cast<instructions::OpFlags>(0x00000000), { .control = false }, instruction_type::normal);
+	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_SYNC ( "PROC_SYNC", 1, &PROC_SYNC_NS::Execute, static_cast<instructions::OpFlags>(0x04000000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_SYNCI ( "PROC_SYNCI", 1, &PROC_SYNCI_NS::Execute, static_cast<instructions::OpFlags>(0x00800000), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_SYSCALL ( "PROC_SYSCALL", 1, &PROC_SYSCALL_NS::Execute, static_cast<instructions::OpFlags>(0x00000002), { .control = false }, instruction_type::normal);
 	_segment(vemips_itable) VEMIPS_ITABLE_EXPORT const InstructionInfo StaticProc_PROC_TEQ ( "PROC_TEQ", 1, &PROC_TEQ_NS::Execute, static_cast<instructions::OpFlags>(0x00800002), { .control = false }, instruction_type::normal);

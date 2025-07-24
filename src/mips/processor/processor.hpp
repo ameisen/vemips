@@ -34,7 +34,6 @@ namespace mips {
 		// remove when we have unified instructions
 		friend class CPUI;
 		friend class jit1;
-		friend class jit2;
 		friend class system;
 		friend class Jit1_CodeGen;
 
@@ -46,7 +45,7 @@ namespace mips {
 			no_cti = 1u << 1,
 			trapped_exception = 1u << 2,
 			pc_changed = 1u << 3,
-			jit_mem_flush = 1u << 4,
+			instruction_hazard = 1u << 4,
 		};
 
 		struct named_registers final
@@ -117,8 +116,7 @@ namespace mips {
 	public: // TODO : clean up later, though not using std::variant most likely (exception overhead)
 		std::variant<
 			std::monostate,
-			jit1* __restrict,
-			jit2* __restrict
+			jit1* __restrict
 		> jit_;
 	private:
 		CPU_Exception									  trapped_exception_ = {};
@@ -226,7 +224,6 @@ namespace mips {
 				overloads {
 					[](std::monostate) { return JitType::None; },
 					[](jit1* __restrict) { return JitType::Jit; },
-					[](jit2* __restrict) { return JitType::FunctionTable; },
 				},
 				jit_
 			);
@@ -792,7 +789,7 @@ namespace mips {
 		void invalidate_instruction_cache(uint32 guest_address);
 		void clear_memory_hazards(memory_hazards hazards);
 		bool handles_memory_hazards(memory_hazards hazards) const;
-		void clear_instruction_hazards();
+		bool flush_instruction_hazards(std::optional<std::pair<uint32, uint32>> current_chunk_span = {});
 	};
 
 	MAKE_BITFLAG_ENUM(processor::flag)
@@ -819,9 +816,6 @@ namespace mips {
 			__debugbreak();
 		}
 		if _unlikely(instruction_count_ != other.instruction_count_) [[unlikely]] {
-			__debugbreak();
-		}
-		if _unlikely((flags_ & ~flag::jit_mem_flush) != (other.flags_ & ~flag::jit_mem_flush)) [[unlikely]] {
 			__debugbreak();
 		}
 		if (get_flags(flag::branch_delay)) {

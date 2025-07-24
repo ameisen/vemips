@@ -381,13 +381,14 @@
     <ClInclude Include="..\..\src\mips\mmu.hpp" />
     <ClInclude Include="..\..\src\mips\pch.hpp" />
     <ClInclude Include="..\..\src\mips\platform\platform.hpp" />
+    <ClInclude Include="..\..\src\mips\platform\platform_headers.hpp" />
     <ClInclude Include="..\..\src\mips\platform\win32\host_mmu.hpp" />
+    <ClInclude Include="..\..\src\mips\platform\win32\platform_headers_win32.hpp" />
     <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\codegen.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1_branch_common.hpp" />
-    <ClInclude Include="..\..\src\mips\processor\jit\jit2\jit2.hpp" />
     <ClInclude Include="..\..\src\mips\processor\processor.hpp" />
     <ClInclude Include="..\..\src\mips\processor\processor_support.hpp" />
     <ClInclude Include="..\..\src\mips\system.hpp" />
@@ -420,7 +421,6 @@
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1.cpp" />
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_memory.cpp" />
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_traps.cpp" />
-    <ClCompile Include="..\..\src\mips\processor\jit\jit2\jit2.cpp" />
     <ClCompile Include="..\..\src\mips\processor\processor.cpp" />
     <ClCompile Include="..\..\src\mips\system.cpp" />
   </ItemGroup>

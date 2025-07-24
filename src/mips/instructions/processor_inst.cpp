@@ -9,6 +9,7 @@
 #include <limits>
 
 #include "instructions_support.hpp"
+#include "platform/platform.hpp"
 
 using namespace mips;
 
@@ -1379,13 +1380,13 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		EHB,
-		(OpFlags::None),
+		(OpFlags::Hazard | OpFlags::InstructionHazard),
 		0b11111111111111111111111111111111,
 		0b00000000000000000000000011000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
 		processor.clear_memory_hazards(memory_hazards::all_data);
-		processor.clear_instruction_hazards();
+		processor.flush_instruction_hazards();
 		return true;
 	}
 
@@ -1407,8 +1408,16 @@ namespace mips::instructions
 		}
 
 		uint32 value = rs.value<uint32>();
-		value >>= lsb;
-		value &= ((1U << (msbd + 1)) - 1); // is + 1 correct?
+
+		if (platform::get_host_features().bmi1)
+		{
+			value = _bextr_u32(value, lsb, msbd + 1);
+		}
+		else
+		{
+			value >>= lsb;
+			value &= ((1U << (msbd + 1)) - 1); // is + 1 correct?
+		}
 
 		return write_result(rt, value);
 	}
@@ -1435,9 +1444,19 @@ namespace mips::instructions
 		const uint32 rs_val = rs.value<uint32>();
 		uint32 rt_val = rt.value<uint32>();
 
-		const uint32 extracted_val = rs_val & Bits(size);
-		rt_val &= ~(Bits(size) << lsb);
-		rt_val |= extracted_val << lsb;
+		/*
+		if (platform::get_host_features().bmi2)
+		{
+			rt_val = _pdep_u32()
+			value = _bextr_u32(value, lsb, msbd + 1);
+		}
+		else
+		*/
+		{
+			const uint32 extracted_val = rs_val & Bits(size);
+			rt_val &= ~(Bits(size) << lsb);
+			rt_val |= extracted_val << lsb;
+		}
 
 		return write_result(rt, rt_val);
 	}
@@ -1493,15 +1512,14 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		JALR_HB,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::Hazard | OpFlags::InstructionHazard),
 		0b111111'00000'11111'00000'1'0000'111111,
 		0b000000'00000'00000'00000'1'0000'001001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor1)
 	{
 		const bool result = PROC_JALR::SubExecute(instruction, processor, coprocessor1);
 
-		processor.clear_memory_hazards(memory_hazards::all_data);
-		processor.clear_instruction_hazards();
+		processor.set_flags(processor::flag::instruction_hazard);
 
 		return result;
 	}
@@ -1522,15 +1540,14 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		JR_HB,
-		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister),
+		(OpFlags::ControlInstruction | OpFlags::DelayBranch | OpFlags::SetNoCTI | OpFlags::ReadsGPRegister | OpFlags::Hazard | OpFlags::InstructionHazard),
 		0b111111'00000'1111111111'1'0000'111111,
 		0b000000'00000'0000000000'1'0000'001001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict coprocessor1)
 	{
 		const bool result = PROC_JR::SubExecute(instruction, processor, coprocessor1);
 
-		processor.clear_memory_hazards(memory_hazards::all_data);
-		processor.clear_instruction_hazards();
+		processor.set_flags(processor::flag::instruction_hazard);
 
 		return result;
 	}
@@ -2615,7 +2632,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SYNC,
-		(OpFlags::None),
+		(OpFlags::None | OpFlags::Hazard),
 		0b11111111111111111111100000111111,
 		0b00000000000000000000000000001111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2954,7 +2971,7 @@ namespace mips::instructions
 	// TODO : move to cop0
 	ProcInstructionDef(
 		ERET,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::Hazard | OpFlags::InstructionHazard),
 		0b111111'1'111111111111111111'1'011000,
 		0b010000'1'000000000000000000'0'000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2964,14 +2981,14 @@ namespace mips::instructions
 		// otherwise, we would have done a hazard clear
 		#if 0
 		processor.clear_memory_hazards(processor::memory_hazards::all);
-		processor.clear_instruction_hazards();
+		processor.flush_instruction_hazards();
 		#endif
 	}
 
 	// TODO : move to cop0
 	ProcInstructionDef(
 		ERETNC,
-		(OpFlags::Throws),
+		(OpFlags::Throws | OpFlags::Hazard | OpFlags::InstructionHazard),
 		0b111111'1'111111111111111111'1'011000,
 		0b010000'1'000000000000000000'1'000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2981,7 +2998,7 @@ namespace mips::instructions
 		// otherwise, we would have done a hazard clear
 		#if 0
 		processor.clear_memory_hazards(processor::memory_hazards::all_data);
-		processor.clear_instruction_hazards();
+		processor.flush_instruction_hazards();
 		#endif
 	}
 

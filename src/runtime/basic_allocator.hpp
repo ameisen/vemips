@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <bit>
 #include <mutex>
 #include <utility>
 #include <vector>
@@ -15,7 +16,7 @@ class contiguous_allocator final {
 
 	using chunk_array_t = std::array<T, chunk_count>;
 
-	static constexpr const size_t alignment = 1ULL << mips::log2_ceil(std::max({chunk_size, sizeof(T), sizeof(chunk_array_t)}));
+	static constexpr const size_t alignment = 1UZ << std::bit_width(std::max({chunk_size, sizeof(T), sizeof(chunk_array_t)}) - 1UZ);
 
 	struct alignas(alignment) chunk_t final {
 		chunk_array_t value;

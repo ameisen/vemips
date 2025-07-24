@@ -5,12 +5,13 @@
 #include "mips/mips.hpp"
 #include "elf/elf.hpp"
 #include "mips/mmu.hpp"
-#include "mips/platform/platform.hpp"
 
+#include <limits>
 #include <thread>
 #include <mutex>
 #include <atomic>
 
+#define NOMINMAX 1
 #include <WinSock2.h>
 
 namespace mips

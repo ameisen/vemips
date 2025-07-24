@@ -7,6 +7,5 @@ namespace mips
 	enum class JitType : uint32 {
 		None,
 		Jit,
-		FunctionTable
 	};
 }

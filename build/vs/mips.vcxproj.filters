@@ -1,7 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClInclude Include="..\..\src\common.hpp" />
     <ClInclude Include="..\..\src\mips\pch.hpp" />
     <ClInclude Include="..\..\src\mips\coprocessor\coprocessor.hpp">
       <Filter>coprocessor</Filter>
@@ -46,13 +45,10 @@
     <ClInclude Include="..\..\src\mips\platform\win32\host_mmu.hpp">
       <Filter>platform\win32</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp">
+    <ClInclude Include="..\..\src\mips\platform\win32\platform_headers_win32.hpp">
       <Filter>platform\win32</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\mips\debugger.hpp" />
-    <ClInclude Include="..\..\src\mips\processor\jit\jit2\jit2.hpp">
-      <Filter>processor\jit\jit2</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\mips\instructions\instructions_table.hpp">
       <Filter>instructions</Filter>
     </ClInclude>
@@ -67,6 +63,13 @@
     </ClInclude>
     <ClInclude Include="..\..\src\mips\instructions\instructions_support.hpp">
       <Filter>instructions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\common.hpp" />
+    <ClInclude Include="..\..\src\mips\platform\platform_headers.hpp">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp">
+      <Filter>platform\win32</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -109,9 +112,6 @@
       <Filter>platform\win32</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\mips\debugger.cpp" />
-    <ClCompile Include="..\..\src\mips\processor\jit\jit2\jit2.cpp">
-      <Filter>processor\jit\jit2</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\mips\instructions\instructions_table.cpp">
       <Filter>instructions</Filter>
     </ClCompile>
@@ -119,14 +119,14 @@
     <ClCompile Include="..\..\src\mips\instructions\instructions_common.cpp">
       <Filter>instructions</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\mips\platform\win32\platform_win32.cpp">
-      <Filter>platform\win32</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\mips\processor\jit\jit1\jit1_branch_common.cpp">
       <Filter>processor\jit\jit1</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\mips\instructions\instructions_support.cpp">
       <Filter>instructions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\platform\win32\platform_win32.cpp">
+      <Filter>platform\win32</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -153,9 +153,6 @@
     </Filter>
     <Filter Include="platform\win32">
       <UniqueIdentifier>{f7c076f1-84d9-4723-bb79-f1b5ca34a311}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="processor\jit\jit2">
-      <UniqueIdentifier>{87312a6b-fb8b-41ed-9d9f-1dd96fe2e245}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

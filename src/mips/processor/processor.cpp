@@ -5,7 +5,6 @@
 #include "mips/instructions/instructions.hpp"
 #if !VEMIPS_TABLEGEN
 #include "mips/processor/jit/jit1/jit1.hpp"
-#include "mips/processor/jit/jit2/jit2.hpp"
 #endif
 #include "mips/system.hpp"
 
@@ -14,7 +13,7 @@
 #endif
 
 #include "instructions/instructions_support.hpp"
-#include "platform/platform.hpp"
+#include "platform/platform_headers.hpp"
 
 
 using namespace mips;
@@ -82,9 +81,6 @@ processor::processor(const options & __restrict options) :
 			break;
 		case JitType::Jit:
 			jit_ = new jit1(*this);
-			break;
-		case JitType::FunctionTable:
-			jit_ = new jit2(*this);
 			break;
 		default:
 			xunreachable("unknown jit");
@@ -251,6 +247,11 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 					jit->execute_instruction(program_counter_);
 				}
 			}, jit_);
+
+			if (get_flags(flag::instruction_hazard))
+			{
+				flush_instruction_hazards();
+			}
 		}
 		
 		const instruction_t instruction = get_instruction();
@@ -448,15 +449,6 @@ void processor::memory_touched(const uint32 pointer, uint32 size) const __restri
 	if (readonly_exec_) {
 		return;
 	}
-#if !VEMIPS_TABLEGEN
-	std::visit(
-		overloads {
-			[](std::monostate) {},
-			[=](auto&& jit) { jit->memory_touched(pointer); }
-		},
-		jit_
-	);
-#endif
 }
 
 void processor::memory_touched_jit(uint32 pointer, uint32 size) const __restrict {
@@ -628,7 +620,15 @@ bool processor::handles_memory_hazards(const memory_hazards hazards) const
 	return (hazards & (memory_hazards::global_barrier_SYNCI)) != memory_hazards::none;
 }
 
-void processor::clear_instruction_hazards()
+bool processor::flush_instruction_hazards(const std::optional<std::pair<uint32, uint32>> current_chunk_span)
 {
-	
+	xassert(!in_jit || current_chunk_span.has_value());
+
+	if (!get_flags(processor::flag::instruction_hazard))
+	{
+		return false;
+	}
+	clear_flags(processor::flag::instruction_hazard);
+
+	return false;
 }

@@ -5,6 +5,7 @@
 #include <mips/mips_common.hpp>
 
 #include <cassert>
+#include <bit>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -48,6 +49,8 @@ namespace mips
 			ReadsGPRegister = (1U << 23),
 			WritesGPRegister = (1U << 24),
 			COP1 = (1U << 25),
+			Hazard = (1U << 26),
+			InstructionHazard = (1U << 27),
 		};
 
 		[[nodiscard]]
@@ -134,7 +137,7 @@ namespace mips
 			void_fp = 5,
 
 			_max,
-			_bits = log2_ceil(_max)
+			_bits = std::bit_width(_max - 1U)
 		};
 
 		struct instruction_flags final {
@@ -149,7 +152,7 @@ namespace mips
 			const char* Name;
 			instructionexec_t Proc;
 			OpFlags OpFlags;
-			uint8 CoprocessorIdx : log2_ceil(coprocessor::max);
+			uint8 CoprocessorIdx : std::bit_width(coprocessor::max - 1U);
 			instruction_type Type : std::to_underlying(instruction_type::_bits);
 			instruction_flags Flags/* : instruction_flags::Bits*/;
 

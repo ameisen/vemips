@@ -275,15 +275,15 @@ namespace mips::instructions
 		) {
 			switch (format_bits) {
 				case FormatBits::Single:
-					return { exec_f, instruction_type::single_fp };
+					return { .executor = exec_f, .type = instruction_type::single_fp };
 				case FormatBits::Double:
-					return { exec_d, instruction_type::double_fp };
+					return { .executor = exec_d, .type = instruction_type::double_fp };
 				case FormatBits::Word:
-					return { exec_w, instruction_type::word_fp };
+					return { .executor = exec_w, .type = instruction_type::word_fp };
 				case FormatBits::Long:
-					return { exec_l, instruction_type::long_fp };
+					return { .executor = exec_l, .type = instruction_type::long_fp };
 				case FormatBits::None:
-					return { exec_f, instruction_type::void_fp };
+					return { .executor = exec_f, .type = instruction_type::void_fp };
 				default:
 					xassert(false);
 			}
@@ -417,7 +417,7 @@ namespace mips::instructions
 				case 28:
 					Caster.valSrc = parent::m_Processor->get_FCSR().get_FENR(); break;;
 				default: [[unlikely]]
-					CPU_Exception::throw_helper(CPU_Exception::Type::RI, get_current_processor()->get_program_counter());
+					CPU_Exception::throw_helper(CPU_Exception::Type::RI, parent::m_Processor->get_processor().get_program_counter());
 			}
 			return Caster.valDst;
 		}
@@ -446,7 +446,7 @@ namespace mips::instructions
 				case 28:
 					parent::m_Processor->get_FCSR().set_FENR(Caster.valDst); break;
 				default: [[unlikely]]
-					CPU_Exception::throw_helper(CPU_Exception::Type::RI, get_current_processor()->get_program_counter());
+					CPU_Exception::throw_helper(CPU_Exception::Type::RI, parent::m_Processor->get_processor().get_program_counter());
 			}
 			return value;
 		}
@@ -609,7 +609,7 @@ namespace mips::instructions
 #if FPU_EXCEPTION_SUPPORT
 		if (uint32(Flags & OpFlags::Signals_All))
 		{
-			auto fpu = (coprocessor1 * __restrict)get_current_coprocessor();
+			auto* const __restrict fpu = get_current_coprocessor<coprocessor1>();
 
 			// Set the cause bits
 			if (exStatus & _SW_INEXACT && uint32(Flags & OpFlags::Signals_Inexact))
@@ -643,35 +643,35 @@ namespace mips::instructions
 				{
 					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Inexact)) [[unlikely]]
 					{
-						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 				if (exStatus & _SW_UNDERFLOW && uint32(Flags & OpFlags::Signals_Underflow))
 				{
 					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Underflow)) [[unlikely]]
 					{
-						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 				if (exStatus & _SW_OVERFLOW && uint32(Flags & OpFlags::Signals_Overflow))
 				{
 					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::Overflow)) [[unlikely]]
 					{
-						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 				if (exStatus & _SW_ZERODIVIDE && uint32(Flags & OpFlags::Signals_DivZero))
 				{
 					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::DivZero)) [[unlikely]]
 					{
-						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 				if (exStatus & _SW_INVALID && uint32(Flags & OpFlags::Signals_InvalidOp)) [[unlikely]]
 				{
 					if (fpu->get_FCSR().Enables & uint32_t(ExceptBits::InvalidOp))
 					{
-						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(fpu->get_FCSR().Cause));
 					}
 				}
 			}
@@ -681,28 +681,30 @@ namespace mips::instructions
 
 	inline void raise_signal(ExceptBits exception)
 	{
-		if _unlikely((get_current_coprocessor<coprocessor1>())->get_FCSR().Enables & uint32_t(exception)) [[unlikely]]
+		auto* const __restrict fpu = get_current_coprocessor<coprocessor1>();
+
+		if _unlikely(fpu->get_FCSR().Enables & uint32_t(exception)) [[unlikely]]
 		{
-			CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(exception));
+			CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(exception));
 		}
 	}
 
 	inline void raise_any_signals()
 	{
-			const auto fpu = (coprocessor1 * __restrict)get_current_coprocessor();
+			auto* const __restrict fpu = get_current_coprocessor<coprocessor1>();
 			if (!fpu->get_FCSR().Cause) {
 				return;
 			}
 			if _unlikely(fpu->get_FCSR().Enables) [[unlikely]] {
 				for (auto ex : { ExceptBits::Inexact, ExceptBits::Underflow, ExceptBits::Overflow, ExceptBits::DivZero, ExceptBits::InvalidOp }) {
 					if ((fpu->get_FCSR().Enables & uint32_t(ex)) && (fpu->get_FCSR().Cause & uint32_t(ex))) {
-						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ex));
+						CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(ex));
 					}
 				}
 			}
 			if ((fpu->get_FCSR().Cause & uint32_t(ExceptBits::UnsupportedOp))) [[unlikely]]
 			{
-				CPU_Exception::throw_helper(CPU_Exception::Type::FPE, get_current_processor()->get_program_counter(), uint32_t(ExceptBits::UnsupportedOp));
+				CPU_Exception::throw_helper(CPU_Exception::Type::FPE, fpu->get_processor().get_program_counter(), uint32_t(ExceptBits::UnsupportedOp));
 			}
 	}
 
@@ -733,7 +735,7 @@ namespace mips::instructions
 				.Precision = (exStatus & _SW_INEXACT) != 0,
 			};
 
-			value = COP1DefaultValueGenerator<format_t>::Get(*(raw_ptr<coprocessor1>(get_current_coprocessor())), value, reason);
+			value = COP1DefaultValueGenerator<format_t>::Get(*get_current_coprocessor<coprocessor1>(), value, reason);
 
 			dest.template set<format_t>(value);
 			return true;

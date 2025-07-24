@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <variant>
 
 #define XBYAK_STRICT_CHECK_MEM_REG_SIZE 0
@@ -61,7 +62,6 @@ namespace mips
 			intrinsic ades;
 			intrinsic ov;
 			intrinsic tr;
-			intrinsic store_flush;
 			intrinsic check_ex;
 			intrinsic save_return_eax_pc;
 			intrinsic save;
@@ -103,7 +103,7 @@ namespace mips
 
 			const auto& dest = [&]
 			{
-				if (dst.getBit() == 64 && imm <= std::numeric_limits<uint32>::max())
+				if (dst.getBit() == 64 && in_range<uint32>(imm))
 				{
 					Xbyak::Operand result = dst;
 					result.setBit(32);
@@ -130,17 +130,26 @@ namespace mips
 		bool mov_ex(
 			const Xbyak::Operand& dst,
 			const Xbyak::Operand& src,
-			const Xbyak::Reg& tmp
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
 		)
 		{
 			if (dst.isREG() || src.isREG())
 			{
+				if (dst.isREG() && src.isREG() && src == dst)
+				{
+					return false;
+				}
+
 				mov(dst, src);
 				return false;
 			}
 
+			if (spill_tmp) { spill_tmp(tmp); }
 			mov(tmp, src);
 			mov(dst, tmp);
+			if (restore_tmp) { restore_tmp(tmp); }
 
 			return true;
 		}
@@ -148,45 +157,32 @@ namespace mips
 		// returns `true` if temporary register was used
 		[[nodiscard]]
 		bool mov_ex(
-			const Xbyak::Operand& dst,
-			const Xbyak::Operand& src,
-			const Xbyak::Reg& tmp,
-			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
-			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+			const Xbyak::Reg& dst,
+			const Xbyak::Operand& src
 		)
 		{
-			if (dst.isREG() || src.isREG())
+			if (src.isREG() && src == dst)
 			{
-				mov(dst, src);
 				return false;
 			}
 
-			spill_tmp(tmp);
-			mov(tmp, src);
-			mov(dst, tmp);
-			restore_tmp(tmp);
-
-			return true;
+			mov(dst, src);
+			return false;
 		}
 
-		// returns `true` if temporary register was used
 		[[nodiscard]]
-		bool movsx_ex(
+		bool mov_ex(
 			const Xbyak::Operand& dst,
-			const Xbyak::Operand& src,
-			const Xbyak::Reg& tmp
+			const Xbyak::Reg& src
 		)
 		{
-			if (dst.isREG())
+			if (dst.isREG() && src == dst)
 			{
-				movsx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
 				return false;
 			}
 
-			movsx(tmp, src);
-			mov(dst, tmp);
-
-			return true;
+			mov(dst, src);
+			return false;
 		}
 
 		// returns `true` if temporary register was used
@@ -195,40 +191,25 @@ namespace mips
 			const Xbyak::Operand& dst,
 			const Xbyak::Operand& src,
 			const Xbyak::Reg& tmp,
-			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
-			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
 		)
 		{
 			if (dst.isREG())
 			{
+				if (dst.isREG() && src.isREG() && src == dst)
+				{
+					return false;
+				}
+
 				movsx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
 				return false;
 			}
 
-			spill_tmp(tmp);
+			if (spill_tmp) { spill_tmp(tmp); }
 			movsx(tmp, src);
 			mov(dst, tmp);
-			restore_tmp(tmp);
-
-			return true;
-		}
-
-		// returns `true` if temporary register was used
-		[[nodiscard]]
-		bool movzx_ex(
-			const Xbyak::Operand& dst,
-			const Xbyak::Operand& src,
-			const Xbyak::Reg& tmp
-		)
-		{
-			if (dst.isREG())
-			{
-				movzx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
-				return false;
-			}
-
-			movzx(tmp, src);
-			mov(dst, tmp);
+			if (restore_tmp) { restore_tmp(tmp); }
 
 			return true;
 		}
@@ -239,20 +220,25 @@ namespace mips
 			const Xbyak::Operand& dst,
 			const Xbyak::Operand& src,
 			const Xbyak::Reg& tmp,
-			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
-			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
 		)
 		{
 			if (dst.isREG())
 			{
+				if (dst.isREG() && src.isREG() && src == dst)
+				{
+					return false;
+				}
+
 				movzx(reinterpret_cast<const Xbyak::Reg&>(dst), src);
 				return false;
 			}
 
-			spill_tmp(tmp);
+			if (spill_tmp) { spill_tmp(tmp); }
 			movzx(tmp, src);
 			mov(dst, tmp);
-			restore_tmp(tmp);
+			if (restore_tmp) { restore_tmp(tmp); }
 
 			return true;
 		}
@@ -275,7 +261,9 @@ namespace mips
 		bool cmp_ex(
 			const Xbyak::Operand& a,
 			const Xbyak::Operand& b,
-			const Xbyak::Reg& tmp
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
 		)
 		{
 			if (a.isREG() || b.isREG())
@@ -284,33 +272,59 @@ namespace mips
 				return false;
 			}
 
+			if (spill_tmp) { spill_tmp(tmp); }
 			mov(tmp, a);
 			cmp(tmp, b);
+			if (restore_tmp) { restore_tmp(tmp); }
 
 			return true;
 		}
 
 		// returns `true` if temporary register was used
 		[[nodiscard]]
-		bool cmp_ex(
-			const Xbyak::Operand& a,
-			const Xbyak::Operand& b,
+		bool call_ex(
+			const void* const ptr,
 			const Xbyak::Reg& tmp,
-			const std::function<void(const Xbyak::Reg&)>& spill_tmp,
-			const std::function<void(const Xbyak::Reg&)>& restore_tmp
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
 		)
 		{
-			if (a.isREG() || b.isREG())
+			const intptr diff = uintptr(ptr) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
+
+			if (in_range<int32>(diff))
 			{
-				cmp(a, b);
+				call(ptr);
+				return false;
+			}
+			else
+			{
+				if (spill_tmp) { spill_tmp(tmp); }
+				set(tmp, intptr(ptr));
+				call(tmp);
+				if (restore_tmp) { restore_tmp(tmp); }
+			}
+
+			return true;
+		}
+
+		[[nodiscard]]
+		bool flush_pc(
+			const Xbyak::Reg& tmp,
+			const uint32 address,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
+		)
+		{
+			if (tmp.isREG())
+			{
+				mov(dword[rbp + offsets.pc], address);
 				return false;
 			}
 
-			spill_tmp(tmp);
-			mov(tmp, a);
-			cmp(tmp, b);
-			restore_tmp(tmp);
-
+			if (spill_tmp) { spill_tmp(tmp); }
+			set(tmp, address);
+			mov(dword[rbp + offsets.pc], tmp);
+			if (restore_tmp) { restore_tmp(tmp); }
 			return true;
 		}
 
@@ -379,7 +393,7 @@ namespace mips
 				return static_cast<const Xbyak::Reg&>(operand);
 			}
 
-			_nothrow const Xbyak::Operand& if_reg(const Xbyak::Operand& else_operand) const noexcept
+			_nothrow Xbyak::Operand if_reg(const Xbyak::Operand& else_operand) const noexcept
 			{
 				auto&& operand = get_operand();
 				return
@@ -388,7 +402,7 @@ namespace mips
 						else_operand;
 			}
 
-			_nothrow const Xbyak::Operand& if_mem(const Xbyak::Operand& else_operand) const noexcept
+			_nothrow Xbyak::Operand if_mem(const Xbyak::Operand& else_operand) const noexcept
 			{
 				auto&& operand = get_operand();
 				return
@@ -493,7 +507,7 @@ namespace mips
 				const instructions::GPRegisterInfo& _register
 			) noexcept
 			{
-				return { codegen, _register, log2_ceil(Size) - log2_ceil(8) };
+				return { codegen, _register, std::bit_width(Size - 1UZ) - std::bit_width(8U - 1U) };
 			}
 		};
 
@@ -568,9 +582,6 @@ namespace mips
 		}
 
 		void write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update);
-
-		void insert_procedure_ecx(uint32 address, void* procedure, uint32 _ecx);
-
 		enum class except_result : uint32
 		{
 			none          = 0U,	     // neither throws nor sets exception
@@ -578,7 +589,15 @@ namespace mips
 			always_throw  = 1U << 1, // always throws exception and return
 			can_except    = 1U << 2, // may set exception
 			always_except = 1U << 3, // always set exception
+			always_exits  = 1U << 4, // always exits generated codestream
 		};
+
+		void insert_procedure(uint32 address, void* procedure, uint32 argument0);
+		except_result insert_procedure_check_hazard(uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info, uint32 argument0);
+		void insert_procedure_hazard(uint32 address, void* procedure, uint32 argument0);
+		void insert_procedure_hazard(uint32 address, void* procedure, const Xbyak::Operand& argument0);
+
+		bool interpret_if_hazard(uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info);
 
 		enum class insert_location : uint32
 		{
@@ -625,6 +644,7 @@ namespace mips
 		void write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		void write_PROC_SEB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		void write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_EHB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		void write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		void write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		void write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
@@ -636,6 +656,8 @@ namespace mips
 		void write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 		void write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 		void write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_CLZ(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_CLO(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 
 		[[nodiscard]]
 		except_result write_PROC_TEQ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
@@ -677,14 +699,15 @@ namespace mips
 		[[nodiscard]]
 		except_result write_delay_branch(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		enum class branch_type : uint32 {
-			near_branch = 0,				  // Branches within this chunk			
+			none = 0,
+			near_branch,				  // Branches within this chunk			
 			far_branch,						 // Branches outside this chunk
 			indeterminate,					 // Branches to an unknown location
 			near_branch_unhandled,		  // Branches within this chunk, use pc state	
 			far_branch_unhandled,			// Branches outside this chunk, use pc state
 			indeterminate_unhandled		 // Branches to an unknown location, use pc state
 		};
-		void handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, bool hazard);
 
 		template <typename... Args>
 		_forceinline _nothrow void db(uint8 arg, Args... args) {
@@ -708,14 +731,19 @@ namespace mips
 		using Xbyak::CodeGenerator::test;
 
 		processor::flag intrinsic_set_cti_flag();
-		processor::flag intrinsic_set_delay_branch();
+		processor::flag intrinsic_set_delay_branch(bool hazard_barrier = false);
 
 		Xbyak::Label intrinsic_write_patch_prolog(const jit1::Chunk& __restrict chunk, void* patch_address, uint32 patch_target_address, const Xbyak::Reg& patch_target_address_reg);
 		void intrinsic_write_patch_epilog(const Xbyak::Label& patch);
 		void intrinsic_write_patch_jump(const jit1::Chunk& __restrict chunk, uint32 target_address, const Xbyak::Reg& patch_target_address_reg, bool set_pc);
 		void intrinsic_insert_jump(const jit1::Chunk& __restrict chunk, const jit1::ChunkOffset& __restrict chunk_offset, uint32 address, const Xbyak::Operand& target_address);
 
-		void intrinsic_clear_hazards(uint32 address);
+		void intrinsic_clear_hazards(uint32 current_address, uint32 target_address);
+		void intrinsic_clear_hazards(uint32 current_address, const Xbyak::Reg& target_address_reg);
+		void intrinsic_clear_hazards(const uint32 address)
+		{
+			intrinsic_clear_hazards(address, address + 4);
+		}
 	};
 
 	static constexpr Jit1_CodeGen::except_result operator | (const Jit1_CodeGen::except_result a, const Jit1_CodeGen::except_result b)

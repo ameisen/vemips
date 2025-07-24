@@ -1,5 +1,7 @@
 #include "pch.hpp"
 
+#include <bit>
+
 #include "jit1.hpp"
 #include "../../processor.hpp"
 #include "coprocessor/coprocessor1/coprocessor1.hpp"
@@ -20,10 +22,6 @@ namespace
 
 	static uintptr mem_read_jit(processor * const __restrict proc, const uint32 address, const uint32 size) {
 		return proc->get_mem_read_jit(address, size);
-	}
-
-	static uint32 memory_touched_jit(processor * const __restrict proc, const uint32 address) {
-		return std::get<jit1* __restrict>(proc->jit_)->memory_touched(address) ? 1 : 0;
 	}
 }
 
@@ -97,7 +95,6 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 	if (mmu_type == mmu::emulated) {
 		const Xbyak::Label valid_ptr;
 
-		set(rax, reinterpret_cast<uintptr>(mem_write_jit));
 		lea(rcx, dword[rbp - 128]);
 		// 'rcx' is the first parameter (processor ptr)
 
@@ -110,19 +107,19 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 			else
 			{
 				mov(edx, op_base);
-			if (offset != 0) {
-				add(edx, offset);
+				if (offset != 0) {
+					add(edx, offset);
+				}
 			}
 		}
-			}
 		else {
 			set(edx, offset);
 		}
 		// 'edx' is the second parameter (address)
-		set(r8d, int8(store_size)); // TODO = store_size - 1 would be more efficient
+		set(r8d, store_size); // TODO = store_size - 1 would be more efficient
 		mov(r13d, edx); // store to non-volatile for after call if there's an exception.
 		// 'r8' is the third parameter (size)
-		call(rax);
+		std::ignore = call_ex(std::bit_cast<void*>(&mem_write_jit), rax);
 		// rax now has our destination pointer.
 		mov(r13, rax); // save the pointer off to non-volatile r13.
 		test(rax, rax);
@@ -210,7 +207,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 				else
 				{
 					// check for range
-					const int64 pow2_memsize = int64(next_pow2(jit_.processor_.memory_size_));
+					const int64 pow2_memsize = int64(std::bit_ceil(jit_.processor_.memory_size_));
 					const int32 addend = int32(pow2_memsize + (store_size - 1));
 					const int32 cmpand = int32(pow2_memsize + store_size);
 					add(edx, addend);
@@ -232,14 +229,6 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 			mov(rdx, qword[rbp + offsets.memory_ptr]);
 		}
 		// rdx == address
-	}
-	if (mmu_type == mmu::emulated && !jit_.processor_.readonly_exec_) {
-		// If ROX isn't set, then we need to also dispatch a check for memory alteration. Yay.
-		set(rax, reinterpret_cast<uintptr>(memory_touched_jit));
-		lea(rcx, qword[rbp - 128]);
-		mov(edx, r13d);
-		call(rax);
-		// if eax is 1, then we need to return after we write.
 	}
 
 	// perform the actual store.
@@ -434,7 +423,6 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 		const Xbyak::Label valid_ptr;
 
 		if (mmu_type == mmu::emulated) {
-			set(rax, reinterpret_cast<uintptr>(mem_read_jit));
 			lea(rcx, qword[rbp - 128]);
 			// 'rcx' is the first parameter (processor ptr)
 
@@ -458,10 +446,10 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			}
 
 			// 'edx' is the second parameter (address)
-			set(r8d, int8(load_size));
+			set(r8d, load_size);
 			mov(r13d, edx); // store to non-volatile for after call if there's an exception.
 			// 'r8' is the third parameter (size)
-			call(rax);
+			std::ignore = call_ex(std::bit_cast<void*>(&mem_read_jit), rax);
 			// rax now has our destination pointer.
 			mov(r13, rax); // save the pointer off to non-volatile r13.
 			//cmp(rax, 0);

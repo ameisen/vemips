@@ -4,9 +4,7 @@
 
 #include <memory>
 
-#define PLATFORM_HEADER_WITH_IO 1
 #include "platform/platform_headers.hpp"
-#undef PLATFORM_HEADER_WITH_IO
 
 using namespace buildcarbide;
 

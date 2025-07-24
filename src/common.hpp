@@ -1,7 +1,5 @@
 #pragma once
 
-#include "platform/common.hpp"
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -362,19 +360,19 @@ namespace mips {
 			>
 		>;
 
-	template <typename T>
-	requires std::is_integral_v<T>
-	static constexpr unsigned log2_floor(const T value)
-	{
-	    return value == 1 ? 0 : 1+log2_floor(value >> 1);
-	}
+  template <typename T>
+  requires std::is_integral_v<T>
+  static constexpr unsigned log2_floor(const T value)
+  {
+      return value == 1 ? 0 : 1+log2_floor(value >> 1);
+  }
 
-	template <typename T>
-	requires std::is_integral_v<T>
-	static constexpr unsigned log2_ceil(const T value)
-	{
-	    return value == 1 ? 0 : log2_floor(value - 1) + 1;
-	}
+  template <typename T>
+  requires std::is_integral_v<T>
+  static constexpr unsigned log2_ceil(const T value)
+  {
+      return value == 1 ? 0 : log2_floor(value - 1) + 1;
+  }
 
 	enum class ptr_qual
 	{
@@ -682,35 +680,29 @@ namespace mips {
 	template<typename TReturn, typename... TFunc> overloads_no_monostate(TFunc...) -> overloads_no_monostate<TReturn, TFunc...>;
 	#endif
 
-	static constexpr uint64 next_pow2(const uint32 value)
+	template <typename TCompareType, typename TInType>
+	requires (std::is_integral_v<TInType> && std::is_integral_v<TCompareType>)
+	static constexpr bool in_range(const TInType& value)
 	{
-		uint64 v = value;
+		if constexpr (std::is_signed_v<TInType> && std::is_unsigned_v<TCompareType>)
+		{
+			return value >= 0 && TCompareType(value) <= std::numeric_limits<TCompareType>::max();
+		}
+		else if constexpr (std::is_unsigned_v<TInType> && std::is_signed_v<TCompareType>)
+		{
+			return value <= uint64(std::numeric_limits<TCompareType>::max());
+		}
 
-		v |= v >> 1;
-		v |= v >> 2;
-		v |= v >> 4;
-		v |= v >> 8;
-		v |= v >> 16;
-		v |= v >> 32;
-		v++;
-
-		return v;
+		return
+			value >= std::numeric_limits<TCompareType>::lowest() &&
+			value <= std::numeric_limits<TCompareType>::max();
 	}
 
-	static constexpr uint64 round_up_pow2(const uint32 value)
+	template <typename TType>
+	requires (std::is_integral_v<TType> || std::is_floating_point_v<TType>)
+	static constexpr bool in_range(const TType& value, const TType min, const TType max)
 	{
-		uint64 v = value;
-
-		v--;
-		v |= v >> 1;
-		v |= v >> 2;
-		v |= v >> 4;
-		v |= v >> 8;
-		v |= v >> 16;
-		v |= v >> 32;
-		v++;
-
-		return v;
+		return value >= min && value >= max;
 	}
 }
 

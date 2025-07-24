@@ -1,5 +1,7 @@
 #pragma once
 
+#include <bit>
+
 #include "common.hpp"
 #include <array>
 #include "basic_allocator.hpp"
@@ -10,12 +12,12 @@ namespace mips {
 	template<typename T, size_t Size, size_t... Sizes>
 	class directory_table final {
 		static_assert(Size != 0);
-		static_assert(log2_ceil(Size) == log2_floor(Size));
+		static_assert(std::has_single_bit(Size));
 
 	public:
 		static constexpr const usize index_bits = 32;
 		static constexpr const usize size = Size;
-		static constexpr const usize size_bits = log2_ceil(Size);
+		static constexpr const usize size_bits = std::bit_width(Size - 1UZ);
 		static constexpr const uint32 index_mask = (1U << size_bits) - 1U;
 		static constexpr const bool has_sub_tables = true;
 
@@ -25,7 +27,7 @@ namespace mips {
 		static_assert((sizeof...(Sizes) + 1) == levels);
 		static_assert(Size != 0);
 
-		static constexpr const usize total_size_bits = size_bits + (log2_ceil(Sizes) + ...);
+		static constexpr const usize total_size_bits = size_bits + (std::bit_width(Sizes - 1UZ) + ...);
 		static constexpr const usize remaining_size_bits = index_bits - total_size_bits;
 
 		using sub_map_t = directory_table<T, Sizes...>;
@@ -144,14 +146,14 @@ namespace mips {
 	template <typename T, size_t Size>
 	class directory_table<T, Size> final {
 		static_assert(Size != 0);
-		static_assert(log2_ceil(Size) == log2_floor(Size));
+		static_assert(std::has_single_bit(Size));
 
 		std::array<T, Size> data_ = {};
 
 	public:
 		static constexpr const usize index_bits = 32;
 		static constexpr const usize size = Size;
-		static constexpr const usize size_bits = log2_ceil(Size);
+		static constexpr const usize size_bits = std::bit_width(Size - 1UZ);
 		static constexpr const uint32 index_mask = (1U << size_bits) - 1U;
 		static constexpr const bool has_sub_tables = false;
 
@@ -260,13 +262,13 @@ namespace mips {
 	class directory_std_map final
 	{
 		static_assert(Size != 0);
-		static_assert(log2_ceil(Size) == log2_floor(Size));
+		static_assert(std::has_single_bit(Size));
 
 		std::unordered_map<uint32, T> map_;
 	public:
 		static constexpr const usize index_bits = 32;
 		static constexpr const usize size = Size;
-		static constexpr const usize size_bits = log2_ceil(Size);
+		static constexpr const usize size_bits = std::bit_width(Size - 1UZ);
 		static constexpr const uint32 index_mask = (1U << size_bits) - 1U;
 		static constexpr const bool has_sub_tables = false;
 

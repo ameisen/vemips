@@ -1,6 +1,8 @@
 #pragma once
 
-#include "platform/platform.hpp"
+#include <cassert>
+
+#include "platform/platform_headers.hpp"
 
 namespace buildcarbide {
 	namespace detail {
@@ -55,7 +57,7 @@ namespace buildcarbide {
 		}
 
 		no_throw handle_t* initialize() noexcept {
-			check(handle_ == handle_t(invalid));
+			assert(handle_ == handle_t(invalid));
 			return &handle_;
 		}
 

@@ -350,12 +350,6 @@ namespace vemips::options
 					) {
 						argument_data.jit = mips::JitType::Jit;
 					}
-					else if (
-						insensitive_equals(jit_nv, TSTR("functiontable")) ||
-						insensitive_equals(jit_nv, TSTR("function_table"))
-					) {
-						argument_data.jit = mips::JitType::FunctionTable;
-					}
 					else [[unlikely]] {
 						fmt::println(stderr, TSTR("Error: The provided JIT (\'{}\') is not a valid JIT type"), jit_nv);
 						std::exit(1);
@@ -386,19 +380,6 @@ namespace vemips::options
 					}
 
 					argument_data.jit = mips::JitType::Jit;
-				}
-			},
-			{
-				{TSTR("--jit2")},
-				TSTR("Enable function table in emulator (deprecated)"),
-				[](argument_data& __restrict argument_data, const std::span<const tchar*>, std::size_t& __restrict, std::optional<tstring_view>&& value) {
-					if (value) [[unlikely]]
-					{
-						fmt::println(stderr, TSTR("Error: Unexpected value provided for `--jit2`: {}"), *value);
-						std::exit(1);
-					}
-
-					argument_data.jit = mips::JitType::FunctionTable;
 				}
 			},
 			{
@@ -577,11 +558,9 @@ namespace vemips::options
 		fmt::println("\t{} bytes reserved for stack", data.stack_memory);
 		switch (data.jit) {
 			case mips::JitType::None:
-			fmt::println("\tInterpreted Mode"); break;
+				fmt::println("\tInterpreted Mode"); break;
 			case mips::JitType::Jit:
-			fmt::println("\tJIT1 Mode"); break;
-		case mips::JitType::FunctionTable:
-			fmt::println("\tFunction Table Mode"); break;
+				fmt::println("\tJIT1 Mode"); break;
 		}
 		fmt::println("\tROX (Read-only Executable) mode {}", data.use_rox ? "enabled" : "disabled");
 		switch (data.mmu_type) {

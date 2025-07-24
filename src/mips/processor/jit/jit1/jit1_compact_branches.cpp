@@ -108,7 +108,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -184,7 +184,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -229,7 +229,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -287,7 +287,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -345,7 +345,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -373,7 +373,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -415,7 +415,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -443,7 +443,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -485,7 +485,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -513,7 +513,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -541,7 +541,7 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 		}
 		else
 		{
-			set(ecx, int32(address));
+			set(ecx, address);
 			jmp(intrinsics_.ri, T_NEAR);
 			exception_result = except_result::always_throw;
 		}
@@ -603,10 +603,9 @@ Jit1_CodeGen::write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOf
 	else
 	{
 		//terminate_instruction = true;
-		insert_procedure_ecx(address, instruction_info.Proc, instruction);
-		exception_result = except_result::can_except;
+		exception_result = insert_procedure_check_hazard(address, instruction_info, instruction);
 		return {
-			[=](const jit1::Chunk& __restrict _chunk, const jit1::ChunkOffset& __restrict _chunk_offset, const uint32 _address)
+			[=, this](const jit1::Chunk& __restrict _chunk, const jit1::ChunkOffset& __restrict _chunk_offset, const uint32 _address)
 			{
 				const Xbyak::Label no_change;
 

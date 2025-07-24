@@ -2,7 +2,7 @@
 
 #include "host_mmu.hpp"
 
-#include "platform/platform.hpp"
+#include "platform/platform_headers.hpp"
 
 
 using namespace mips::platform;
