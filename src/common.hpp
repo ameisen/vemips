@@ -130,8 +130,8 @@ using tstring = std::string;
 #define TSTR(expr) expr
 #endif
 
-template <uint32 Bit> constexpr uint64 bit = (uint64(1) << Bit);
-template <uint32 Bit> constexpr uint64 bitmask = bit<Bit> - 1;
+template <uint32 Bit> inline constexpr uint64 bit = (uint64(1) << Bit);
+template <uint32 Bit> inline constexpr uint64 bitmask = bit<Bit> - 1;
 
 // ReSharper disable once IdentifierTypo CppInconsistentNaming
 #if _DEBUG
@@ -147,20 +147,89 @@ template <uint32 Bit> constexpr uint64 bitmask = bit<Bit> - 1;
 #	error Unknown Configuration
 #endif
 
-#define xwarn(expr, msg) xwarn_impl((expr), #expr, msg)
+#define xwarn(expr, msg) detail::xwarn_impl((expr), #expr, msg)
+
+#define MAKE_BITFLAG_ENUM(enum_type) \
+	inline constexpr _forceinline _nothrow enum_type operator & (const enum_type a, const enum_type b) noexcept { \
+		using underlying_t = std::underlying_type_t<decltype(a)>; \
+		return decltype(a)(underlying_t(a) & underlying_t(b)); \
+	} \
+ \
+	inline constexpr _forceinline _nothrow enum_type operator | (const enum_type a, const enum_type b) noexcept { \
+		using underlying_t = std::underlying_type_t<decltype(a)>; \
+		return decltype(a)(underlying_t(a) | underlying_t(b)); \
+	} \
+ \
+	inline constexpr _forceinline _nothrow enum_type operator &= (enum_type& __restrict a, const enum_type b) noexcept { \
+		using underlying_t = std::underlying_type_t<decltype(b)>; \
+		return a = decltype(b)(underlying_t(a) & underlying_t(b)); \
+	} \
+ \
+	inline constexpr _forceinline _nothrow enum_type operator |= (enum_type& __restrict a, const enum_type b) noexcept { \
+		using underlying_t = std::underlying_type_t<decltype(b)>; \
+		return a = decltype(b)(underlying_t(a) | underlying_t(b)); \
+	} \
+ \
+	inline constexpr _forceinline _nothrow enum_type operator ~ (const enum_type v) noexcept { \
+		using underlying_t = std::underlying_type_t<decltype(v)>; \
+		return decltype(v)(~underlying_t(v)); \
+	} \
+ \
+	inline constexpr _forceinline _nothrow bool operator ! (const enum_type v) noexcept { \
+		return v == enum_type::none; \
+	}
 
 namespace mips {
-	template <size_t En, size_t Mn>
-	static inline void xwarn_impl(const bool expr, const char (&__restrict expr_string)[En], const char (& __restrict message)[Mn]) {
+	namespace detail {
+
 #if _DEBUG
-		if _unlikely(!expr) {
+		template <size_t En, size_t Mn>
+		_noinline _nothrow void xwarn_inner_impl(
+			const char (&__restrict expr_string)[En],
+			const char (& __restrict message)[Mn]
+		) noexcept {
+			// TODO : add try/catch just in case?
 			fmt::println(stderr, "xwarn [{}]: {}", expr_string, message);
 		}
 #endif
+
+		template <size_t En, size_t Mn>
+		_forceinline _nothrow void xwarn_impl(
+#if !_DEBUG
+			[[maybe_unused]]
+#endif
+			const bool expr,
+#if !_DEBUG
+			[[maybe_unused]]
+#endif
+			const char (&__restrict expr_string)[En],
+#if !_DEBUG
+			[[maybe_unused]]
+#endif
+			const char (& __restrict message)[Mn]
+		) noexcept {
+#if _DEBUG
+			// TODO : add try/catch just in case?
+			if _unlikely(!expr) {
+				xwarn_inner_impl(expr_string, message);
+			}
+#endif
+		}
+
 	}
 
-	template <typename T, typename U>
-	static constexpr inline T value_assert(U value) {
+	// TODO : move me somewhere
+	template <typename T>
+	concept IntegralC = std::is_integral_v<T>;
+
+	template <typename T>
+	concept NumericC = std::is_integral_v<T> || std::is_floating_point_v<T>;
+
+	template <typename T>
+	concept EnumC = std::is_enum_v<T>;
+
+	template <NumericC T, NumericC U>
+	inline constexpr _nothrow T value_assert(U value) noexcept {
 		static constexpr const T min_value = std::numeric_limits<T>::lowest();
 		static constexpr const T max_value = std::numeric_limits<T>::max();
 
@@ -172,13 +241,13 @@ namespace mips {
 	}
 
 	template <typename T>
-	static constexpr T make_bit(const uint32 bit)
+	inline constexpr _nothrow T make_bit(const uint32 bit) noexcept
 	{
 		return static_cast<T>(1) << bit;
 	}
 
 	template <typename T>
-	static constexpr T make_bitmask(const uint32 bit)
+	inline constexpr _nothrow T make_bitmask(const uint32 bit) noexcept
 	{
 		if (bit == sizeof(T) * 8)
 		{
@@ -247,32 +316,25 @@ namespace mips {
 		>;
 	};
 
-	template <typename T> using remove_restrict_t = typename remove_restrict<T>::type;
-
-	// TODO : move me somewhere
-	template <typename T>
-	concept IntegralC = std::is_integral_v<T>;
+	template <typename T> using remove_restrict_t = remove_restrict<T>::type;
 
 	template <IntegralC ValueT, IntegralC RangeT>
-	static constexpr _nothrow _forceinline bool within(const ValueT value, const RangeT min, const RangeT max) {
+	inline constexpr _nothrow _forceinline bool within(const ValueT value, const RangeT min, const RangeT max) noexcept {
 		return value >= min && value <= max;
 	}
 
 	template <IntegralC ValueT, typename LimitsT>
-	static constexpr _nothrow _forceinline bool within(const ValueT value, const LimitsT& limits) {
+	inline constexpr _nothrow _forceinline bool within(const ValueT value, const LimitsT& limits) noexcept {
 		return value >= limits.min() && value <= limits.max();
 	}
 
 	template <IntegralC ValueT>
-	static constexpr _nothrow _forceinline bool is_max_value(const ValueT value) {
+	inline constexpr _nothrow _forceinline bool is_max_value(const ValueT value) noexcept {
 		return value == std::numeric_limits<ValueT>::max();
 	}
 
-	template <typename T>
-	concept EnumC = std::is_enum_v<T>;
-
 	template <typename T, size_t N>
-	static constexpr _nothrow _forceinline size_t count_of(T (& __restrict)[N]) {
+	inline constexpr _nothrow _forceinline size_t count_of(T (& __restrict)[N]) noexcept {
 		return N;
 	}
 
@@ -360,42 +422,20 @@ namespace mips {
 			>
 		>;
 
-  template <typename T>
-  requires std::is_integral_v<T>
-  static constexpr unsigned log2_floor(const T value)
-  {
-      return value == 1 ? 0 : 1+log2_floor(value >> 1);
-  }
-
-  template <typename T>
-  requires std::is_integral_v<T>
-  static constexpr unsigned log2_ceil(const T value)
-  {
-      return value == 1 ? 0 : log2_floor(value - 1) + 1;
-  }
-
 	enum class ptr_qual
 	{
 		none = 0,
 		restrict
 	};
 
-	static constexpr ptr_qual operator&(const ptr_qual a, const ptr_qual b)
-	{
-		return static_cast<ptr_qual>(std::to_underlying(a) & std::to_underlying(b));
-	}
-
-	static constexpr ptr_qual operator|(const ptr_qual a, const ptr_qual b)
-	{
-		return static_cast<ptr_qual>(std::to_underlying(a) | std::to_underlying(b));
-	}
+	MAKE_BITFLAG_ENUM(ptr_qual);
 
 	template <typename T, ptr_qual Qualifiers>
 	class held_ptr
 	{
 	private:
 		template <ptr_qual Q>
-		static constexpr bool has_qualifiers = (Qualifiers & Q) == Q;
+		static constexpr const bool has_qualifiers = (Qualifiers & Q) == Q;
 
 	public:
 		using value_type = T;
@@ -611,7 +651,7 @@ namespace mips {
 	};
 
 	template <typename T, typename... Tt>
-	static T* make_unique_inline(std::unique_ptr<T>& ptr, Tt&&... args)
+	inline T* make_unique_inline(std::unique_ptr<T>& ptr, Tt&&... args) noexcept(std::is_nothrow_constructible_v<T, Tt...>)
 	{
 		ptr = std::make_unique<T>(std::forward<Tt>(args)...);
 		return ptr.get();
@@ -619,7 +659,7 @@ namespace mips {
 
 	// .second == true if created 
 	template <typename T, typename... Tt>
-	static std::tuple<T*, bool> get_or_make_unique_inline(std::unique_ptr<T>& ptr, Tt&&... args)
+	inline std::tuple<T*, bool> get_or_make_unique_inline(std::unique_ptr<T>& ptr, Tt&&... args) noexcept(std::is_nothrow_constructible_v<T, Tt...>)
 	{
 
 		if (T* const result = ptr.get())
@@ -635,7 +675,7 @@ namespace mips {
 
 	template <typename T>
 	requires (std::is_nothrow_convertible_v<T, bool>)
-	static T& value_or(T& value, T& else_value)
+	inline T& value_or(T& value, T& else_value)
 	{
 		return static_cast<bool>(value) ?
 			value :
@@ -647,7 +687,7 @@ namespace mips {
 		std::is_nothrow_convertible_v<T, bool> &&
 		std::is_nothrow_convertible_v<Tt..., T>
 	)
-	static T& value_or(T& value, T& else_value, Tt&&... else_values)
+	inline T& value_or(T& value, T& else_value, Tt&&... else_values)
 	{
 		return static_cast<bool>(value) ?
 			value :
@@ -659,7 +699,7 @@ namespace mips {
 		std::is_nothrow_convertible_v<T, bool> &&
 		std::is_nothrow_invocable_v<TConverter>
 	)
-	static T& value_or(T& value, TConverter&& else_getter)
+	inline T& value_or(T& value, const TConverter& else_getter)
 	{
 		return static_cast<bool>(value) ?
 			value :
@@ -680,9 +720,8 @@ namespace mips {
 	template<typename TReturn, typename... TFunc> overloads_no_monostate(TFunc...) -> overloads_no_monostate<TReturn, TFunc...>;
 	#endif
 
-	template <typename TCompareType, typename TInType>
-	requires (std::is_integral_v<TInType> && std::is_integral_v<TCompareType>)
-	static constexpr bool in_range(const TInType& value)
+	template <IntegralC TCompareType, IntegralC TInType>
+	inline constexpr _forceinline _nothrow bool in_range(const TInType& value) noexcept
 	{
 		if constexpr (std::is_signed_v<TInType> && std::is_unsigned_v<TCompareType>)
 		{
@@ -698,43 +737,12 @@ namespace mips {
 			value <= std::numeric_limits<TCompareType>::max();
 	}
 
-	template <typename TType>
-	requires (std::is_integral_v<TType> || std::is_floating_point_v<TType>)
-	static constexpr bool in_range(const TType& value, const TType min, const TType max)
+	template <NumericC TType>
+	inline constexpr _forceinline _nothrow bool in_range(const TType& value, const TType min, const TType max) noexcept
 	{
 		return value >= min && value >= max;
 	}
 }
-
-#define MAKE_BITFLAG_ENUM(enum_type) \
-	static constexpr enum_type operator & (const enum_type a, const enum_type b) { \
-		using underlying_t = std::underlying_type_t<decltype(a)>; \
-		return decltype(a)(underlying_t(a) & underlying_t(b)); \
-	} \
- \
-	static constexpr enum_type operator | (const enum_type a, const enum_type b) { \
-		using underlying_t = std::underlying_type_t<decltype(a)>; \
-		return decltype(a)(underlying_t(a) | underlying_t(b)); \
-	} \
- \
-	static constexpr enum_type operator &= (enum_type& __restrict a, const enum_type b) { \
-		using underlying_t = std::underlying_type_t<decltype(b)>; \
-		return a = decltype(b)(underlying_t(a) & underlying_t(b)); \
-	} \
- \
-	static constexpr enum_type operator |= (enum_type& __restrict a, const enum_type b) { \
-		using underlying_t = std::underlying_type_t<decltype(b)>; \
-		return a = decltype(b)(underlying_t(a) | underlying_t(b)); \
-	} \
- \
-	static constexpr enum_type operator ~ (const enum_type v) { \
-		using underlying_t = std::underlying_type_t<decltype(v)>; \
-		return decltype(v)(~underlying_t(v)); \
-	} \
- \
-	static constexpr bool operator ! (const enum_type v) { \
-		return v == enum_type::none; \
-	}
 
 #define _make_qual(type) copy_qualifiers<decltype(self), type>
 

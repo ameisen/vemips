@@ -15,21 +15,20 @@ namespace mips {
 		static_assert(sizeof(float) == 4, "Need custom FPU definition for this platform");
 
 		struct alignas(uint32) FIR final {
-			uint32 Revision : 8;
-			uint32 ProcessorID : 8;
-			uint32 SinglePrecision : 1;
-			uint32 DoublePrecision : 1;
-			uint32 : 2;
-			uint32 FixedPointW : 1;
-			uint32 FixedPointL : 1;
-			uint32 Float64 : 1;
-			uint32 Has2008 : 1;
-			uint32 Impl : 4;
-			uint32 : 1;
-			uint32 FREP : 1;
-			uint32 : 2;
+			uint32 Revision        : 8 = 0b00000001;
+			uint32 ProcessorID     : 8 = 0b11111111;
+			uint32 SinglePrecision : 1 = 1;
+			uint32 DoublePrecision : 1 = 1;
+			uint32 _z_padding0     : 2 = 0;
+			uint32 FixedPointW     : 1 = 0;
+			uint32 FixedPointL     : 1 = 0;
+			uint32 Float64         : 1 = 1;
+			uint32 Has2008         : 1 = 1;
+			uint32 Impl            : 4 = 0;
+			uint32 _z_padding1     : 1 = 0;
+			uint32 FREP            : 1 = 0;
+			uint32 _z_padding2     : 2 = 0;
 
-			_nothrow FIR() noexcept;
 			_nothrow void clock() noexcept;
 
 			_nothrow operator uint32 () const __restrict noexcept {
@@ -39,19 +38,18 @@ namespace mips {
 		static_assert(sizeof(FIR) == sizeof(uint32), "FIR register size mismatch");
 
 		struct alignas(uint32) FCSR final {
-			uint32 RoundingMode : 2; // 0 = RN, 1 = RZ, 2 = RP, 3 = RM
-			uint32 Flags : 5;
-			uint32 Enables : 5;
-			uint32 Cause : 6;
-			uint32 NAN2008 : 1;
-			uint32 ABS2008 : 1;
-			uint32 _z_padding0 : 1;
-			uint32 Impl : 2;
-			uint32 _z_padding1 : 1;
-			uint32 FlushZero : 1;
-			uint32 _z_padding2 : 7;
+			uint32 RoundingMode : 2 = 0; // 0 = RN, 1 = RZ, 2 = RP, 3 = RM
+			uint32 Flags        : 5 = 0;
+			uint32 Enables      : 5 = 0;
+			uint32 Cause        : 6 = 0;
+			uint32 NAN2008      : 1 = 1;
+			uint32 ABS2008      : 1 = 1;
+			uint32 _z_padding0  : 1 = 0;
+			uint32 Impl         : 2 = 0;
+			uint32 _z_padding1  : 1 = 0;
+			uint32 FlushZero    : 1 = 0;
+			uint32 _z_padding2  : 7 = 0;
 
-			_nothrow FCSR() noexcept;
 			_nothrow void clock() noexcept;
 
 			_nothrow uint32 get_FEXR() const noexcept;

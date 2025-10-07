@@ -258,7 +258,7 @@ namespace mips {
 		}
 	};
 
-	template<typename T, [[maybe_unused]] size_t Size>
+	template<typename T, size_t Size [[maybe_unused]]>
 	class directory_std_map final
 	{
 		static_assert(Size != 0);

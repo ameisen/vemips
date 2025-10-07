@@ -125,7 +125,7 @@ namespace buildcarbide::file_utils {
 	}
 
 	template <>
-	static no_throw void combiner<std::string>(wstring & __restrict combined, const std::string & __restrict arg) noexcept {
+	inline no_throw void combiner<std::string>(wstring & __restrict combined, const std::string & __restrict arg) noexcept {
 		if (!combined.empty()) {
 			combined += L'/';
 		}
@@ -133,7 +133,7 @@ namespace buildcarbide::file_utils {
 	}
 
 	template <>
-	static no_throw void combiner<std::string_view>(wstring & __restrict combined, const std::string_view & __restrict arg) noexcept {
+	inline no_throw void combiner<std::string_view>(wstring & __restrict combined, const std::string_view & __restrict arg) noexcept {
 		if (!combined.empty()) {
 			combined += L'/';
 		}
@@ -141,7 +141,7 @@ namespace buildcarbide::file_utils {
 	}
 
 	template <>
-	static no_throw void combiner<const char *>(wstring & __restrict combined, const char * const & __restrict arg) noexcept {
+	inline no_throw void combiner<const char *>(wstring & __restrict combined, const char * const & __restrict arg) noexcept {
 		if (!combined.empty()) {
 			combined += L'/';
 		}

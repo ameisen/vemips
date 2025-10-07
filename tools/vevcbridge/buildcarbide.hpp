@@ -69,7 +69,7 @@ namespace buildcarbide {
 	}
 
 	template<class T>
-	concept integral = std::is_integral_v<T>;
+	concept integral = requires { std::is_integral_v<T>; };
 
 	namespace detail {
 		struct static_tag {
@@ -95,11 +95,13 @@ namespace buildcarbide {
 
 		template <integral Th, Th OffsetBasis, Th Prime>
 		struct fnv1_a_base : public fnv_base<Th, OffsetBasis, Prime> {
-			using fnv_base<Th, OffsetBasis, Prime>::octet_t;
+			using super = fnv_base<Th, OffsetBasis, Prime>;
+			//using fnv_base<Th, OffsetBasis, Prime>::octet_t;
 
 			template <integral To> requires (sizeof(To) == 1)
 			static __forceinline constexpr no_throw Th iteration(const Th hash, const To octet) noexcept {
-				return (hash ^ octet_t<To>(octet)) * Prime;
+				using octet_type = decltype(octet);
+				return (hash ^ static_cast<super::template octet_t<octet_type>>(octet)) * Prime;
 			}
 
 			template <integral TElement> requires(std::is_trivially_copyable_v<TElement> && sizeof(TElement) != 1)

@@ -772,14 +772,14 @@ namespace mips {
 		}
 
 		[[nodiscard]]
-		bool get_flags(const flag bits) const __restrict;
+		_nothrow bool get_flags(const flag bits) const __restrict noexcept;
 
-		void set_flags(const flag bits) __restrict;
+		_nothrow void set_flags(const flag bits) __restrict noexcept;
 
-		void clear_flags(const flag bits) __restrict;
+		_nothrow void clear_flags(const flag bits) __restrict noexcept;
 
 		[[nodiscard]]
-		system* get_guest_system() const __restrict {
+		_forceinline _nothrow system* get_guest_system() const __restrict noexcept {
 			return guest_system_;
 		}
 
@@ -794,15 +794,15 @@ namespace mips {
 
 	MAKE_BITFLAG_ENUM(processor::flag)
 
-	inline bool processor::get_flags(const flag bits) const __restrict {
+	_nothrow inline bool processor::get_flags(const flag bits) const __restrict noexcept {
 		return !!(flags_ & bits);
 	}
 
-	inline void processor::set_flags(const flag bits) __restrict {
+	_nothrow inline void processor::set_flags(const flag bits) __restrict noexcept {
 		flags_ = flags_ | bits;
 	}
 
-	inline void processor::clear_flags(const flag bits) __restrict {
+	_nothrow inline void processor::clear_flags(const flag bits) __restrict noexcept {
 		flags_ = flags_ & ~bits;
 	}
 

@@ -9,83 +9,75 @@ _nothrow void coprocessor1::clock() noexcept {
 }
 
 namespace {
-	static const coprocessor1::FIR g_reference_fir;
-	static const coprocessor1::FCSR g_reference_fcsr_ones = []() -> coprocessor1::FCSR {
-		coprocessor1::FCSR value;
-		memset(&value, 0x0, sizeof(value));
-		value.NAN2008 = 1;
-		value.ABS2008 = 1;
-		return value;
-	}();
-	static const coprocessor1::FCSR g_reference_fcsr_zeros = []() -> coprocessor1::FCSR {
-		coprocessor1::FCSR value;
-		memset(&value, 0xFF, sizeof(value));
-		value._z_padding0 = 0;
-		value._z_padding1 = 0;
-		value._z_padding2 = 0;
-		return value;
-	}();
-}
-
-_nothrow coprocessor1::FIR::FIR() noexcept {
-	*(uint32 * __restrict)this = 0;
-
-	Revision = 0b00000001;
-	ProcessorID = 0b11111111;
-	SinglePrecision = 0b1;
-	DoublePrecision = 0b1;
-	FixedPointW = 0b0;
-	FixedPointL = 0b0;
-	Float64 = 0b1;
-	Has2008 = 0b1;
-	FREP = 0b0;
+	static constexpr const coprocessor1::FCSR g_reference_fcsr_ones {
+		.RoundingMode = 0,
+		.Flags = 0,
+		.Enables = 0,
+		.Cause = 0,
+		.NAN2008 = 1,
+		.ABS2008 = 1,
+		.Impl = 0,
+		.FlushZero = 0
+	};
+	static constexpr const coprocessor1::FCSR g_reference_fcsr_zeros {
+		.RoundingMode = 0b11,
+		.Flags = 0b11111,
+		.Enables = 0b11111,
+		.Cause = 0b111111,
+		.NAN2008 = 1,
+		.ABS2008 = 1,
+		.Impl = 0b11,
+		.FlushZero = 1
+	};
 }
 
 _nothrow void coprocessor1::FIR::clock() noexcept {
 	// FIR is supposed to be read-only.
-	*this = g_reference_fir;
-}
-
-_nothrow coprocessor1::FCSR::FCSR() noexcept {
-	*(uint32 * __restrict)this = 0;
-
-	RoundingMode = 0;
-	Flags = 0;
-	Enables = 0;
-	Cause = 0;
-	NAN2008 = 1;
-	ABS2008 = 1;
-	Impl = 0;
-	FlushZero = 0;
+	*this = FIR{};
 }
 
 _nothrow void coprocessor1::FCSR::clock() noexcept {
-	*(uint32 * __restrict)this |= uint32(g_reference_fcsr_ones);
-	*(uint32 * __restrict)this &= uint32(g_reference_fcsr_zeros);
+	uint32 this_u32 = uint32(*this);
+	this_u32 |= uint32(g_reference_fcsr_ones);
+	this_u32 &= uint32(g_reference_fcsr_zeros);
+	*this = std::bit_cast<FCSR>(this_u32);
 }
 
 _nothrow uint32 coprocessor1::FCSR::get_FEXR() const noexcept {
-	uint32 ret = 0;
-	((FCSR & __restrict)ret).Flags = Flags;
-	((FCSR & __restrict)ret).Cause = Cause;
-	return ret;
+	return FCSR {
+		.RoundingMode = 0,
+		.Flags = Flags,
+		.Enables = 0,
+		.Cause = Cause,
+		.NAN2008 = 0,
+		.ABS2008 = 0,
+		.Impl = 0,
+		.FlushZero = 0
+	};
 }
 
 _nothrow void coprocessor1::FCSR::set_FEXR(uint32 fexr) noexcept {
-	Flags = ((const FCSR & __restrict)fexr).Flags;
-	Cause = ((const FCSR & __restrict)fexr).Cause;
+	const FCSR in_fexr = std::bit_cast<FCSR>(fexr);
+	Flags = in_fexr.Flags;
+	Cause = in_fexr.Cause;
 }
 
 _nothrow uint32 coprocessor1::FCSR::get_FENR() const noexcept {
-	uint32 ret = 0;
-	((FCSR & __restrict)ret).RoundingMode = RoundingMode;
-	((FCSR & __restrict)ret).Enables = Enables;
-	((FCSR & __restrict)ret).FlushZero = FlushZero;
-	return ret;
+	return FCSR {
+		.RoundingMode = RoundingMode,
+		.Flags = 0,
+		.Enables = Enables,
+		.Cause = 0,
+		.NAN2008 = 0,
+		.ABS2008 = 0,
+		.Impl = 0,
+		.FlushZero = FlushZero
+	};
 }
 
 _nothrow void coprocessor1::FCSR::set_FENR(const uint32 fenr) noexcept {
-	RoundingMode = ((const FCSR & __restrict)fenr).RoundingMode;
-	Enables = ((const FCSR & __restrict)fenr).Enables;
-	FlushZero = ((const FCSR & __restrict)fenr).FlushZero;
+	const FCSR in_fenr = std::bit_cast<FCSR>(fenr);
+	RoundingMode = in_fenr.RoundingMode;
+	Enables = in_fenr.Enables;
+	FlushZero = in_fenr.FlushZero;
 }

@@ -13,7 +13,7 @@ namespace vemips::tablegen {
 
 	using crstring = const char* __restrict;
 
-	static _nothrow void PrintIndent(size_t indent) {
+	static inline _nothrow void PrintIndent(size_t indent) {
 		while (indent--) {
 			std::fputc('\t', out_stream);
 		}
