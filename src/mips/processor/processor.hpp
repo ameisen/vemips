@@ -141,6 +141,8 @@ namespace mips {
 		const bool ticked_ : 1;
 		const bool collect_stats_ : 1;
 		const bool disable_cti_ : 1;
+		const bool handles_execution_hazards_ : 1 = false;
+		const bool handles_instruction_hazards_ : 1 = false;
 		const bool debugging_ : 1 = false;
 	public:
 		bool in_jit : 1 = false;
@@ -463,11 +465,11 @@ namespace mips {
 				address += stack_size_;
 
 				if (mmu_type_ == mmu::emulated) {
-					if _unlikely(memory_source_->at(address, sizeof(T))) [[unlikely]] {
+					if _unlikely(nullptr != memory_source_->at(address, sizeof(T))) [[unlikely]] {
 						return;
 					}
 				}
-				else if _unlikely(address < memory_size_) [[unlikely]] {
+				else if _unlikely(address + sizeof(T) <= memory_size_) [[unlikely]] {
 					return;
 				}
 			}
@@ -535,7 +537,7 @@ namespace mips {
 						return *val_ptr;
 					}
 				}
-				else if _likely(address < memory_size_) [[likely]] {
+				else if _likely(address + sizeof(T) <= memory_size_) [[likely]] {
 					return *reinterpret_cast<const T * __restrict>(
 						(ForInstruction ? shadow_memory_ptr_ : memory_ptr_) + address
 					);
@@ -649,7 +651,7 @@ namespace mips {
 						return val_ptr;
 					}
 				}
-				else if _likely(address < memory_size_) [[likely]] {
+				else if _likely(address + sizeof(T) <= memory_size_) [[likely]] {
 					return reinterpret_cast<const T * __restrict>(memory_ptr_ + address);
 				}
 			}
@@ -684,7 +686,7 @@ namespace mips {
 						return val_ptr;
 					}
 				}
-				else if _likely(address < memory_size_) [[likely]] {
+				else if _likely(address + sizeof(T) <= memory_size_) [[likely]] {
 					return reinterpret_cast<const T * __restrict>(shadow_memory_ptr_ + address);
 				}
 			}
@@ -719,7 +721,7 @@ namespace mips {
 					memory_touched(address, sizeof(T));
 					return {};
 				}
-				else if _likely(address < memory_size_) [[likely]] {
+				else if _likely(address + sizeof(T) <= memory_size_) [[likely]] {
 					*reinterpret_cast<T * __restrict>(memory_ptr_ + address) = value;
 					memory_touched(address, sizeof(T));
 					return {};
@@ -816,7 +818,10 @@ namespace mips {
 		void invalidate_instruction_cache(uint32 guest_address);
 		void clear_memory_hazards(memory_hazards hazards);
 		bool handles_memory_hazards(memory_hazards hazards) const;
-		bool flush_instruction_hazards(std::optional<std::pair<uint32, uint32>> current_chunk_span = {});
+		bool handles_execution_hazards() const;
+		bool handles_instruction_hazards() const;
+		void clear_execution_hazards();
+		bool clear_instruction_hazards(std::optional<std::pair<uint32, uint32>> current_chunk_span = {});
 	};
 
 	MAKE_BITFLAG_ENUM(processor::flag)

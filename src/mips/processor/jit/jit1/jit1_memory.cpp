@@ -180,7 +180,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 		set(r8d, store_size); // TODO = store_size - 1 would be more efficient
 		mov(r13d, edx); // store to non-volatile for after call if there's an exception.
 		// 'r8' is the third parameter (size)
-		std::ignore = call_ex(std::bit_cast<void*>(&mem_write_jit), rax);
+		std::ignore = call_ex<true>(ptr_cast(&mem_write_jit), rax);
 		// rax now has our destination pointer.
 		mov(r13, rax); // save the pointer off to non-volatile r13.
 		test(rax, rax);
@@ -577,7 +577,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 			set(r8d, load_size);
 			mov(r13d, edx); // store to non-volatile for after call if there's an exception.
 			// 'r8' is the third parameter (size)
-			std::ignore = call_ex(std::bit_cast<void*>(&mem_read_jit), rax);
+			std::ignore = call_ex<true>(ptr_cast(&mem_read_jit), rax);
 			// rax now has our destination pointer.
 			mov(r13, rax); // save the pointer off to non-volatile r13.
 			//cmp(rax, 0);

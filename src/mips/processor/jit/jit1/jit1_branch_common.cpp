@@ -126,7 +126,7 @@ namespace mips
 			mov(edx, eax);
 		}
 		set(rcx, std::bit_cast<uintptr>(&jit));
-		std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
+		std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
 		intrinsic_write_patch_epilog(patch);
 		jmp(rax);
 	}
@@ -202,8 +202,8 @@ namespace mips
 
 		mov(rdx, rax);
 		set(rcx, uintptr(&jit_));
-		std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
-		
+		std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
+
 		jmp(rax);
 	}
 }

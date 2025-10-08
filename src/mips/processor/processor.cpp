@@ -65,6 +65,11 @@ processor::processor(const options & __restrict options) :
 	ticked_(options.ticked),
 	collect_stats_(options.collect_stats),
 	disable_cti_(options.disable_cti),
+	handles_execution_hazards_(false),
+	handles_instruction_hazards_(
+		(options.guest_system && options.guest_system->has_strict_noncoherence()) ||
+		options.jit_type != JitType::None
+	),
 	debugging_(options.debugging)
 {
 #if !USE_STATIC_INSTRUCTION_SEARCH
@@ -250,7 +255,7 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 
 			if (get_flags(flag::instruction_hazard))
 			{
-				flush_instruction_hazards();
+				clear_instruction_hazards();
 			}
 		}
 		
@@ -606,6 +611,11 @@ uint32 processor::get_cache_line_size() const __restrict
 
 void processor::invalidate_instruction_cache(const uint32 guest_address)
 {
+	if (!handles_instruction_hazards_)
+	{
+		return;
+	}
+
 	const uint32 cache_line_size = get_cache_line_size();
 	const uint32 guest_address_line_start = guest_address & (~(cache_line_size - 1U));
 }
@@ -620,9 +630,30 @@ bool processor::handles_memory_hazards(const memory_hazards hazards) const
 	return (hazards & (memory_hazards::global_barrier_SYNCI)) != memory_hazards::none;
 }
 
-bool processor::flush_instruction_hazards(const std::optional<std::pair<uint32, uint32>> current_chunk_span)
+bool processor::handles_execution_hazards() const
+{
+	return handles_execution_hazards_;
+}
+
+bool processor::handles_instruction_hazards() const
+{
+	return handles_instruction_hazards_;
+}
+
+void processor::clear_execution_hazards()
+{
+	// do nothing
+	// handles_execution_hazards_
+}
+
+bool processor::clear_instruction_hazards(const std::optional<std::pair<uint32, uint32>> current_chunk_span)
 {
 	xassert(!in_jit || current_chunk_span.has_value());
+
+	if (!handles_instruction_hazards_)
+	{
+		return false;
+	}
 
 	if (!get_flags(processor::flag::instruction_hazard))
 	{

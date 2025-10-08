@@ -349,7 +349,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYSCALL(jit1::ChunkOffset &
 		mov(dword[rbp + offsets.flags], ebx);
 		set(ecx, code);
 		lea(rdx, qword[rbp - 128]);
-		std::ignore = call_ex(&do_syscall, rax);
+		std::ignore = call_ex<true>(ptr_cast(&do_syscall), rax);
 		mov(ebx, dword[rbp + offsets.flags]);
 		test(eax, eax);
 		jnz(intrinsics_.save_return, T_NEAR);

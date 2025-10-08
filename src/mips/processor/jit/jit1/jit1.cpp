@@ -181,8 +181,8 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 			cg.mov(cg.dword[cg.rbp + offsets.flags], cg.ebx);
 			cg.mov(cg.dword[cg.rbp + offsets.dbt], cg.esi);  // set it in the interpreter
 			cg.mov(cg.dword[cg.rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], cg.r15d);
-			cg.mov(cg.rax, intptr(jit1_drop_signal));
-			cg.jmp(cg.rax);
+			cg.set(cg.rax, reinterpret_cast<intptr>(&jit1_drop_signal));
+			cg.jmp_ex<true>(cg.rax);
 			{
 				const Xbyak::Label no_redirect;
 
@@ -197,13 +197,13 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 				cg.mov(cg.dword[cg.rbp + offsets.flags], cg.ebx);
 				cg.lea(cg.rdx, cg.qword[cg.rbp - 128]);
 				cg.mov(cg.rcx, cg.r9);
-				cg.call(cg.rax);
+				cg.call_ex<true>(cg.rax);
 				cg.test(cg.rax, cg.rax);
 				cg.jz(no_redirect);
 				{
 					// If we reach here, we altered the current chunk, meaning we need to jump to a different offset.
 					cg.inc(cg.rdi);
-					cg.add(cg.rsp, sizeof(void*));
+					cg.push(cg.rax.changeBit(sizeof(void*) * 8));
 					cg.jmp(cg.rax);
 				}
 				cg.L(no_redirect);
@@ -359,7 +359,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		const Xbyak::Label id_label;
 		jmp(id_label);
 		nop(4, false);
-		mov(eax, int32(current_address));
+		set(eax, current_address);
 		nop(4, false);
 		L(id_label);
 #endif
@@ -368,7 +368,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		{
 			mov(dword[rbp + offsets.pc], current_address);
 			lea(rcx, qword[rbp - 128]);
-			std::ignore = call_ex(std::bit_cast<void*>(&should_debug_break), rax);
+			std::ignore = call_ex<true>(ptr_cast(&should_debug_break), rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
 			cmp(rdi, r14);
@@ -378,7 +378,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		{
 			mov(dword[rbp + offsets.pc], current_address);
 			lea(rcx, qword[rbp - 128]);
-			std::ignore = call_ex(std::bit_cast<void*>(&should_debug_break), rax);
+			std::ignore = call_ex<true>(ptr_cast(&should_debug_break), rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
 		}
@@ -700,6 +700,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					{
 						write_PROC_SYNC(chunk_offset, current_address, instruction, *instruction_info_ptr);
 					}
+					else if (IS_INSTRUCTION(instruction_info_ptr, PROC_SYNC))
+					{
+						exception_result = write_PROC_SYNCI(chunk_offset, current_address, instruction, *instruction_info_ptr);
+					}
 					else if (
 						const auto&& write_trap_func = [&] -> std::optional<decltype(&Jit1_CodeGen::write_PROC_TNE)>
 						{
@@ -895,6 +899,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		start_address += 4;
 	}
 
+	chunk.ends_with_delay_branch = prev_instruction_info_ptr && HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::DelayBranch);
+
 	intrinsic_write_patch_jump(
 		chunk,
 		last_address + 1,
@@ -961,8 +967,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			L(intrinsic_ex_no_pc);
 			call(save);
 			lea(rdx, qword[rbp - 128]);
-			add(rsp, 40);
-			jmp(rax);
+			jmp_ex<true>(rax);
 		}
 
 		if (intrinsics_.check_ex.used) {
@@ -986,8 +991,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		if (intrinsics_.save_return.used) {
 			L(intrinsics_.save_return);
 			call(save);
-			add(rsp, 40);
-			ret();
+			escape_ret();
 		}
 
 		if (this_processor.collect_stats_) {
@@ -995,18 +999,14 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			if (intrinsics_.stats.used) {
 				L(intrinsics_.stats);
 				lea(rdx, qword[rbp - 128]);
-				sub(rsp, 40);
-				std::ignore = call_ex(&increment_instruction_statistic, rax);
-				add(rsp, 40);
+				std::ignore = call_ex<true, 8>(ptr_cast(&increment_instruction_statistic), rax);
 				ret();
 			}
 
 			if (intrinsics_.emulated_stats.used) {
 				L(intrinsics_.emulated_stats);
 				lea(rdx, qword[rbp - 128]);
-				sub(rsp, 40);
-				std::ignore = call_ex(&increment_jit_emulated_instruction_statistic, rax);
-				add(rsp, 40);
+				std::ignore = call_ex<true, 8>(ptr_cast(&increment_jit_emulated_instruction_statistic), rax);
 				ret();
 			}
 		}

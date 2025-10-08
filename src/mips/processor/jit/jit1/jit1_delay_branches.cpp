@@ -331,7 +331,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_delay_branch(jit1::ChunkOffset &
 void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const bool hazard)
 {
 	branch_type branch_type = branch_type::none;
-	uint32 target_address = 0;
+	std::optional<uint32> target_address;
 
 	const uint32 this_address = address + 4;
 
@@ -446,13 +446,20 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 
 	if (branch_type == branch_type::none)
 	{
-		if (chunk_begin <= target_address && chunk_last >= target_address)
+		if (target_address.has_value())
 		{
-			branch_type = branch_type::near_branch;
+			if (chunk_begin <= target_address && chunk_last >= target_address)
+			{
+				branch_type = branch_type::near_branch;
+			}
+			else
+			{
+				branch_type = branch_type::far_branch;
+			}
 		}
 		else
 		{
-			branch_type = branch_type::far_branch;
+			branch_type = branch_type::indeterminate;
 		}
 	}
 
@@ -469,7 +476,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		test(ebx, processor::flag::instruction_hazard);
 		jz(no_hazard);
 		//std::ignore = flush_pc(eax, instruction_offset);
-		intrinsic_clear_hazards(this_offset, target);
+		intrinsic_clear_instruction_hazards(this_offset, target);
 		L(no_hazard);
 	};
 
@@ -483,7 +490,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 		test(ebx, processor::flag::instruction_hazard);
 		jz(no_hazard);
 		//std::ignore = flush_pc(eax, instruction_offset);
-		intrinsic_clear_hazards(this_offset, target);
+		intrinsic_clear_instruction_hazards(this_offset, target);
 		L(no_hazard);
 	};
 
@@ -496,10 +503,10 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
 			// what is the offset of the target address?
-			const uint32 target_offset = (target_address - chunk_begin) / 4u;
+			const uint32 target_offset = (*target_address - chunk_begin) / 4u;
 			const auto& target_label = get_instruction_offset_label(target_offset);
 			xor_(esi, esi);
-			insert_hazard(target_address);
+			insert_hazard(*target_address);
 			safe_jmp(target_label, target_offset);
 			L(no_branch);
 		} break;
@@ -510,8 +517,8 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jz(no_branch);
 			xor_(esi, esi);
 			and_(ebx, ~processor::flag::branch_delay);
-			insert_hazard(target_address);
-			intrinsic_write_patch_jump(chunk, target_address, edx, false);
+			insert_hazard(*target_address);
+			intrinsic_write_patch_jump(chunk, *target_address, edx, false);
 			L(no_branch);
 		} break;
 		case branch_type::indeterminate:					 // Branches to an unknown location
@@ -548,7 +555,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			L(not_within);
 			mov(rdx, rax);
 			set(rcx, uintptr(&jit_));
-			std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
+			std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
 			jmp(rax);
 			L(no_branch);
 		} break;
@@ -558,11 +565,11 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
-			insert_hazard(target_address);
-			mov(dword[rbp + offsets.pc], target_address);
+			insert_hazard(*target_address);
+			mov(dword[rbp + offsets.pc], *target_address);
 
 			// what is the offset of the target address?
-			const uint32 target_offset = (target_address - chunk_begin) / 4u;
+			const uint32 target_offset = (*target_address - chunk_begin) / 4u;
 			const auto& target_label = get_instruction_offset_label(target_offset);
 
 			safe_jmp(target_label, target_offset);
@@ -574,12 +581,12 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			test(ebx, processor::flag::branch_delay);
 			jz(no_branch);
 			and_(ebx, ~processor::flag::branch_delay);
-			insert_hazard(target_address);
-			mov(edx, target_address);
+			insert_hazard(*target_address);
+			mov(edx, *target_address);
 			mov(dword[rbp + offsets.pc], edx);
 
 			mov(rcx, uintptr(&jit_));
-			std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
+			std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
 			jmp(rax);
 
 			L(no_branch);
@@ -618,7 +625,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			L(not_within);
 			mov(rdx, rax);
 			mov(rcx, uintptr(&jit_));
-			std::ignore = call_ex(std::bit_cast<void*>(&jit1::get_instruction), rax);
+			std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
 			jmp(rax);
 			L(no_branch);
 		} break;

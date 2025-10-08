@@ -13,38 +13,50 @@
 
 using namespace mips;
 
-void Jit1_CodeGen::insert_procedure(const uint32 address, void* const procedure, const uint32 argument0) {
+void Jit1_CodeGen::insert_procedure(const uint32 address, const void* const procedure, const uint32 argument0) {
 
 	mov(dword[rbp + offsets.pc], address);
 	mov(dword[rbp + offsets.flags], ebx);
 	set(ecx, argument0);
 	lea(rdx, qword[rbp - 128]);
-	std::ignore = call_ex(procedure, rax);
+	std::ignore = call_ex<true>(procedure, rax);
 	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 	mov(ebx, dword[rbp + offsets.flags]);
 }
 
-void Jit1_CodeGen::insert_procedure_hazard(const uint32 address [[maybe_unused]], void* const procedure, const uint32 argument0) {
+void Jit1_CodeGen::insert_procedure(const uint32 address, const void* const procedure, const Xbyak::Operand& argument0) {
+
+	std::ignore = mov_ex(ecx, argument0);
+	mov(dword[rbp + offsets.pc], address);
+	mov(dword[rbp + offsets.flags], ebx);
+	lea(rdx, qword[rbp - 128]);
+	std::ignore = call_ex<true>(procedure, rax);
+	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
+	mov(ebx, dword[rbp + offsets.flags]);
+}
+
+void Jit1_CodeGen::insert_procedure_hazard(const uint32 address [[maybe_unused]], const void* const procedure, const uint32 argument0) {
 	const Xbyak::Label return_label;
 
 	set(rax, reinterpret_cast<uintptr>(procedure));
 	mov(rdx, return_label);
 	set(ecx, address);
 	set(r9, argument0);
-	std::ignore = call_ex(jit_.call_instruction_hazard_ptr_, r8);
+	std::ignore = call_ex<true>(jit_.call_instruction_hazard_ptr_, r8);
 	L(return_label);
 	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 	mov(ebx, dword[rbp + offsets.flags]);
 }
 
-void Jit1_CodeGen::insert_procedure_hazard(const uint32 address [[maybe_unused]], void* const procedure, const Xbyak::Operand& argument0) {
+void Jit1_CodeGen::insert_procedure_hazard(const uint32 address [[maybe_unused]], const void* const procedure, const Xbyak::Operand& argument0) {
 	const Xbyak::Label return_label;
 
 	std::ignore = mov_ex(r9, argument0);
 	set(rax, reinterpret_cast<uintptr>(procedure));
 	mov(rdx, return_label);
 	set(ecx, address);
-	std::ignore = call_ex(jit_.call_instruction_hazard_ptr_, r8);
+	std::ignore = call_ex<true>(jit_.call_instruction_hazard_ptr_, r8);
+
 	L(return_label);
 	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 	mov(ebx, dword[rbp + offsets.flags]);
@@ -91,16 +103,32 @@ bool Jit1_CodeGen::interpret_if_hazard(const uint32 address, const mips::instruc
 
 namespace
 {
-	_nothrow static void* ClearHazards(const uint32 target_address, processor & __restrict processor) noexcept
+	_nothrow static void ClearExecutionHazards(const uint32, processor & __restrict processor) noexcept
+	{
+		//const uint32 chunk_size = jit1::get_static_chunk_size();
+		//const uint32 current_address = processor.get_program_counter();
+		//const uint32 chunk_base = current_address & (~(chunk_size - 1));
+
+		try
+		{
+			processor.clear_execution_hazards();
+		}
+		catch (...)
+		{
+			xunreachable("unexpected exception in `ClearExecutionHazards`");
+		}
+	}
+
+	_nothrow static void* ClearInstructionHazards(const uint32 target_address, processor & __restrict processor) noexcept
 	{
 		const uint32 chunk_size = jit1::get_static_chunk_size();
 		const uint32 current_address = processor.get_program_counter();
 		const uint32 chunk_base = current_address & (~(chunk_size - 1));
 
-
 		try
 		{
-			if (processor.flush_instruction_hazards({{chunk_base, chunk_size}}))
+			processor.clear_execution_hazards();
+			if (processor.clear_instruction_hazards({{chunk_base, chunk_size}}))
 			{
 				const uint32 next_address = target_address;
 
@@ -115,21 +143,40 @@ namespace
 		}
 		catch (...)
 		{
-			xunreachable("unexpected exception in `ClearHazards`");
+			xunreachable("unexpected exception in `ClearInstructionHazards`");
+		}
+	}
+
+	_nothrow static void SyncInstruction(const uint32 target_address, processor & __restrict processor) noexcept
+	{
+		try
+		{
+			//processor.mem_poke<char>(target_address);
+			processor.invalidate_instruction_cache(target_address);
+		}
+		catch (...)
+		{
+			xunreachable("unexpected exception in `SyncInstruction`");
 		}
 	}
 }
 
-void Jit1_CodeGen::intrinsic_clear_hazards(const uint32 address, const uint32 target_address)
+void Jit1_CodeGen::intrinsic_clear_execution_hazards(const uint32 address)
 {
 	// suboptimal
-	insert_procedure_hazard(address, &ClearHazards, target_address);
+	insert_procedure(address, std::bit_cast<void*>(&ClearExecutionHazards), 0U);
 }
 
-void Jit1_CodeGen::intrinsic_clear_hazards(const uint32 address, const Xbyak::Reg& target_address_reg)
+void Jit1_CodeGen::intrinsic_clear_instruction_hazards(const uint32 address, const uint32 target_address)
 {
 	// suboptimal
-	insert_procedure_hazard(address, &ClearHazards, target_address_reg);
+	insert_procedure_hazard(address, std::bit_cast<void*>(&ClearInstructionHazards), target_address);
+}
+
+void Jit1_CodeGen::intrinsic_clear_instruction_hazards(const uint32 address, const Xbyak::Reg& target_address_reg)
+{
+	// suboptimal
+	insert_procedure_hazard(address, std::bit_cast<void*>(&ClearInstructionHazards), target_address_reg);
 }
 
 void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
@@ -2208,12 +2255,12 @@ void Jit1_CodeGen::write_PROC_EHB(jit1::ChunkOffset & __restrict chunk_offset, c
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
 	const int8 sa = instructions::TinyInt<5>(instruction >> 6).zextend<int8>();
 
-	auto&& op_rt = get_register_op32(rt);
-	auto&& op_rd = get_register_op32(rd);
-
 	xassert(rt.is_zero() && rd.is_zero() && sa == 0b00011);
 
-	intrinsic_clear_hazards(address);
+	if (jit_.processor_.handles_execution_hazards())
+	{
+		intrinsic_clear_execution_hazards(address);
+	}
 }
 
 void Jit1_CodeGen::write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
@@ -2539,10 +2586,11 @@ void Jit1_CodeGen::write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, 
 {
 	const uint8 stype = instructions::TinyInt<5>(instruction >> 6).zextend<uint8>();
 
-	const mips::memory_hazards hazards = instructions::parse_sync_type(stype);
-
 	// Don't defer to an expensive procedure if the interpreter doesn't handle this hazard to begin with.
-	if (!jit_.processor_.handles_memory_hazards(hazards))
+	if (
+		const mips::memory_hazards hazards = instructions::parse_sync_type(stype);
+		!jit_.processor_.handles_memory_hazards(hazards)
+	)
 	{
 		return;
 	}
@@ -2556,11 +2604,39 @@ void Jit1_CodeGen::write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, 
 		call(intrinsics_.emulated_stats);
 	}
 
-	// Defer to the emulator for this. In the end, we're going to call into host code anyways, so might as well let the emulator do it.
-	insert_procedure(address, std::bit_cast<void*>(instruction_info.Proc), instruction);
+	// Defer to the emulator for this. In the end, we're going to call into host code anyway, so might as well let the emulator do it.
+	insert_procedure(address, std::bit_cast<const void*>(instruction_info.Proc), instruction);
 	// `SYNC` does not throw.
 }
 
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYNCI(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+{
+	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
+	const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
+
+	if (base.is_zero())
+	{
+		insert_procedure(address, std::bit_cast<const void*>(&SyncInstruction), offset);
+	}
+	else
+	{
+		auto&& op_base = get_register_op32(base);
+
+		if (offset != 0)
+		{
+			auto&& tmp = is_same(op_base, eax) ? ecx : eax;
+			set(tmp, offset);
+			add(tmp, op_base);
+			insert_procedure(address, std::bit_cast<const void*>(&SyncInstruction), tmp);
+		}
+		else
+		{
+			insert_procedure(address, std::bit_cast<const void*>(&SyncInstruction), op_base);
+		}
+	}
+
+	return except_result::none; // TODO : for now
+}
 
 Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {

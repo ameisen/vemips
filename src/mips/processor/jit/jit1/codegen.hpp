@@ -297,6 +297,7 @@ namespace mips
 		}
 
 		// returns `true` if temporary register was used
+		template <bool ExternalCall = false, uint32 Realignment = 0U>
 		[[nodiscard]]
 		bool call_ex(
 			const void* const ptr,
@@ -307,20 +308,267 @@ namespace mips
 		{
 			const intptr diff = uintptr(ptr) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
 
+			uint32 stack_add = Realignment;
+
+#if 0 // stack space is added in springboard, and we do not use the stack ourselves
+			if constexpr (ExternalCall)
+			{
+				stack_add = 40;
+			}
+#endif
+
+			const auto push_stack = [&tmp, stack_add, this]
+			{
+				const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
+					edx :
+					ecx;
+
+				switch (stack_add)
+				{
+					case 0:
+						break;
+					case 1:
+						push(dummy.cvt8());
+						break;
+					case 2:
+						push(dummy.cvt16());
+						break;
+					case 4:
+						push(dummy.cvt32());
+						break;
+					case 8:
+						push(dummy.cvt64());
+						break;
+					default:
+						sub_ex(rsp, 40);
+						break;
+				}
+			};
+
+			const auto pop_stack = [&tmp, stack_add, this]
+			{
+				const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
+					edx :
+					ecx;
+
+				switch (stack_add)
+				{
+					case 0:
+						break;
+					case 1:
+						pop(dummy.cvt8());
+						break;
+					case 2:
+						pop(dummy.cvt16());
+						break;
+					case 4:
+						pop(dummy.cvt32());
+						break;
+					case 8:
+						pop(dummy.cvt64());
+						break;
+					default:
+						add_ex(rsp, 40);
+						break;
+				}
+			};
+
 			if (in_range<int32>(diff))
 			{
+				push_stack();
 				call(ptr);
+				pop_stack();
+				
 				return false;
 			}
 			else
 			{
 				if (spill_tmp) { spill_tmp(tmp); }
 				set(tmp, intptr(ptr));
+				push_stack();
 				call(tmp);
+				pop_stack();
 				if (restore_tmp) { restore_tmp(tmp); }
 			}
 
 			return true;
+		}
+
+		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		void call_ex(
+			const Xbyak::Operand& target
+		)
+		{
+			uint32 stack_add = Realignment;
+
+#if 0 // stack space is added in springboard, and we do not use the stack ourselves
+			if constexpr (ExternalCall)
+			{
+				stack_add = 40;
+			}
+#endif
+
+			const auto push_stack = [stack_add, this]
+			{
+				const Xbyak::Reg& dummy = ecx;
+
+				switch (stack_add)
+				{
+					case 0:
+						break;
+					case 1:
+						push(dummy.cvt8());
+						break;
+					case 2:
+						push(dummy.cvt16());
+						break;
+					case 4:
+						push(dummy.cvt32());
+						break;
+					case 8:
+						push(dummy.cvt64());
+						break;
+					default:
+						sub_ex(rsp, 40);
+						break;
+				}
+			};
+
+			const auto pop_stack = [stack_add, this]
+			{
+				const Xbyak::Reg& dummy = ecx;
+
+				switch (stack_add)
+				{
+					case 0:
+						break;
+					case 1:
+						pop(dummy.cvt8());
+						break;
+					case 2:
+						pop(dummy.cvt16());
+						break;
+					case 4:
+						pop(dummy.cvt32());
+						break;
+					case 8:
+						pop(dummy.cvt64());
+						break;
+					default:
+						add_ex(rsp, 40);
+						break;
+				}
+			};
+
+			push_stack();
+			call(target);
+			pop_stack();
+		}
+
+		// returns `true` if temporary register was used
+		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		[[nodiscard]]
+		bool jmp_ex(
+			const void* const ptr,
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {}
+		)
+		{
+			const intptr diff = uintptr(ptr) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
+
+			uint32 stack_add = Realignment;
+
+#if 0 // stack space is added in springboard, and we do not use the stack ourselves
+			if constexpr (ExternalCall)
+			{
+				stack_add = 40;
+			}
+#endif
+
+			const auto push_stack = [&tmp, stack_add, this]
+			{
+				const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
+					edx :
+					ecx;
+
+				switch (stack_add)
+				{
+					case 0:
+						break;
+					case 1:
+						push(dummy.cvt8());
+						break;
+					case 2:
+						push(dummy.cvt16());
+						break;
+					case 4:
+						push(dummy.cvt32());
+						break;
+					case 8:
+						push(dummy.cvt64());
+						break;
+					default:
+						sub_ex(rsp, 40);
+						break;
+				}
+			};
+
+			if (in_range<int32>(diff))
+			{
+				push_stack();
+				jmp(ptr);
+				
+				return false;
+			}
+			else
+			{
+				if (spill_tmp) { spill_tmp(tmp); }
+				set(tmp, intptr(ptr));
+				push_stack();
+				jmp(tmp);
+			}
+
+			return true;
+		}
+
+		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		void jmp_ex(
+			const Xbyak::Operand& target
+		)
+		{
+			uint32 stack_add = Realignment;
+
+#if 0 // stack space is added in springboard, and we do not use the stack ourselves
+			if constexpr (ExternalCall)
+			{
+				stack_add = 40;
+			}
+#endif
+
+			const Xbyak::Reg& dummy = ecx;
+
+			switch (stack_add)
+			{
+				case 0:
+					break;
+				case 1:
+					push(dummy.cvt8());
+					break;
+				case 2:
+					push(dummy.cvt16());
+					break;
+				case 4:
+					push(dummy.cvt32());
+					break;
+				case 8:
+					push(dummy.cvt64());
+					break;
+				default:
+					sub_ex(rsp, 40);
+					break;
+			}
+
+			jmp(target);
 		}
 
 		void sub_ex(
@@ -378,6 +626,38 @@ namespace mips
 					break;
 			}
 		}
+
+		template <uint32 StackAdjust = 0>
+		void escape_ret()
+		{
+			const uint32 stack_adjust = 40 + StackAdjust;
+
+			const Xbyak::Reg& dummy = ecx;
+
+			switch (stack_adjust)
+			{
+				case 0:
+					break;
+				case 1:
+					pop(dummy.cvt8());
+					break;
+				case 2:
+					pop(dummy.cvt16());
+					break;
+				case 4:
+					pop(dummy.cvt32());
+					break;
+				case 8:
+					pop(dummy.cvt64());
+					break;
+				default:
+					add_ex(rsp, 40);
+					break;
+			}
+
+			ret();
+		}
+
 		[[nodiscard]]
 		bool flush_pc(
 			const Xbyak::Reg& tmp,
@@ -578,7 +858,14 @@ namespace mips
 				const instructions::GPRegisterInfo& _register
 			) noexcept
 			{
-				return { codegen, _register, std::bit_width(Size - 1UZ) - std::bit_width(8U - 1U) };
+				return {
+					codegen,
+					_register,
+					static_cast<uint8>(
+						std::bit_width(Size - 1UZ) -
+						std::bit_width(8U - 1U)
+					)
+				};
 			}
 		};
 
@@ -663,10 +950,11 @@ namespace mips
 			always_exits  = 1U << 4, // always exits generated codestream
 		};
 
-		void insert_procedure(uint32 address, void* procedure, uint32 argument0);
+		void insert_procedure(uint32 address, const void* procedure, uint32 argument0);
+		void insert_procedure(uint32 address, const void* procedure,  const Xbyak::Operand& argument0);
 		except_result insert_procedure_check_hazard(uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info, uint32 argument0);
-		void insert_procedure_hazard(uint32 address, void* procedure, uint32 argument0);
-		void insert_procedure_hazard(uint32 address, void* procedure, const Xbyak::Operand& argument0);
+		void insert_procedure_hazard(uint32 address, const void* procedure, uint32 argument0);
+		void insert_procedure_hazard(uint32 address, const void* procedure, const Xbyak::Operand& argument0);
 
 		bool interpret_if_hazard(uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info);
 
@@ -724,6 +1012,8 @@ namespace mips
 		[[nodiscard]]
 		except_result write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		void write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		[[nodiscard]]
+		except_result write_PROC_SYNCI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		void write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 		void write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 		void write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
@@ -812,11 +1102,22 @@ namespace mips
 		void intrinsic_write_patch_jump(const jit1::Chunk& __restrict chunk, uint32 target_address, const Xbyak::Reg& patch_target_address_reg, bool set_pc);
 		void intrinsic_insert_jump(const jit1::Chunk& __restrict chunk, const jit1::ChunkOffset& __restrict chunk_offset, uint32 address, const Xbyak::Operand& target_address);
 
-		void intrinsic_clear_hazards(uint32 current_address, uint32 target_address);
-		void intrinsic_clear_hazards(uint32 current_address, const Xbyak::Reg& target_address_reg);
-		void intrinsic_clear_hazards(const uint32 address)
+		void intrinsic_clear_execution_hazards(uint32 current_address);
+		void intrinsic_clear_instruction_hazards(uint32 current_address, uint32 target_address);
+		void intrinsic_clear_instruction_hazards(uint32 current_address, const Xbyak::Reg& target_address_reg);
+		inline void intrinsic_clear_instruction_hazards(const uint32 address)
 		{
-			intrinsic_clear_hazards(address, address + 4);
+			intrinsic_clear_instruction_hazards(address, address + 4);
+		}
+
+		processor& get_processor()
+		{
+			return jit_.processor_;
+		}
+
+		const processor& get_processor() const
+		{
+			return jit_.processor_;
 		}
 	};
 

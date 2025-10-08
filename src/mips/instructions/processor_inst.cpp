@@ -1426,7 +1426,7 @@ namespace mips::instructions
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
 		processor.clear_memory_hazards(memory_hazards::all_data);
-		processor.flush_instruction_hazards();
+		processor.clear_execution_hazards();
 		return true;
 	}
 
