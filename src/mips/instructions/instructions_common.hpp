@@ -51,6 +51,8 @@ namespace mips
 			COP1 = (1U << 25),
 			Hazard = (1U << 26),
 			InstructionHazard = (1U << 27),
+			ThrowsMisaligned = (1U << 28),
+			RequiresCoP0 = (1U << 29),
 		};
 
 		[[nodiscard]]

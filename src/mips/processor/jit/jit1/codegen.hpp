@@ -22,6 +22,20 @@ namespace mips
 	#define _xbyak_nothrow
 #endif
 
+	static bool is_same(const Xbyak::Reg& a, const Xbyak::Reg& b)
+	{
+		return a.getIdx() == b.getIdx();
+	}
+
+	static bool is_same(const Xbyak::Operand& a, const Xbyak::Operand& b)
+	{
+		if (a.isREG() && b.isREG())
+		{
+			return is_same(a.getReg(), b.getReg());
+		}
+		return a == b;
+	}
+
 	class jit1;
 	class Jit1_CodeGen final : public Xbyak::CodeGenerator
 	{
@@ -58,10 +72,12 @@ namespace mips
 			};
 
 			intrinsic ri;
+			intrinsic adel_identity;
 			intrinsic adel;
 			intrinsic ades;
 			intrinsic ov;
 			intrinsic tr;
+			intrinsic cpu;
 			intrinsic check_ex;
 			intrinsic save_return_eax_pc;
 			intrinsic save;
@@ -307,6 +323,61 @@ namespace mips
 			return true;
 		}
 
+		void sub_ex(
+			const Xbyak::Operand& dst,
+			const int32 operand
+		)
+		{
+			switch (operand)
+			{
+				case 0: [[unlikely]]
+					break;
+				case -1:
+					inc(dst);
+					break;
+				case 1:
+					dec(dst);
+					break;
+				default:
+					if (operand < 0)
+					{
+						sub(dst, operand);
+					}
+					else
+					{
+						add(dst, -operand);
+					}
+					break;
+			}
+		}
+
+		void add_ex(
+			const Xbyak::Operand& dst,
+			const int32 operand
+		)
+		{
+			switch (operand)
+			{
+				case 0: [[unlikely]]
+					break;
+				case -1:
+					dec(dst);
+					break;
+				case 1:
+					inc(dst);
+					break;
+				default:
+					if (operand < 0)
+					{
+						add(dst, operand);
+					}
+					else
+					{
+						sub(dst, -operand);
+					}
+					break;
+			}
+		}
 		[[nodiscard]]
 		bool flush_pc(
 			const Xbyak::Reg& tmp,
@@ -681,9 +752,12 @@ namespace mips
 		[[nodiscard]]
 		except_result write_PROC_SIGRIE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex);
 
-		// returns 'true' if it was unhandled
-		bool write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		bool write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		// returns empty if it was unhandled
+		[[nodiscard]]
+		std::optional<except_result> write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		// returns empty if it was unhandled
+		[[nodiscard]]
+		std::optional<except_result> write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		// FPU ops
 		void write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
@@ -754,19 +828,5 @@ namespace mips
 	static constexpr Jit1_CodeGen::except_result operator & (const Jit1_CodeGen::except_result a, const Jit1_CodeGen::except_result b)
 	{
 		return Jit1_CodeGen::except_result(std::to_underlying(a) & std::to_underlying(b));
-	}
-
-	static bool is_same(const Xbyak::Reg& a, const Xbyak::Reg& b)
-	{
-		return a.getIdx() == b.getIdx();
-	}
-
-	static bool is_same(const Xbyak::Operand& a, const Xbyak::Operand& b)
-	{
-		if (a.isREG() && b.isREG())
-		{
-			return is_same(a.getReg(), b.getReg());
-		}
-		return a == b;
 	}
 }

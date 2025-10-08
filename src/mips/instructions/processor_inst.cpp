@@ -13,6 +13,8 @@
 
 using namespace mips;
 
+#define WITH_COPROCESSOR_0 0
+
 #pragma region Boilerplate
 #define ProcInstructionDef(InsInstruction, InsOperFlags, InsOpMask, InsOpRef)																	  \
 struct PROC_ ## InsInstruction																																	 \
@@ -146,6 +148,38 @@ namespace mips::instructions
 		}
 	};
 	#pragma endregion Boilerplate
+
+	namespace
+	{
+		template <uint32 Bits, CPU_Exception::Type EException>
+		requires(std::has_single_bit(Bits))
+		static _forceinline uint32 handle_misaligned_address(const processor& __restrict processor, const uint32 address)
+		{
+			static constexpr const uint32 mask = mips::make_bitmask<uint32>((Bits - 1U) / 8U);
+
+			const auto misaligned_address_handler = processor.get_misaligned_address_handling();
+			if ((address & mask) != 0) [[unlikely]]
+			{
+				switch (misaligned_address_handler)
+				{
+					using enum processor::misaligned_address_handling;
+					case exception:
+						CPU_Exception::throw_helper( EException, address );
+
+					case align:
+						return address & ~mask;
+
+					case keep:
+						return address;
+
+					default: [[unlikely]]
+						xunreachable("Unknown Misaligned Address Handler");
+				}
+			}
+
+			return address;
+		}
+	}
 
 	ProcInstructionDef(
 		ADD,
@@ -1177,11 +1211,12 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		CACHEE,
-		(OpFlags::ReadsGPRegister),
+		(OpFlags::ReadsGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000110110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		const OpCacheType op_cache = static_cast<OpCacheType>(TinyInt<2>(instruction >> 16).zextend<uint32>());
 		const uint32 op_code = TinyInt<3>(instruction >> 18).zextend<uint32>();
@@ -1246,18 +1281,23 @@ namespace mips::instructions
 		}
 
 		return true;
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter(), 0);
+#endif
 	}
 
 	ProcInstructionDef(
 		GINVI,
-		(OpFlags::ReadsGPRegister),
+		(OpFlags::ReadsGPRegister | OpFlags::RequiresCoP0),
 		0b111111'00000'1111111111111'11'111111,
 		0b011111'00000'0000000000000'00'111101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		const GPRegister<21, 5> rs(instruction, processor);
+		//const GPRegister<21, 5> rs(instruction, processor);
 
 		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter(), 0);
+
+		// TODO - clear instruction cache
 	}
 
 	ProcInstructionDef(
@@ -1572,11 +1612,12 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBE,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
@@ -1584,6 +1625,9 @@ namespace mips::instructions
 		const uint32 address = base.value<uint32>() + offset;
 		const int32 value = int32(processor.mem_fetch<int8>(address));
 		return write_result(rt, value);
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
@@ -1608,11 +1652,12 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LBUE,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
@@ -1620,13 +1665,16 @@ namespace mips::instructions
 		const uint32 address = base.value<uint32>() + offset;
 		const uint32 value = uint32(processor.mem_fetch<uint8>(address));
 		return write_result(rt, value);
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
 
 	ProcInstructionDef(
 		LH,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b10000100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1635,7 +1683,10 @@ namespace mips::instructions
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<16>(instruction).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<16, CPU_Exception::Type::AdEL>(processor, address);
+
 		const int32 value = int32(processor.mem_fetch<int16>(address));
 		return write_result(rt, value);
 
@@ -1644,25 +1695,32 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHE,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<16, CPU_Exception::Type::AdEL>(processor, address);
+
 		const int32 value = int32(processor.mem_fetch<int16>(address));
 		return write_result(rt, value);
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
 
 	ProcInstructionDef(
 		LHU,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b10010100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1671,7 +1729,10 @@ namespace mips::instructions
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<16>(instruction).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<16, CPU_Exception::Type::AdEL>(processor, address);
+
 		const uint32 value = uint32(processor.mem_fetch<uint16>(address));
 		return write_result(rt, value);
 
@@ -1680,18 +1741,25 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LHUE,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101001
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<16, CPU_Exception::Type::AdEL>(processor, address);
+
 		const uint32 value = uint32(processor.mem_fetch<uint16>(address));
 		return write_result(rt, value);
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
@@ -1719,11 +1787,12 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLE,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
@@ -1734,6 +1803,9 @@ namespace mips::instructions
 		const uint32 address = base.value<uint32>() + offset;
 		const uint32 value = processor.mem_fetch<uint32>(address);
 		return write_result(rt, value);
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
@@ -1763,11 +1835,12 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LLWPE,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001101110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
@@ -1780,6 +1853,9 @@ namespace mips::instructions
 		rt.set(uint32(value));
 		rd.set(uint32(value >> 32));
 		return true;
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
@@ -1803,7 +1879,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LW,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b10001100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -1812,7 +1888,10 @@ namespace mips::instructions
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<16>(instruction).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<32, CPU_Exception::Type::AdEL>(processor, address);
+
 		const int32 value = processor.mem_fetch<int32>(address);
 		return write_result(rt, value);
 
@@ -1821,18 +1900,25 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		LWE,
-		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Load | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000101111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<32, CPU_Exception::Type::AdEL>(processor, address);
+
 		const int32 value = processor.mem_fetch<int32>(address);
 		return write_result(rt, value);
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
@@ -1848,6 +1934,7 @@ namespace mips::instructions
 		const int32 offset = TinyInt<21>(instruction << 2).sextend<int32>();
 
 		const uint32 address = processor.get_program_counter() + offset;
+		xassert((address & 0b11U) == 0U);
 		const int32 value = processor.mem_fetch<int32>(address);
 		return write_result(rs, value);
 
@@ -2019,11 +2106,12 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		PREFE,
-		(OpFlags::ReadsGPRegister),
+		(OpFlags::ReadsGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000100011
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
@@ -2032,6 +2120,9 @@ namespace mips::instructions
 		//processor.mem_fetch<char>(address); // Does NOT throw address-related exceptions.
 
 		return true;
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 	}
 
 	ProcInstructionDef(
@@ -2136,11 +2227,12 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SBE,
-		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011100
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		const GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
@@ -2149,13 +2241,16 @@ namespace mips::instructions
 		const uint8 value = rt.value<uint8>();
 		processor.mem_write(address, value);
 		return true;
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Implement Watch")
 	}
 
 	ProcInstructionDef(
 		SC,
-		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned ),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000100110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2165,6 +2260,12 @@ namespace mips::instructions
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
 		const uint32 address = base.value<uint32>() + offset;
+
+		if ((address & 0b11U) != 0U) [[unlikely]]
+		{
+			CPU_Exception::throw_helper( CPU_Exception::Type::AdES, address );
+		}
+
 		const uint32 value = rt.value<uint8>();
 		rt.set<uint32>(1);
 		processor.mem_write(address, value);
@@ -2178,20 +2279,30 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCE,
-		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::ThrowsMisaligned | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
 		const uint32 address = base.value<uint32>() + offset;
+
+		if ((address & 0b11U) != 0U) [[unlikely]]
+		{
+			CPU_Exception::throw_helper( CPU_Exception::Type::AdES, address );
+		}
+
 		const uint32 value = rt.value<uint32>();
 		rt.set<uint32>(1);
 		processor.mem_write(address, value);
 		return true;
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Lots of times this should fail. Needs further implementation. This and LLE.")
 #pragma message("Should fail if address does not match preceding LLE")
@@ -2211,6 +2322,12 @@ namespace mips::instructions
 		const GPRegister<11, 5> rd(instruction, processor);
 
 		const uint32 address = base.value<uint32>();
+
+		if ((address & 0b111U) != 0U) [[unlikely]]
+		{
+			CPU_Exception::throw_helper( CPU_Exception::Type::AdES, address );
+		}
+
 		const uint64 value = rt.value<uint32>() | (uint64(rd.value<uint32>()) << 32);
 		rt.set<uint32>(1);
 		processor.mem_write(address, value);
@@ -2224,20 +2341,30 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SCWPE,
-		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::WritesGPRegister | OpFlags::RequiresCoP0),
 		0b11111100000000000000011111111111,
 		0b01111100000000000000000001011110
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const GPRegister<11, 5> rd(instruction, processor);
 
 		const uint32 address = base.value<uint32>();
+
+		if ((address & 0b111U) != 0U) [[unlikely]]
+		{
+			CPU_Exception::throw_helper( CPU_Exception::Type::AdES, address );
+		}
+
 		const uint64 value = rt.value<uint32>() | (uint64(rd.value<uint32>()) << 32);
 		rt.set<uint32>(1);
 		processor.mem_write(address, value);
 		return true;
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 
 #pragma message("Lots of times this should fail. Needs further implementation. This and LL.")
 #pragma message("Should fail if address does not match preceding LL")
@@ -2325,7 +2452,7 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SH,
-		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b10100100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2334,7 +2461,10 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<16>(instruction).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<16, CPU_Exception::Type::AdES>(processor, address);
+
 		const uint16 value = rt.value<uint16>();
 		processor.mem_write(address, value);
 		return true;
@@ -2344,20 +2474,26 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SHE,
-		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister),
+		(OpFlags::Store | OpFlags::Throws | OpFlags::ReadsGPRegister | OpFlags::ThrowsMisaligned | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011101
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		const GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<16, CPU_Exception::Type::AdES>(processor, address);
+
 		const uint16 value = rt.value<uint16>();
 		processor.mem_write(address, value);
 		return true;
-
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 #pragma message("Implement Watch")
 	}
 
@@ -2587,14 +2723,13 @@ namespace mips::instructions
 		GPRegister<11, 5> rd(instruction, processor);
 
 		const uint32 result = rs.value<uint32>() - rt.value<uint32>();
-#pragma message("make sure we aren't supposed to clamp the value")
 
 		return write_result(rd, int32(result));
 	}
 
 	ProcInstructionDef(
 		SW,
-		(OpFlags::Store | OpFlags::ReadsGPRegister),
+		(OpFlags::Store | OpFlags::ReadsGPRegister | OpFlags::Throws | OpFlags::ThrowsMisaligned ),
 		0b11111100000000000000000000000000,
 		0b10101100000000000000000000000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
@@ -2603,7 +2738,10 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<16>(instruction).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<32, CPU_Exception::Type::AdES>(processor, address);
+
 		const uint32 value = rt.value<uint32>();
 		processor.mem_write(address, value);
 		return true;
@@ -2613,21 +2751,28 @@ namespace mips::instructions
 
 	ProcInstructionDef(
 		SWE,
-		(OpFlags::Store | OpFlags::ReadsGPRegister),
+		(OpFlags::Store | OpFlags::ReadsGPRegister | OpFlags::Throws | OpFlags::ThrowsMisaligned | OpFlags::RequiresCoP0),
 		0b11111100000000000000000001111111,
 		0b01111100000000000000000000011111
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
+#if WITH_COPROCESSOR_0
 		const GPRegister<21, 5> base(instruction, processor);
 		const GPRegister<16, 5> rt(instruction, processor);
 		const int32 offset = TinyInt<9>(instruction >> 7).sextend<int32>();
 
-		const uint32 address = base.value<uint32>() + offset;
+		uint32 address = base.value<uint32>() + offset;
+
+		address = handle_misaligned_address<32, CPU_Exception::Type::AdES>(processor, address);
+
 		const uint32 value = rt.value<uint32>();
 		processor.mem_write(address, value);
 		return true;
-
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 #pragma message("Implement Watch")
+
 	}
 
 	ProcInstructionDef(
@@ -2661,7 +2806,7 @@ namespace mips::instructions
 		
 		const uint32 address = base.value<uint32>() + offset;
 
-		processor.mem_poke<char>(address); // We still want to touch the address.
+		//processor.mem_poke<char>(address); // We still want to touch the address.
 
 		processor.invalidate_instruction_cache(address);
 
@@ -2865,12 +3010,12 @@ namespace mips::instructions
 	// TODO : move to cop0
 	ProcInstructionDef(
 		MFC0,
-		(OpFlags::WritesGPRegister | OpFlags::Throws),
+		(OpFlags::WritesGPRegister | OpFlags::Throws | OpFlags::RequiresCoP0),
 		0b111111'11111'00000'00000'11111111'000,
 		0b010000'00000'00000'00000'00000000'000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		#if 0
+#if WITH_COPROCESSOR_0
 		const GPRegister<11, 5> rd(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
@@ -2884,20 +3029,20 @@ namespace mips::instructions
 		}
 
 		return write_result(rt, result);
-		#endif
-
+#else
 		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 	}
 
 	// TODO : move to cop0
 	ProcInstructionDef(
 		MFHC0,
-		(OpFlags::WritesGPRegister | OpFlags::Throws),
+		(OpFlags::WritesGPRegister | OpFlags::Throws | OpFlags::RequiresCoP0),
 		0b111111'11111'00000'00000'11111111'000,
 		0b010000'00010'00000'00000'00000000'000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		#if 0
+#if WITH_COPROCESSOR_0
 		const GPRegister<11, 5> rd(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
@@ -2911,20 +3056,20 @@ namespace mips::instructions
 		}
 
 		return write_result(rt, result);
-		#endif
-
+#else
 		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 	}
 
 	// TODO : move to cop0
 	ProcInstructionDef(
 		MTC0,
-		(OpFlags::ReadsGPRegister | OpFlags::Throws),
+		(OpFlags::ReadsGPRegister | OpFlags::Throws | OpFlags::RequiresCoP0),
 		0b111111'11111'00000'00000'11111111'000,
 		0b010000'00100'00000'00000'00000000'000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		#if 0
+#if WITH_COPROCESSOR_0
 		const GPRegister<11, 5> rd(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
@@ -2937,20 +3082,20 @@ namespace mips::instructions
 		}
 
 		return write_result(rt, result);
-		#endif
-
+#else
 		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 	}
 
 	// TODO : move to cop0
 	ProcInstructionDef(
 		MTHC0,
-		(OpFlags::ReadsGPRegister | OpFlags::Throws),
+		(OpFlags::ReadsGPRegister | OpFlags::Throws | OpFlags::RequiresCoP0),
 		0b111111'11111'00000'00000'11111111'000,
 		0b010000'00110'00000'00000'00000000'000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		#if 0
+#if WITH_COPROCESSOR_0
 		const GPRegister<11, 5> rd(instruction, processor);
 		GPRegister<16, 5> rt(instruction, processor);
 		const uint32 selector = TinyInt<3>(instruction).zextend<uint32>();
@@ -2963,43 +3108,41 @@ namespace mips::instructions
 		}
 
 		return write_result(rt, result);
-		#endif
-
+#else
 		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 	}
 
 	// TODO : move to cop0
 	ProcInstructionDef(
 		ERET,
-		(OpFlags::Throws | OpFlags::Hazard | OpFlags::InstructionHazard),
+		(OpFlags::Throws | OpFlags::Hazard | OpFlags::InstructionHazard | OpFlags::RequiresCoP0),
 		0b111111'1'111111111111111111'1'011000,
 		0b010000'1'000000000000000000'0'000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
-
-		// otherwise, we would have done a hazard clear
-		#if 0
+#if WITH_COPROCESSOR_0
 		processor.clear_memory_hazards(processor::memory_hazards::all);
 		processor.flush_instruction_hazards();
-		#endif
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 	}
 
 	// TODO : move to cop0
 	ProcInstructionDef(
 		ERETNC,
-		(OpFlags::Throws | OpFlags::Hazard | OpFlags::InstructionHazard),
+		(OpFlags::Throws | OpFlags::Hazard | OpFlags::InstructionHazard | OpFlags::RequiresCoP0),
 		0b111111'1'111111111111111111'1'011000,
 		0b010000'1'000000000000000000'1'000000
 	) (const instruction_t instruction, processor & __restrict processor, coprocessor1 & __restrict)
 	{
-		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
-
-		// otherwise, we would have done a hazard clear
-		#if 0
+#if WITH_COPROCESSOR_0
 		processor.clear_memory_hazards(processor::memory_hazards::all_data);
 		processor.flush_instruction_hazards();
-		#endif
+#else
+		CPU_Exception::throw_helper( CPU_Exception::Type::CpU, processor.get_program_counter() );
+#endif
 	}
 
 	// TODO : move to cop2

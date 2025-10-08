@@ -23,9 +23,26 @@ namespace
 	static uintptr mem_read_jit(processor * const __restrict proc, const uint32 address, const uint32 size) {
 		return proc->get_mem_read_jit(address, size);
 	}
+
+	static constexpr uint32 make_size_mask(const uint32 size)
+	{
+		switch (size)
+		{
+			case 1:
+				return 0U;
+			case 2:
+				return 0b1U;
+			case 4:
+				return 0b11U;
+			case 8:
+				return 0b111U;
+			default:
+				xunreachable("Unrecognized Size");
+		}
+	}
 }
 
-bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
+std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 
@@ -43,18 +60,18 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 		store_size = 1;
 	}
 	else if(IS_INSTRUCTION(instruction_info, PROC_SC)) {
-		return true;
+		return {};
 	}
 	else if(IS_INSTRUCTION(instruction_info, PROC_SCE)) {
 		e = true;
-		return true;
+		return {};
 	}
 	else if(IS_INSTRUCTION(instruction_info, PROC_SCWP)) {
-		return true;
+		return {};
 	}
 	else if(IS_INSTRUCTION(instruction_info, PROC_SCWPE)) {
 		e = true;
-		return true;
+		return {};
 	}
 	else if(IS_INSTRUCTION(instruction_info, PROC_SH)) {
 		store_size = 2;
@@ -79,7 +96,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 		fpu = true;
 	}
 	else {
-		return true;
+		return {};
 	}
 
 	const auto mmu_type = jit_.processor_.mmu_type_;
@@ -92,7 +109,29 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 		offset = instructions::TinyInt<9>(instruction >> 7).sextend<int32>();
 	}
 
+	const auto misaligned_address_handler = jit_.processor_.get_misaligned_address_handling();
+
 	if (mmu_type == mmu::emulated) {
+		if (base.is_zero() && (offset & make_size_mask(store_size)) != 0U)
+		{
+			switch (misaligned_address_handler)
+			{
+				using enum processor::misaligned_address_handling;
+				case exception:
+					set(eax, address);
+					set(ecx, offset);
+					jmp(intrinsics_.ades, T_NEAR);
+					return except_result::always_throw;
+
+				case align:
+					offset &= ~make_size_mask(store_size);
+					break;
+
+				case keep:
+					break;
+			}
+		}
+
 		const Xbyak::Label valid_ptr;
 
 		lea(rcx, dword[rbp - 128]);
@@ -102,14 +141,36 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 			// The effective address is '[base] + offset'
 			if (offset && op_base.isREG())
 			{
+				xassert(!is_same(op_base, edx)); // TODO : handle this case
 				lea(edx, dword[op_base.as_reg() + offset]);
 			}
 			else
 			{
+				xassert(!is_same(op_base, edx)); // TODO : handle this case
 				mov(edx, op_base);
-				if (offset != 0) {
-					add(edx, offset);
+				add_ex(edx, offset);
+			}
+			switch (misaligned_address_handler)
+			{
+				using enum processor::misaligned_address_handling;
+				case exception:
+				{
+					const Xbyak::Label no_misalign;
+					test(edx, make_size_mask(store_size));
+					jz(no_misalign, T_SHORT);
+					set(eax, address);
+					set(ecx, offset);
+					jmp(intrinsics_.ades, T_NEAR);
+					L(no_misalign);
 				}
+				break;
+
+				case align:
+					and_(edx, ~make_size_mask(store_size));
+					break;
+
+				case keep:
+					break;
 			}
 		}
 		else {
@@ -132,6 +193,26 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 	else {
 		// This would be far faster if we could memory map easily. Then we could just wrap the address range around.
 		if (base.is_zero()) {
+			if ((offset & make_size_mask(store_size)) != 0U)
+			{
+				switch (misaligned_address_handler)
+				{
+					using enum processor::misaligned_address_handling;
+					case exception:
+						set(eax, address);
+						set(ecx, offset);
+						jmp(intrinsics_.ades, T_NEAR);
+						return except_result::always_throw;
+
+					case align:
+						offset &= ~make_size_mask(store_size);
+						break;
+
+					case keep:
+						break;
+				}
+			}
+
 			// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 			// Check for basic range things.
 			const uint32 start_address = uint32(offset);
@@ -148,7 +229,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 					set(eax, address);
 					set(ecx, start_address);
 					jmp(intrinsics_.ades, T_NEAR);
-					return false;
+					return except_result::always_throw;
 				}
 			}
 			else if (mmu_type == mmu::host) {
@@ -165,7 +246,7 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 						set(eax, address);
 						set(ecx, addr);
 						jmp(intrinsics_.ades, T_NEAR);
-						return false;
+						return except_result::always_throw;
 					}
 				}
 			}
@@ -181,28 +262,56 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 			else
 			{
 				mov(eax, op_base);
-				if (offset) {
-					add(eax, offset);
-				}
+				add_ex(eax, offset);
 			}
+
+			switch (misaligned_address_handler)
+			{
+				using enum processor::misaligned_address_handling;
+				case exception:
+				{
+					const Xbyak::Label no_misalign;
+					test(eax, make_size_mask(store_size));
+					jz(no_misalign, T_SHORT);
+					mov(ecx, eax);
+					set(eax, address);
+					jmp(intrinsics_.ades, T_NEAR);
+					L(no_misalign);
+				}
+				break;
+
+				case align:
+					and_(eax, ~make_size_mask(store_size));
+					break;
+
+				case keep:
+					break;
+			}
+
 			// error checking
 			if (mmu_type == mmu::none) {
 				const Xbyak::Label ades;
 
-				mov(edx, eax);
 				if (jit_.processor_.stack_size_)
 				{
 					// zero test
-					lea(edx, dword[eax - 1]);
-					add(edx, store_size);
-					jo(ades, T_SHORT);
+					if (store_size == 1)
+					{
+						test(eax, eax);
+						jz(ades, T_SHORT);
+					}
+					else
+					{
+						lea(edx, dword[eax + (store_size - 1)]);
+						cmp(edx, store_size - 1);
+						jbe(ades, T_SHORT);
+					}
 
 					// Offset for stack
-					mov(ecx, eax);
-					add(eax, jit_.processor_.stack_size_);
+					add_ex(eax, jit_.processor_.stack_size_);
 
 					// check for range
-					cmp(eax, uint32((jit_.processor_.memory_size_ - store_size) - offset));
+					cmp(eax, uint32((jit_.processor_.memory_size_ - store_size) /* - offset */));
 				}
 				else
 				{
@@ -210,18 +319,22 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 					const int64 pow2_memsize = int64(std::bit_ceil(jit_.processor_.memory_size_));
 					const int32 addend = int32(pow2_memsize + (store_size - 1));
 					const int32 cmpand = int32(pow2_memsize + store_size);
-					add(edx, addend);
+					lea(edx, dword[eax + addend]);
 					cmp(edx, cmpand);
 					jae(ades, T_SHORT);
 				}
 				const Xbyak::Label no_ades;
 				jbe(no_ades, T_SHORT);
 				L(ades);
-				set(eax, address);
 				if (!jit_.processor_.stack_size_)
 				{
 					mov(ecx, eax);
 				}
+				else
+				{
+					lea(ecx, dword[eax - jit_.processor_.stack_size_]);
+				}
+				set(eax, address);
 				jmp(intrinsics_.ades, T_NEAR);
 				L(no_ades);
 			}
@@ -230,6 +343,57 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 		}
 		// rdx == address
 	}
+
+	const auto get_sized_address = [this](const Xbyak::RegExp& address, const uint8 size)
+	{
+		switch (size)
+		{
+			case 1:
+				return byte[address];
+			case 2:
+				return word[address];
+			case 4:
+				return dword[address];
+			case 8:
+				return qword[address];
+			default:
+				xunreachable("undefined size");
+		}
+	};
+
+	const auto get_sized_register_op = [this](const auto& register_entry, const uint8 size)
+	{
+		switch (size)
+		{
+			case 1:
+				return get_register_op8(register_entry);
+			case 2:
+				return get_register_op16(register_entry);
+			case 4:
+				return get_register_op32(register_entry);
+			case 8:
+				return get_register_op64(register_entry);
+			default:
+				xunreachable("undefined size");
+		}
+	};
+
+	const auto get_sized_register = [](const Xbyak::Reg& reg, const uint8 size) -> Xbyak::Reg
+	{
+		switch (size)
+		{
+			case 1:
+				return reg.cvt8();
+			case 2:
+				return reg.cvt16();
+			case 4:
+				return reg.cvt32();
+			case 8:
+				return reg.cvt64();
+			default:
+				xunreachable("undefined size");
+		}
+	};
 
 	// perform the actual store.
 	if (!fpu) {
@@ -255,34 +419,12 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 				}
 			}
 			else {
-				switch (store_size) {
-					case 1: {
-						const auto& src = get_register_op8(rt);
-						const auto& dst = byte[target_operand];
-						std::ignore = mov_ex(dst, src, cl);
-					}
-					break;
-					case 2: {
-						const auto& src = get_register_op16(rt);
-						const auto& dst = word[target_operand];
-						std::ignore = mov_ex(dst, src, cx);
-					}
-					break;
-					case 4: {
-						const auto& src = get_register_op32(rt);
-						const auto& dst = dword[target_operand];
-						std::ignore = mov_ex(dst, src, ecx);
-					}
-					break;
-					case 8: {
-						const auto& src = get_register_op64(rt);
-						const auto& dst = qword[target_operand];
-						std::ignore = mov_ex(dst, src, rcx);
-					}
-					break;
-					default:
-						_assume(0);
-				}
+				std::ignore = mov_ex(
+					get_sized_address(target_operand, store_size),
+					get_sized_register_op(rt, store_size),
+					get_sized_register(rcx, store_size)
+				);
+
 			}
 		}
 		else {
@@ -303,34 +445,9 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 				}
 			}
 			else {
-				switch (store_size) {
-					case 1: {
-						const auto& src = get_register_op8(rt);
-						const auto& dst = byte[r13];
-						std::ignore = mov_ex(dst, src, cl);
-					}
-					break;
-					case 2: {
-						const auto& src = get_register_op16(rt);
-						const auto& dst = word[r13];
-						std::ignore = mov_ex(dst, src, cx);
-					}
-					break;
-					case 4: {
-						const auto& src = get_register_op32(rt);
-						const auto& dst = dword[r13];
-						std::ignore = mov_ex(dst, src, ecx);
-					}
-					break;
-					case 8: {
-						const auto& src = get_register_op64(rt);
-						const auto& dst = qword[r13];
-						std::ignore = mov_ex(dst, src, rcx);
-					}
-					break;
-					default:
-						_assume(0);
-				}
+				const auto& src = get_sized_register_op(rt, store_size);
+				const auto& dst = get_sized_address(r13, store_size);
+				std::ignore = mov_ex(dst, src, get_sized_register(cl, store_size));
 			}
 		}
 	}
@@ -343,48 +460,14 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 		if (mmu_type != mmu::emulated) {
 			auto&& target_operand = rdx + rax;
 
-			switch (store_size) {
-				case 1:
-					mov(cl, byte[r12 + ft_offset]);
-					mov(byte[target_operand], cl);
-					break;
-				case 2:
-					mov(cx, word[r12 + ft_offset]);
-					mov(word[target_operand], cx);
-					break;
-				case 4:
-					mov(ecx, dword[r12 + ft_offset]);
-					mov(dword[target_operand], ecx);
-					break;
-				case 8:
-					mov(rcx, qword[r12 + ft_offset]);
-					mov(qword[target_operand], rcx);
-					break;
-				default:
-					_assume(0);
-			}
+			const auto& tmp = get_sized_register(cl, store_size);
+			mov(tmp, get_sized_address(r12 + ft_offset, store_size));
+			mov(get_sized_address(target_operand, store_size), tmp);
 		}
 		else {
-			switch (store_size) {
-				case 1:
-					mov(cl, byte[r12 + ft_offset]);
-					mov(byte[r13], cl);
-					break;
-				case 2:
-					mov(cx, word[r12 + ft_offset]);
-					mov(word[r13], cx);
-					break;
-				case 4:
-					mov(ecx, dword[r12 + ft_offset]);
-					mov(dword[r13], ecx);
-					break;
-				case 8:
-					mov(rcx, qword[r12 + ft_offset]);
-					mov(qword[r13], rcx);
-					break;
-				default:
-					_assume(0);
-			}
+			const auto& tmp = get_sized_register(cl, store_size);
+			mov(tmp, get_sized_address(r12 + ft_offset, store_size));
+			mov(get_sized_address(r13, store_size), tmp);
 		}
 	}
 
@@ -399,10 +482,10 @@ bool Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, cons
 		L(no_flush);
 	}
 
-	return false;
+	return except_result::can_throw;
 }
 
-bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
+std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -410,19 +493,41 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 	auto&& op_base = get_register_op32(base);
 	auto&& op_rt = get_register_op32(rt);
 
-	if (rt.is_zero()) {
+	const auto misaligned_address_handler = jit_.processor_.get_misaligned_address_handling();
+
+	if (rt.is_zero() && misaligned_address_handler != processor::misaligned_address_handling::exception) {
 		// nop
-		return false;
+		return except_result::none;
 	}
 
 	const auto mmu_type = jit_.processor_.mmu_type_;
 
 	int32 nommu_offset = 0;
 
-	const auto get_address = [&](const int32 offset, const uint32 load_size) {
+	const auto get_address = [&](int32 offset, const uint32 load_size, bool alignment_check = true) {
 		const Xbyak::Label valid_ptr;
 
 		if (mmu_type == mmu::emulated) {
+			if (alignment_check && base.is_zero() && (offset & make_size_mask(load_size)) != 0U)
+			{
+				switch (misaligned_address_handler)
+				{
+					using enum processor::misaligned_address_handling;
+					case exception:
+						set(eax, address);
+						set(ecx, offset);
+						jmp(intrinsics_.adel, T_NEAR);
+						return false;
+
+					case align:
+						offset &= ~make_size_mask(load_size);
+						break;
+
+					case keep:
+						break;
+				}
+			}
+
 			lea(rcx, qword[rbp - 128]);
 			// 'rcx' is the first parameter (processor ptr)
 
@@ -435,9 +540,32 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				else
 				{
 					mov(edx, op_base);
+					add_ex(edx, offset);
+				}
 
-					if (offset != 0) {
-						add(edx, offset);
+				if (alignment_check)
+				{
+					switch (misaligned_address_handler)
+					{
+						using enum processor::misaligned_address_handling;
+						case exception:
+						{
+							const Xbyak::Label no_misalign;
+							test(edx, make_size_mask(load_size));
+							jz(no_misalign, T_SHORT);
+							set(eax, address);
+							mov(ecx, edx);
+							jmp(intrinsics_.adel, T_NEAR);
+							L(no_misalign);
+						}
+						break;
+
+						case align:
+							and_(edx, ~make_size_mask(load_size));
+							break;
+
+						case keep:
+							break;
 					}
 				}
 			}
@@ -464,6 +592,26 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 		else {
 			// This would be far faster if we could memory map easily. Then we could just wrap the address range around.
 			if (base.is_zero()) {
+				if (alignment_check && (offset & make_size_mask(load_size)) != 0U)
+				{
+					switch (misaligned_address_handler)
+					{
+						using enum processor::misaligned_address_handling;
+						case exception:
+							set(eax, address);
+							set(ecx, offset);
+							jmp(intrinsics_.adel, T_NEAR);
+							return false;
+
+						case align:
+							offset &= ~make_size_mask(load_size);
+							break;
+
+						case keep:
+							break;
+					}
+				}
+
 				// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 				// Check for basic range things.
 				const uint32 start_address = uint32(offset);
@@ -513,28 +661,67 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				else
 				{
 					mov(eax, op_base);
-					if (offset) {
-						add(eax, offset);
+					add_ex(eax, offset);
+				}
+
+				if (alignment_check)
+				{
+					switch (misaligned_address_handler)
+					{
+						using enum processor::misaligned_address_handling;
+						case exception:
+						{
+							const Xbyak::Label no_misalign;
+							test(eax, make_size_mask(load_size));
+							jz(no_misalign, T_SHORT);
+							mov(ecx, eax);
+							set(eax, address);
+							jmp(intrinsics_.adel, T_NEAR);
+							L(no_misalign);
+						}
+						break;
+
+						case align:
+							and_(eax, ~make_size_mask(load_size));
+							break;
+
+						case keep:
+							break;
 					}
 				}
+
 				// error checking
 				if (mmu_type == mmu::none) {
 					const Xbyak::Label adel;
 
 					// zero test
-					lea(edx, dword[eax - 1]);
-					add(edx, load_size);
-					jo(adel, T_SHORT);
+					if (load_size == 1)
+					{
+						test(eax, eax);
+						jz(adel, T_SHORT);
+					}
+					else
+					{
+						lea(edx, dword[eax + (load_size - 1)]);
+						cmp(edx, load_size - 1);
+						jbe(adel, T_SHORT);
+					}
 
 					// Offset for stack
 					if (jit_.processor_.stack_size_)
 					{
-						mov(ecx, eax);
-						add(eax, jit_.processor_.stack_size_);
+						add_ex(eax, jit_.processor_.stack_size_);
 					}
 
 					// check for range
-					cmp(eax, uint32((jit_.processor_.memory_size_ - load_size) - offset));
+					// address 1000
+					// offset 500
+					// eax = 1500
+					// memory size = 1250
+					// load size = 4
+					// first = 1246
+					// second = 1246 - 500 = 746
+					cmp(eax, uint32((jit_.processor_.memory_size_ - load_size) /* - offset */));
 					const Xbyak::Label no_adel;
 					jbe(no_adel, T_SHORT);
 					L(adel);
@@ -542,6 +729,10 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 					if (!jit_.processor_.stack_size_)
 					{
 						mov(ecx, eax);
+					}
+					else
+					{
+						lea(ecx, dword[eax - jit_.processor_.stack_size_]);
 					}
 					jmp(intrinsics_.adel, T_NEAR);
 					L(no_adel);
@@ -560,89 +751,89 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 		try {
 			if (IS_INSTRUCTION(instruction_info, PROC_LB)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBU)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBUE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LH)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHU)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, word[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHUE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, word[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LL)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LLE)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LLWP)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LLWPE)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LW)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LDC1_v)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
@@ -653,7 +844,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LWC1_v)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
@@ -667,21 +858,21 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
 
-				const int8 rs_offset = rs.get_offset();
+				auto&& op_rs = get_register_op32(rs);
 
 				if (!get_address(address + offset, 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
-				mov(eax, dword[r13]);
-				mov(dword[rbp + rs_offset], eax);
+				std::ignore = mov_ex(op_rs, dword[r13], eax);
 			}
 			else {
-				return true;
+				return {};
 			}
 		}
 		catch (...) {
-			return false;
+			// TODO : eh?
+			return except_result::always_throw;
 		}
 	}
 	else { // no mmu
@@ -690,89 +881,89 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 
 			if (IS_INSTRUCTION(instruction_info, PROC_LB)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBU)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBUE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LH)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHU)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, word[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHUE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, word[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LL)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LLE)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LLWP)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LLWPE)) {
-				return true;
+				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LW)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWE)) {
 				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LDC1_v)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
@@ -783,7 +974,7 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LWC1_v)) {
 				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
-					return false;
+					return except_result::always_throw;
 				}
 
 				const instructions::FPRegister<16, 5> ft(instruction, jit_.processor_.get_fpu_coprocessor());
@@ -797,23 +988,23 @@ bool Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint3
 				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
 
-				const int8 rs_offset = rs.get_offset();
+				auto&& op_rs = get_register_op32(rs);
 
-				if (!get_address(address + offset, 4)) {
-					return false;
+				if (!get_address(address + offset, 4, false)) {
+					return except_result::always_throw;
 				}
 
-				mov(eax, dword[src]);
-				mov(dword[rbp + rs_offset], eax);
+				std::ignore = mov_ex(op_rs, dword[src], eax);
 			}
 			else {
-				return true;
+				return {};
 			}
 		}
 		catch (...) {
-			return false;
+			// TODO : eh?
+			return except_result::always_throw;
 		}
 	}
 
-	return false;
+	return except_result::can_throw;
 }

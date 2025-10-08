@@ -48,6 +48,17 @@ namespace mips {
 			instruction_hazard = 1u << 4,
 		};
 
+		/// How should misaligned addresses be handled?
+		enum class misaligned_address_handling : uint8
+		{
+			/// An Address Exception should be raised
+			exception = 0,
+			/// The address should be aligned
+			align,
+			/// Perform the operation on the unaligned address
+			keep,
+		};
+
 		struct named_registers final
 		{
 			named_registers() = delete;
@@ -135,6 +146,9 @@ namespace mips {
 		bool in_jit : 1 = false;
 	private:
 		bool from_exception_ : 1 = false;
+
+		/// How should misaligned addresses in loads/stores be handled?
+		const misaligned_address_handling misaligned_address_handling_ : std::bit_width(std::to_underlying(misaligned_address_handling::keep)) = misaligned_address_handling::keep;
 
 		void ExecuteInstruction(bool branch_delay);
 		void ExecuteInstructionExplicit(const instructions::InstructionInfo* instruction_info, instruction_t instruction, bool branch_delay);
@@ -777,6 +791,19 @@ namespace mips {
 		_nothrow void set_flags(const flag bits) __restrict noexcept;
 
 		_nothrow void clear_flags(const flag bits) __restrict noexcept;
+
+		[[nodiscard]]
+		_forceinline _nothrow misaligned_address_handling get_misaligned_address_handling() const __restrict noexcept
+		{
+			return misaligned_address_handling_;
+		}
+
+		[[nodiscard]]
+		// ReSharper disable once CppMemberFunctionMayBeStatic
+		_forceinline _nothrow bool has_coprocessor0_support() const __restrict noexcept
+		{
+			return false;
+		}
 
 		[[nodiscard]]
 		_forceinline _nothrow system* get_guest_system() const __restrict noexcept {

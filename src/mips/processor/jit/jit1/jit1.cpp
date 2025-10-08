@@ -140,6 +140,11 @@ namespace {
 		processor.set_trapped_exception({ CPU_Exception::Type::Tr, processor.get_program_counter(), code });
 	}
 
+	_cold _nothrow void CpU_Exception (uint32 code, processor & __restrict processor) noexcept
+	{
+		processor.set_trapped_exception({ CPU_Exception::Type::CpU, processor.get_program_counter(), code });
+	}
+
 	_cold _nothrow void AdEL_Exception (uint32 address, processor & __restrict processor) noexcept
 	{
 		processor.set_trapped_exception({ CPU_Exception::Type::AdEL, processor.get_program_counter(), address });
@@ -300,8 +305,17 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	const Xbyak::Label intrinsic_ex;
 	const Xbyak::Label intrinsic_ex_no_pc;
 
+	const instructions::InstructionInfo * __restrict prev_instruction_info_ptr = nullptr;
+	const instructions::InstructionInfo * __restrict instruction_info_ptr = nullptr;
+	instruction_t prev_instruction = 0;
+	instruction_t instruction = 0;
+
 	static constexpr uint32 num_instructions = jit1::NumInstructionsChunk;
-	for (uint32 i = start_index; i < num_instructions; ++i)
+	for (
+		uint32 i = start_index;
+		i < num_instructions;
+		++i, prev_instruction_info_ptr = instruction_info_ptr, prev_instruction = instruction
+	)
 	{
 		const auto& cur_label = get_instruction_offset_label(i);
 		L(cur_label);
@@ -318,9 +332,23 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 		const uint32 current_address = start_address;
 
-		instruction_t prev_instruction = 0;
-		const instructions::InstructionInfo * __restrict prev_instruction_info_ptr = nullptr;
-		const instructions::InstructionInfo * __restrict instruction_info_ptr = nullptr;
+		if (i == start_index)
+		{
+#if 0
+			// For the purpose of handling self-modifying code, we always emit delay branch logic for the first instruction of a chunk
+			// so that we do not potentially need to change it after the fact, causing a cascade of sorts.
+			// TODO : this really sucks since it will always make the first instruction an indeterminate branch,
+			// which is the slowest by a very large margin. It's probably faster to just rebuild adjacent chunks as well...
+			possible_after_delaybranch = true;
+			possible_after_delaybranch_hazard = true;
+#endif
+
+			if (const instruction_t * __restrict prev_ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4))
+			{
+				prev_instruction = *prev_ptr;
+				prev_instruction_info_ptr = mips::FindExecuteInstruction(prev_instruction);
+			}
+		}
 
 		except_result exception_result = except_result::none;
 
@@ -366,12 +394,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		{
 			const size_t ins_start_size = getSize();
 
-			// Also fetch previous instruction.
-			if (const instruction_t * __restrict prev_ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4))
+			if (prev_instruction_info_ptr != nullptr)
 			{
-				prev_instruction = *prev_ptr;
-				prev_instruction_info_ptr = mips::FindExecuteInstruction(prev_instruction);
-
 				if (prev_instruction_info_ptr && instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::SetNoCTI))
 				{
 					cti_test = true;
@@ -386,7 +410,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			const instruction_t * __restrict ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address);
 			if (ptr)
 			{
-				const instruction_t instruction = *ptr;
+				instruction = *ptr;
 				instruction_info_ptr = mips::FindExecuteInstruction(instruction);
 
 				if (instruction_info_ptr)
@@ -430,12 +454,20 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					{
 						exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 					}
+					else if (instructions::HasAnyFlags(instruction_info_ptr->OpFlags, instructions::OpFlags::RequiresCoP0) && !jit_.processor_.has_coprocessor0_support())
+					{
+						set(ecx, current_address);
+						jmp(intrinsics_.cpu, T_NEAR);
+						exception_result = except_result::always_throw;
+					}
 					else if (instructions::HasAnyFlags(instruction_info_ptr->OpFlags, instructions::OpFlags::Store))
 					{
-						if (write_STORE(chunk_offset, current_address, instruction, *instruction_info_ptr))
+						if (
+							const auto store_result = write_STORE(chunk_offset, current_address, instruction, *instruction_info_ptr);
+							!store_result
+						)
 						{
 							store_handled = false;
-							exception_result = except_result::can_except;
 
 							if (this_processor.collect_stats_)
 							{
@@ -443,19 +475,24 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 								set(rcx, intptr(instruction_info_ptr->Name));
 								call(intrinsics_.emulated_stats);
 							}
+
 							exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 						}
 						else
 						{
 							store_handled = true;
+							exception_result = store_result.value();
 						}
-						alters_memory = true;
+						alters_memory = exception_result != except_result::always_throw && exception_result != except_result::always_except;
 					}
 					else if (
 						((instruction_info_ptr->OpFlags & (instructions::OpFlags::Load | instructions::OpFlags::COP1)) == instructions::OpFlags::Load)
 					)
 					{
-						if (write_LOAD(chunk_offset, current_address, instruction, *instruction_info_ptr))
+						if (
+							const auto load_result = write_LOAD(chunk_offset, current_address, instruction, *instruction_info_ptr);
+							!load_result
+						)
 						{
 							if (this_processor.collect_stats_)
 							{
@@ -465,7 +502,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							}
 
 							exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
-							exception_result = except_result::can_except;
+						}
+						else
+						{
+							exception_result = load_result.value();
 						}
 					}
 					else if (compact_branch)
@@ -755,8 +795,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			{
 				// AdEL
 				set(ecx, current_address);
-				jmp(intrinsics_.adel, T_NEAR);
+				jmp(intrinsics_.adel_identity, T_NEAR);
 				exception_result = except_result::always_throw;
+				instruction = 0;
+				instruction_info_ptr = nullptr;
 			}
 
 			const size_t ins_size = getSize() - ins_start_size;
@@ -766,8 +808,10 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		{
 			// AdEL
 			set(ecx, current_address);
-			jmp(intrinsics_.adel, T_NEAR);
+			jmp(intrinsics_.adel_identity, T_NEAR);
 			exception_result = except_result::always_throw;
+			instruction = 0;
+			instruction_info_ptr = nullptr;
 		}
 		// Epilog for store ops, as we need to test afterwards to see if they may have altered JIT memory.
 		//if (!terminate_instruction)
@@ -869,14 +913,22 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			jmp(intrinsic_ex, T_SHORT);
 		}
 
-		if (intrinsics_.adel.used) {
-			L(intrinsics_.adel);
+		if (intrinsics_.adel_identity.used) {
+			L(intrinsics_.adel_identity);
 			set(rax, uintptr(AdEL_Exception));
 			jmp(intrinsic_ex, T_SHORT);
 		}
 
+		if (intrinsics_.adel.used) {
+			L(intrinsics_.adel);
+			mov(dword[rbp + offsets.pc], eax);
+			set(rax, uintptr(AdEL_Exception));
+			jmp(intrinsic_ex_no_pc, T_SHORT);
+		}
+
 		if (intrinsics_.ades.used) {
 			L(intrinsics_.ades);
+			mov(dword[rbp + offsets.pc], eax);
 			set(rax, uintptr(AdES_Exception));
 			jmp(intrinsic_ex, T_SHORT);
 		}
@@ -893,6 +945,12 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			mov(dword[rbp + offsets.pc], ecx);
 			mov(ecx, edx);
 			jmp(intrinsic_ex_no_pc, T_SHORT);
+		}
+
+		if (intrinsics_.cpu.used) {
+			L(intrinsics_.cpu);
+			set(rax, uintptr(CpU_Exception));
+			jmp(intrinsic_ex, T_SHORT);
 		}
 
 		if (isReferenced(intrinsic_ex) || isReferenced(intrinsic_ex_no_pc)) {

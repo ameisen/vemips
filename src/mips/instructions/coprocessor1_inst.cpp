@@ -20,6 +20,38 @@ using namespace mips;
 
 namespace mips::instructions
 {
+	namespace
+	{
+		template <uint32 Bits, CPU_Exception::Type EException>
+		requires(std::has_single_bit(Bits))
+		static _forceinline uint32 handle_misaligned_address(const processor& __restrict processor, const uint32 address)
+		{
+			static constexpr const uint32 mask = mips::make_bitmask<uint32>((Bits - 1U) / 8U);
+
+			const auto misaligned_address_handler = processor.get_misaligned_address_handling();
+			if ((address & mask) != 0) [[unlikely]]
+			{
+				switch (misaligned_address_handler)
+				{
+					using enum processor::misaligned_address_handling;
+					case exception:
+						CPU_Exception::throw_helper( EException, address );
+
+					case align:
+						return address & ~mask;
+
+					case keep:
+						return address;
+
+					default: [[unlikely]]
+						xunreachable("Unknown Misaligned Address Handler");
+				}
+			}
+
+			return address;
+		}
+	}
+
 	Cop1InstructionDef(
 		ABS,
 		(OpFlags::None | OpFlags::Denorm_None | OpFlags::Round_None),
@@ -1152,7 +1184,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		LDC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load | OpFlags::ReadsGPRegister),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load | OpFlags::ReadsGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b11010100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1164,7 +1196,9 @@ namespace mips::instructions
 
 		const uint32 base_val = base.value<uint32>();
 
-		const uint32 address = base_val + offset;
+		uint32 address = base_val + offset;
+
+		address = handle_misaligned_address<64, CPU_Exception::Type::AdEL>(processor, address);
 
 		const uint64 result = processor.mem_fetch<uint64>(address);
 
@@ -1175,7 +1209,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		LWC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load | OpFlags::ReadsGPRegister),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Load | OpFlags::ReadsGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b11000100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1187,7 +1221,9 @@ namespace mips::instructions
 
 		const uint32 base_val = base.value<uint32>();
 
-		const uint32 address = base_val + offset;
+		uint32 address = base_val + offset;
+
+		address = handle_misaligned_address<32, CPU_Exception::Type::AdEL>(processor, address);
 
 		const uint32 result = processor.mem_fetch<uint32>(address);
 
@@ -1198,7 +1234,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		SDC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store | OpFlags::ReadsGPRegister),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store | OpFlags::ReadsGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b11110100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1211,7 +1247,9 @@ namespace mips::instructions
 		const uint32 base_val = base.value<uint32>();
 		const uint64 ft_val = ft.value<uint64>();
 
-		const uint32 address = base_val + offset;
+		uint32 address = base_val + offset;
+
+		address = handle_misaligned_address<64, CPU_Exception::Type::AdES>(processor, address);
 
 		processor.mem_write<uint64_t>(address, ft_val);
 
@@ -1220,7 +1258,7 @@ namespace mips::instructions
 
 	Cop1InstructionDef(
 		SWC1,
-		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store | OpFlags::ReadsGPRegister),
+		(OpFlags::Denorm_None | OpFlags::Round_None | OpFlags::Store | OpFlags::ReadsGPRegister | OpFlags::ThrowsMisaligned),
 		0b11111100000000000000000000000000,
 		0b11100100000000000000000000000000,
 		{ FormatBits::None, FormatBits::None }
@@ -1233,7 +1271,9 @@ namespace mips::instructions
 		const uint32 base_val = base.value<uint32>();
 		const uint32 ft_val = ft.value<uint32>();
 
-		const uint32 address = base_val + offset;
+		uint32 address = base_val + offset;
+
+		address = handle_misaligned_address<32, CPU_Exception::Type::AdES>(processor, address);
 
 		processor.mem_write<uint32_t>(address, ft_val);
 
