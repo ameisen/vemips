@@ -195,7 +195,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <EnableModules>
       </EnableModules>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <BuildStlModules>false</BuildStlModules>
@@ -228,7 +228,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <EnableModules>
       </EnableModules>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <BuildStlModules>false</BuildStlModules>
@@ -261,7 +261,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <EnableModules>
       </EnableModules>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <BuildStlModules>false</BuildStlModules>
@@ -303,7 +303,7 @@
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <EnableModules>
       </EnableModules>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
@@ -343,7 +343,7 @@
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <EnableModules>
       </EnableModules>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
@@ -382,7 +382,7 @@
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <EnableModules>
       </EnableModules>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>
@@ -418,10 +418,9 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <EnableModules>
       </EnableModules>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <FloatingPointExceptions>false</FloatingPointExceptions>

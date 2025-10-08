@@ -245,9 +245,13 @@ void processor::ExecuteInstruction(const bool branch_delay) {
 
 		if (has_jit && !branch_delay) {
 			// if this is a branch delay slot, force interpretive mode. Fall through to the interpreter.
-			std::visit([=, this](auto&& __restrict jit)
+			std::visit([this](auto&& __restrict jit)
 			{
-				if constexpr (!std::is_same_v<std::remove_cvref_t<decltype(jit)>, std::monostate>)
+				if constexpr (
+					// clang rules around '__restrict' are very strange, and don't match MSVC or GCC.
+					!std::is_same_v<decltype(jit), std::monostate& __restrict> &&
+					!std::is_same_v<decltype(jit), std::monostate&> 
+				)
 				{
 					jit->execute_instruction(program_counter_);
 				}
@@ -341,7 +345,10 @@ _forceinline void processor::execute_internal(const uint64 clocks) {
 
 	const mips::system* const __restrict guest_system = debugging ? guest_system_ : nullptr;
 
+	_clang_pragma(clang diagnostic push)
+	_clang_pragma(clang diagnostic ignored "-Wignored-attributes")
 	while _likely(!ticked || instruction_count_ < target_instructions_) [[likely]] {
+	_clang_pragma(clang diagnostic pop)
 		xassert(registers_[0] == 0); // $0 is _always_ 0
 		for (const std::unique_ptr<coprocessor>& cop : coprocessors_) {
 			if (cop) {

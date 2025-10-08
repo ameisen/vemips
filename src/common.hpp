@@ -52,13 +52,21 @@
 #	endif
 #	define _clear_cache(start, end) __builtin___clear_cache((char*)(start), (char*)(end))
 #	define _constant_p(expression) __builtin_constant_p(expression)
-#	define _pragma_small_code _Pragma("optimize(\"s\", on)") __attribute__((__minsize__))
-#	define _pragma_default_code _Pragma("optimize(\"\", on)")
+#	define _pragma_small_code
+#	define _pragma_default_code
 #	define _hot __attribute__((__hot__))
-#	define _cold __attribute__((__cold__))
+#	define _cold __attribute__((__minsize__, __cold__))
 #	define _flatten __attribute__((__flatten__))
 #	define _result_noalias __declspec(restrict)
-#	define _block_forceinline [[msvc::forceinline_calls]]
+#	define _pure __attribute__((__pure__)) __declspec(noalias)
+#	define _func_const __attribute__((__const__)) __declspec(noalias)
+#	if __has_cpp_attribute(msvc::forceinline_calls)
+#		define _block_forceinline [[msvc::forceinline_calls]]
+#	else
+#		define _block_forceinline
+#	endif
+
+#	define _clang_pragma(...) _Pragma(#__VA_ARGS__)
 
 #elif defined(_MSC_VER)
 #	define _unpredictable(expr) (expr)
@@ -88,7 +96,12 @@
 #	define _cold
 #	define _flatten [[msvc::flatten]]
 #	define _result_noalias __declspec(restrict)
-#	define _block_forceinline [[msvc::forceinline_calls]]
+#	define _pure __declspec(noalias)
+#	define _func_const _pure
+#	define _block_forceinline [[msvc::flatten, msvc::forceinline_calls]]
+#	define __has_builtin(...) 0
+
+#	define _clang_pragma(...)
 
 #elif defined(__GNUC__)
 # error GCC unimplemented
@@ -741,6 +754,13 @@ namespace mips {
 	inline constexpr _forceinline _nothrow bool in_range(const TType& value, const TType min, const TType max) noexcept
 	{
 		return value >= min && value >= max;
+	}
+
+	template <typename TPointer>
+	requires ((std::is_pointer_v<TPointer> || std::is_member_pointer_v<TPointer>) && sizeof(TPointer) <= sizeof(void*))
+	inline constexpr _forceinline _nothrow copy_qualifiers_ptr<TPointer, void> ptr_cast(const TPointer ptr) noexcept
+	{
+		return std::bit_cast<copy_qualifiers_ptr<TPointer, void>>(ptr);
 	}
 }
 

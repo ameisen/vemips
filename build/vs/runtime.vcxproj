@@ -154,7 +154,7 @@
       <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso /permissive- %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DisableSpecificWarnings>4514;4710</DisableSpecificWarnings>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
@@ -178,7 +178,7 @@
       <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DisableSpecificWarnings>4514;4710</DisableSpecificWarnings>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
@@ -202,7 +202,7 @@
       <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <DisableSpecificWarnings>4514;4710</DisableSpecificWarnings>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
@@ -234,7 +234,7 @@
       <StringPooling>true</StringPooling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <CppLanguageStandard>gnu++1y</CppLanguageStandard>
       <StrictAliasing>true</StrictAliasing>
@@ -274,7 +274,7 @@
       <StringPooling>true</StringPooling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <CppLanguageStandard>gnu++1y</CppLanguageStandard>
       <StrictAliasing>true</StrictAliasing>
@@ -313,7 +313,7 @@
       <StringPooling>true</StringPooling>
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <ControlFlowGuard>Guard</ControlFlowGuard>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <CppLanguageStandard>gnu++1y</CppLanguageStandard>
       <StrictAliasing>true</StrictAliasing>
@@ -348,11 +348,10 @@
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <StringPooling>true</StringPooling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <FloatingPointModel>Strict</FloatingPointModel>
+      <FloatingPointModel>Precise</FloatingPointModel>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <CppLanguageStandard>gnu++1y</CppLanguageStandard>
       <StrictAliasing>true</StrictAliasing>

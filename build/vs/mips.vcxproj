@@ -155,7 +155,7 @@
       <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso /permissive- %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;FMT_HEADER_ONLY=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -176,10 +176,10 @@
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;$(SolutionDir)..\..\ext\uni-algo-single-include;$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\xbyak\xbyak;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
-      <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso -Wno-assume -Wno-invalid-offsetof -Wno-microsoft-include %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;FMT_HEADER_ONLY=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -202,7 +202,7 @@
       <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;FMT_HEADER_ONLY=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -235,7 +235,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <ControlFlowGuard>false</ControlFlowGuard>
       <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -244,7 +244,7 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BuildStlModules>false</BuildStlModules>
-      <AssemblerOutput>NoListing</AssemblerOutput>
+      <AssemblerOutput>AssemblyAndSourceCode</AssemblerOutput>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
@@ -273,7 +273,7 @@
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <ControlFlowGuard>false</ControlFlowGuard>
       <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -310,7 +310,7 @@
       <BufferSecurityCheck>true</BufferSecurityCheck>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -336,17 +336,16 @@
       <AdditionalIncludeDirectories>$(ProjectDir)..\..\src;$(ProjectDir)..\..\src\mips;$(SolutionDir)..\..\ext\uni-algo-single-include;$(SolutionDir)..\..\ext\fmt\include;$(SolutionDir)..\..\ext\xbyak\xbyak;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.hpp</PrecompiledHeaderFile>
-      <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso -flto=thin -Wno-assume -Wno-invalid-offsetof %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/std:c++latest /utf-8 /volatile:iso -flto=thin -Wno-assume -Wno-invalid-offsetof -Wno-microsoft-include %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS=1;_RELEASE=1;FMT_HEADER_ONLY=1;NDEBUG=1;XBYAK_NO_OP_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OmitFramePointers>true</OmitFramePointers>
-      <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
       <StringPooling>true</StringPooling>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <ControlFlowGuard>false</ControlFlowGuard>
       <FloatingPointModel>Strict</FloatingPointModel>
-      <FloatingPointExceptions>false</FloatingPointExceptions>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
       <ConformanceMode>true</ConformanceMode>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -355,6 +354,7 @@
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BuildStlModules>false</BuildStlModules>
+      <AssemblerOutput>AssemblyAndSourceCode</AssemblerOutput>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>

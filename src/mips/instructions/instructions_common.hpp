@@ -56,36 +56,42 @@ namespace mips
 		};
 
 		[[nodiscard]]
+		_func_const
 		constexpr _nothrow OpFlags operator | (const OpFlags a, const OpFlags b) noexcept
 		{
 			return OpFlags(std::to_underlying(a) | std::to_underlying(b));
 		}
 
 		[[nodiscard]]
+		_func_const
 		constexpr _nothrow OpFlags operator & (const OpFlags a, const OpFlags b) noexcept
 		{
 			return OpFlags(std::to_underlying(a) & std::to_underlying(b));
 		}
 
 		[[nodiscard]]
+		_func_const
 		constexpr _nothrow bool HasAllFlags(const OpFlags ref, const OpFlags flags) noexcept
 		{
 			return (ref & flags) == flags;
 		}
 
 		[[nodiscard]]
+		_func_const
 		constexpr _nothrow bool HasAnyFlags(const OpFlags ref, const OpFlags flags) noexcept
 		{
 			return (ref & flags) != OpFlags::None;
 		}
 
 		[[nodiscard]]
+		_func_const
 		static constexpr _nothrow uint32 Bits(const uint32 NumBits) noexcept
 		{
 			return (1 << (NumBits)) - 1;
 		}
 
 		[[nodiscard]]
+		_func_const
 		static constexpr _nothrow uint32 HighBits(const uint32 NumBits) noexcept
 		{
 			return ((1 << (NumBits)) - 1) << (32 - NumBits);
@@ -93,6 +99,7 @@ namespace mips
 
 		template <typename TFrom, typename TTo>
 		[[nodiscard]]
+		_func_const
 		static constexpr _nothrow bool in_range(const TFrom value) noexcept
 		{
 			return
@@ -112,6 +119,7 @@ namespace mips
 
 			template <typename T>
 			[[nodiscard]]
+			_pure
 			_nothrow _forceinline T sextend() const noexcept
 			{
 				// todo: value range check
@@ -120,6 +128,7 @@ namespace mips
 
 			template <typename T>
 			[[nodiscard]]
+			_pure
 			_nothrow _forceinline T zextend() const noexcept
 			{
 				// todo: value range check
@@ -275,8 +284,10 @@ namespace mips
 		public:
 
 			[[nodiscard]]
+			_pure
 			_nothrow int8 get_offset_gp() const noexcept;
 			[[nodiscard]]
+			_pure
 			_nothrow int16 get_offset_fp() const noexcept;
 		};
 
@@ -288,7 +299,12 @@ namespace mips
 			using processor_t = T;
 			processor_t * __restrict m_Processor = nullptr;
 			using _RegisterBase::m_Register;
-			static [[nodiscard]] _nothrow uint32 _get_register(const instruction_t instruction) noexcept { return (instruction >> offset) & Bits(size); }
+			[[nodiscard]]
+			_pure
+			static _nothrow uint32 _get_register(const instruction_t instruction) noexcept
+			{
+				return (instruction >> offset) & Bits(size);
+			}
 		public:
 			_nothrow _Register(const instruction_t instruction, processor_t& processor) noexcept :
 				_RegisterBase(_get_register(instruction)), 
@@ -303,6 +319,7 @@ namespace mips
 
 			template <uint32 _offset, uint32 _size>
 			[[nodiscard]]
+			_pure
 			_nothrow bool operator == (const _Register<_offset, _size, T> & __restrict reg) const noexcept
 			{
 				return get_register() == reg.get_register();
@@ -310,6 +327,7 @@ namespace mips
 
 			template <uint32 _offset, uint32 _size>
 			[[nodiscard]]
+			_pure
 			_nothrow bool operator != (const _Register<_offset, _size, T> & __restrict reg) const noexcept
 			{
 				return get_register() != reg.get_register();
@@ -317,12 +335,14 @@ namespace mips
 
 			template <uint32 _offset, uint32 _size>
 			[[nodiscard]]
+			_pure
 			_nothrow auto operator <=> (const _Register<_offset, _size, T> & __restrict reg) const noexcept
 			{
 				return get_register() <=> reg.get_register();
 			}
 
 			[[nodiscard]]
+			_pure
 			_nothrow uint32 get_register() const noexcept
 			{
 				xassert(m_Register < 32);
@@ -331,6 +351,7 @@ namespace mips
 			}
 
 			[[nodiscard]]
+			_pure
 			_nothrow uint32 get_index() const noexcept
 			{
 				xassert(m_Register != 0 && m_Register < 32);
@@ -340,6 +361,7 @@ namespace mips
 
 			template <typename format_t>
 			[[nodiscard]]
+			_pure
 			_nothrow format_t value() const noexcept
 			{
 				xassert(m_Processor != nullptr);
@@ -364,26 +386,31 @@ namespace mips
 			int8 offset_;
 			std::optional<int32> constant_;
 
+			_pure
 			_forceinline _nothrow bool is_zero() const noexcept
 			{
 				return register_ == 0U;
 			}
 
+			_pure
 			_forceinline _nothrow bool is_constant() const noexcept
 			{
 				return constant_.has_value();
 			}
 
+			_pure
 			_forceinline _nothrow const std::optional<int32>& get_constant() const noexcept
 			{
 				return constant_;
 			}
 
+			_pure
 			_forceinline _nothrow int8 get_offset() const noexcept
 			{
 				return offset_;
 			}
 
+			_pure
 			_forceinline _nothrow uint32 get_index() const noexcept
 			{
 				xassert(register_ != 0);
@@ -391,6 +418,7 @@ namespace mips
 				return register_ /*- 1*/;
 			}
 
+			_pure
 			_forceinline _nothrow uint32 get_register() const noexcept
 			{
 				xassert(register_ < 32);
@@ -418,18 +446,21 @@ namespace mips
 			{}
 
 			[[nodiscard]]
+			_pure
 			_nothrow _forceinline bool is_zero() const noexcept
 			{
 				return _RegisterBase::m_Register == 0U;
 			}
 
 			[[nodiscard]]
+			_pure
 			_nothrow _forceinline bool is_constant() const noexcept
 			{
 				return is_zero();
 			}
 
 			[[nodiscard]]
+			_pure
 			_nothrow _forceinline std::optional<int32> get_constant() const noexcept
 			{
 				if (is_zero())
@@ -445,6 +476,7 @@ namespace mips
 			}
 
 			[[nodiscard]]
+			_pure
 			_nothrow _forceinline int8 get_offset(const bool force = false) const noexcept
 			{
 				if (!force)
@@ -456,6 +488,7 @@ namespace mips
 			}
 
 			[[nodiscard]]
+			_pure
 			_nothrow _forceinline operator GPRegisterInfo() const noexcept
 			{
 				return {

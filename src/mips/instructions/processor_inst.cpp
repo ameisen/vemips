@@ -1449,11 +1449,14 @@ namespace mips::instructions
 
 		uint32 value = rs.value<uint32>();
 
+		// TODO : Clang does _not_ like inlining this as it isn't being built with BMI globally-enabled
+		#if !defined(__clang__)
 		if (platform::get_host_features().bmi1)
 		{
 			value = _bextr_u32(value, lsb, msbd + 1);
 		}
 		else
+		#endif
 		{
 			value >>= lsb;
 			value &= ((1U << (msbd + 1)) - 1); // is + 1 correct?
