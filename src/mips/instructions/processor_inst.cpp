@@ -192,8 +192,17 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
+		#if __has_builtin(__builtin_sub_overflow)
+		int32 result;
+		const bool overflow = __builtin_add_overflow(rs.value<int32>(), rt.value<int32>(), &result);
+		#elif defined(_MSC_VER) && _MSC_VER >= 1937
+		int32 result;
+		const bool overflow = _add_overflow_i32(0, rs.value<int32>(), rt.value<int32>(), &result);
+		#else
 		const int64 result = int64(rs.value<int32>()) + rt.value<int32>();
-		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min()) [[unlikely]]
+		const bool overflow = result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min();
+		#endif
+		if (overflow) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
@@ -2705,8 +2714,17 @@ namespace mips::instructions
 		const GPRegister<16, 5> rt(instruction, processor);
 		GPRegister<11, 5> rd(instruction, processor);
 
+		#if __has_builtin(__builtin_sub_overflow)
+		int32 result;
+		const bool overflow = __builtin_sub_overflow(rs.value<int32>(), rt.value<int32>(), &result);
+		#elif defined(_MSC_VER) && _MSC_VER >= 1937
+		int32 result;
+		const bool overflow = _sub_overflow_i32(0, rs.value<int32>(), rt.value<int32>(), &result);
+		#else
 		const int64 result = int64(rs.value<int32>()) - rt.value<int32>();
-		if (result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min()) [[unlikely]]
+		const bool overflow = result > std::numeric_limits<int32>::max() || result < std::numeric_limits<int32>::min();
+		#endif
+		if (overflow) [[unlikely]]
 		{
 			CPU_Exception::throw_helper( CPU_Exception::Type::Ov, processor.get_program_counter() );
 		}
