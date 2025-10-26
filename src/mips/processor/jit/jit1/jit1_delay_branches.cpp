@@ -585,7 +585,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			mov(edx, *target_address);
 			mov(dword[rbp + offsets.pc], edx);
 
-			mov(rcx, uintptr(&jit_));
+			mov(rcx, std::bit_cast<uintptr>(&jit_));
 			std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
 			jmp(rax);
 
@@ -624,7 +624,7 @@ void Jit1_CodeGen::handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::Chu
 			jmp(rax);
 			L(not_within);
 			mov(rdx, rax);
-			mov(rcx, uintptr(&jit_));
+			mov(rcx, std::bit_cast<uintptr>(&jit_));
 			std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
 			jmp(rax);
 			L(no_branch);

@@ -99,10 +99,11 @@ namespace mips
 
 		auto* address = patch.getAddress();
 
+		#pragma message("validate that this is optimal over `patch + 2`, `patch + 10`, etc")
 		mov(rcx, patch);
-		mov(word[rcx], int16_t(patch_prefix));
+		mov(word[rcx], patch_prefix);
 		mov(qword[rcx + 2], rax);
-		mov(word[rcx + 10], int16_t(patch_suffix));
+		mov(word[rcx + 10], patch_suffix);
 	}
 
 	void Jit1_CodeGen::intrinsic_write_patch_jump(const jit1::Chunk& __restrict chunk, const uint32 target_address, const Xbyak::Reg& patch_target_address_reg, const bool set_pc)

@@ -321,7 +321,7 @@ void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, ui
 	else if (rs.is_zero() || rt == rs) [[unlikely]]
 	{
 		// just move rt to rd
-		// 8B 42 DD 89 42 EE 
+		// 8B 42 DD 89 42 EE
 		// mov dword eax, [rdx + 0xDD] ; DD = 'rt' offset
 		// mov dword [rdx + 0xEE], eax ; EE = 'rd' offset
 		if (rd != rt)
@@ -332,7 +332,7 @@ void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, ui
 	else if (rt.is_zero())
 	{
 		// just move rs to rd
-		// 8B 42 DD 89 42 EE 
+		// 8B 42 DD 89 42 EE
 		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 		// mov dword [rdx + 0xEE], eax ; EE = 'rd' offset
 		if (rd != rs)
@@ -454,7 +454,7 @@ void Jit1_CodeGen::write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, u
 	else if (rt == rs) [[unlikely]]
 	{
 		// just move rt to rd
-		// 8B 42 DD 89 42 EE 
+		// 8B 42 DD 89 42 EE
 		// mov dword eax, [rdx + 0xDD] ; DD = 'rt' offset
 		// mov dword [rdx + 0xEE], eax ; EE = 'rd' offset
 		if (rd != rt)
@@ -772,14 +772,14 @@ void Jit1_CodeGen::write_PROC_MOVE(jit1::ChunkOffset & __restrict chunk_offset, 
 	else if (rs.is_zero())
 	{
 		// This just sets rt to 0.
-		// 89 4A EE 
+		// 89 4A EE
 		// mov dword [rdx + 0xEE], ecx ; EE = 'rt' offset
 		set(op_rt, 0);
 	}
 	else
 	{
 		// We are just moving rs to rt
-		// 8B 42 DD 89 42 EE 
+		// 8B 42 DD 89 42 EE
 		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		std::ignore = mov_ex(op_rt, op_rs, eax);
@@ -812,20 +812,20 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 		}
 		else if (immediate == 1)
 		{
-			// FF 42 EE 
+			// FF 42 EE
 			// inc dword [rdx + 0xEE]		 ; EE = 'rt' offset
 			inc(op_rt);
 		}
 		else if (immediate == -1)
 		{
-			// FF 4A EE 
+			// FF 4A EE
 			// dec dword [rdx + 0xEE]		 ; EE = 'rt' offset
 			dec(op_rt);
 		}
 		else if (immediate >= 0 && immediate <= 128)
 		{
 			// using 'sub' for add means we can go to 128
-			// 83 6A EE FF 
+			// 83 6A EE FF
 			// sub dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
 			sub(op_rt, int8(-immediate));
 		}
@@ -834,7 +834,7 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 			// We are just adding immediate to 'rt'.
 			// 83 42 EE FF
 			// add dword [rdx + 0xEE], 0xFF		 ; EE = 'rt' offset
-			// 81 42 EE FF FF FF FF 
+			// 81 42 EE FF FF FF FF
 			// add dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
 			add(op_rt, immediate);
 		}
@@ -849,7 +849,7 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 		{
 			// rt = rs
 			// We are just moving rs to rt
-			// 8B 42 DD 89 42 EE 
+			// 8B 42 DD 89 42 EE
 			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 
@@ -859,7 +859,7 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 		{
 			// rt = rs + 1
 			// increment
-			// 8B 42 DD FF C0 89 42 EE 
+			// 8B 42 DD FF C0 89 42 EE
 			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 			// inc eax
 			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
@@ -869,7 +869,7 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 		{
 			// rt = rs + -1
 			// decrement
-			// 8B 42 DD FF C8 89 42 EE  
+			// 8B 42 DD FF C8 89 42 EE
 			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 			// dec eax
 			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
@@ -911,7 +911,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 		if (immediate == 0) [[unlikely]]
 		{
 			// This just sets rt to 0.
-			// 89 4A EE 
+			// 89 4A EE
 			// mov dword [rdx + 0xEE], ecx ; EE = 'rt' offset
 			set(op_rt, 0);
 			return except_result::none;
@@ -920,7 +920,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 		else
 		{
 			// This just sets rt to the immediate value.
-			// C7 42 EE FF FF FF FF 
+			// C7 42 EE FF FF FF FF
 			// mov dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
 			set(op_rt, immediate);
 			return except_result::none;
@@ -962,7 +962,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 	else if (immediate == 0) [[unlikely]]
 	{
 		// We are just moving rs to rt
-		// 8B 42 DD 89 42 EE 
+		// 8B 42 DD 89 42 EE
 		// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 		// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
 		std::ignore = mov_ex(op_rt, op_rs, eax);
@@ -975,7 +975,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 		if (immediate == 1)
 		{
 			// increment
-			// 8B 42 DD FF C0 89 42 EE 
+			// 8B 42 DD FF C0 89 42 EE
 			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 			// inc eax
 			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
@@ -984,7 +984,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 		else if (immediate == -1)
 		{
 			// decrement
-			// 8B 42 DD FF C8 89 42 EE  
+			// 8B 42 DD FF C8 89 42 EE
 			// mov dword eax, [rdx + 0xDD] ; DD = 'rs' offset
 			// dec eax
 			// mov dword [rdx + 0xEE], eax ; EE = 'rt' offset
@@ -2447,7 +2447,7 @@ void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, 
 	else if (rs.is_zero()) [[unlikely]]
 	{
 		if (rd == rt) [[unlikely]]
-		{ 
+		{
 			// nop
 		}
 		else
@@ -2695,7 +2695,9 @@ void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, ui
 			set(op_rt, 0);
 		}
 		else {
-			if (platform::get_host_features().bmi1)
+			const uint32_t mask = ((1U << (msbd + 1)) - 1) & (std::numeric_limits<uint32>::max() >> lsb);
+
+			if (platform::get_host_features().bmi1 && lsb > 0 && mask != 0)
 			{
 				struct bextr_operand final
 				{
@@ -2716,7 +2718,6 @@ void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, ui
 			else
 			{
 				// Equivalent logic to ProcInstructionDef::EXT
-				const uint32_t mask = ((1U << (msbd + 1)) - 1) & (std::numeric_limits<uint32>::max() >> lsb);
 				xassert(mask != 0 || (lsb == 0 && msbd == 31));
 				if (mask == 0) [[unlikely]] {
 					set(op_rt, 0);

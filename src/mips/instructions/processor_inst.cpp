@@ -1468,7 +1468,8 @@ namespace mips::instructions
 		#endif
 		{
 			value >>= lsb;
-			value &= ((1U << (msbd + 1)) - 1); // is + 1 correct?
+			value &= ~(uint64_t(std::numeric_limits<uint32_t>::max()) << (msbd + 1));
+			// value &= ~(0x1FFFFFFFEull << (msbd));
 		}
 
 		return write_result(rt, value);

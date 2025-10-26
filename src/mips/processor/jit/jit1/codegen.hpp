@@ -109,6 +109,39 @@ namespace mips
 			return address_ + getSize();
 		}
 
+		void exchange(
+			const Xbyak::Reg& a,
+			const Xbyak::Reg& b
+		)
+		{
+			#pragma message("use three moves for proper chips instead of xchg")
+			#pragma message("fix reg sizes")
+			xchg(a, b);
+		}
+
+		// returns `true` if temporary was used
+		[[nodiscard]]
+		bool exchange(
+			const Xbyak::Operand& a,
+			const Xbyak::Operand& b,
+			const Xbyak::Reg& tmp
+		)
+		{
+			#pragma message("use three moves for proper chips instead of xchg")
+			if (a.isREG() && b.isREG())
+			{
+				exchange(a.getReg(), b.getReg());
+				return false;
+			}
+			else
+			{
+				mov(tmp, a);
+				mov(a, b);
+				mov(b, tmp);
+				return true;
+			}
+		}
+
 		void set(const Xbyak::Operand& dst, const uint64 imm)
 		{
 			if (!dst.isREG())
@@ -170,7 +203,7 @@ namespace mips
 			return true;
 		}
 
-		// returns `true` if temporary register was used
+		// returns `true` if the operation was actually generated
 		[[nodiscard]]
 		bool mov_ex(
 			const Xbyak::Reg& dst,
@@ -186,6 +219,7 @@ namespace mips
 			return false;
 		}
 
+		// returns `true` if the operation was actually generated
 		[[nodiscard]]
 		bool mov_ex(
 			const Xbyak::Operand& dst,
