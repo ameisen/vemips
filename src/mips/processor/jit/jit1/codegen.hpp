@@ -8,9 +8,13 @@
 #undef XBYAK_STRICT_CHECK_MEM_REG_SIZE
 
 #include "mips_common.hpp"
+#include "abi/jit1_abi_win64.hpp"
 #include "instructions/instructions_common.hpp"
 #include "mips/processor/jit/jit1/jit1.hpp"
 #include "mips/processor/processor.hpp"
+
+#define WITH_WIN64_ABI 1
+
 
 namespace mips
 {
@@ -46,7 +50,7 @@ namespace mips
 		struct {
 			struct intrinsic final {
 				Xbyak::Label label;
-				mutable bool used = false;
+				mutable bool used : 1 = false;
 
 				_nothrow operator const Xbyak::Label& () const noexcept {
 					used = true;
@@ -330,34 +334,28 @@ namespace mips
 			return true;
 		}
 
-		// returns `true` if temporary register was used
-		template <bool ExternalCall = false, uint32 Realignment = 0U>
-		[[nodiscard]]
-		bool call_ex(
-			const void* const ptr,
-			const Xbyak::Reg& tmp,
-			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
-			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
-		)
+		template <bool IsCall, bool IsExternal, int32 StackAdjust = 0>
+		static constexpr const int32 stack_realignment = 
+			(
+				// The stack is pre-adjusted to reserved bytes in the secondary springboard.
+				// Thus, we do not need to adjust rsp for the ABI when making `call`s, only when `jmp`ing,
+				// as `jmp` will result in a `ret` bringing us back to the springboard - we must pop from `rsp`
+				// before that to make sure that the return address is available.
+				(!IsCall && IsExternal) ?
+					static_cast<int32>(jit::abi::win64::caller_stack_reserve) :
+					0
+			) +
+			(
+				(!IsCall && !IsExternal) ?
+					-StackAdjust :
+					StackAdjust
+			);
+
+		void adjust_stack(const int32 amount, const Xbyak::Reg& dummy)
 		{
-			const intptr diff = uintptr(ptr) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
-
-			uint32 stack_add = Realignment;
-
-#if 0 // stack space is added in springboard, and we do not use the stack ourselves
-			if constexpr (ExternalCall)
+			if (amount > 0)
 			{
-				stack_add = 40;
-			}
-#endif
-
-			const auto push_stack = [&tmp, stack_add, this]
-			{
-				const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
-					edx :
-					ecx;
-
-				switch (stack_add)
+				switch (amount)
 				{
 					case 0:
 						break;
@@ -374,18 +372,13 @@ namespace mips
 						push(dummy.cvt64());
 						break;
 					default:
-						sub_ex(rsp, 40);
+						sub_ex(rsp, amount);
 						break;
 				}
-			};
-
-			const auto pop_stack = [&tmp, stack_add, this]
+			}
+			else
 			{
-				const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
-					edx :
-					ecx;
-
-				switch (stack_add)
+				switch (-amount)
 				{
 					case 0:
 						break;
@@ -402,30 +395,59 @@ namespace mips
 						pop(dummy.cvt64());
 						break;
 					default:
-						add_ex(rsp, 40);
+						add_ex(rsp, -amount);
 						break;
 				}
-			};
+			}
+		}
 
-			if (in_range<int32>(diff))
+		void adjust_stack(const int32 amount)
+		{
+			adjust_stack(amount, ecx);
+		}
+
+		// returns `true` if temporary register was used
+		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		[[nodiscard]]
+		bool call_ex(
+			const void* const pointer,
+			const Xbyak::Reg& tmp,
+			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {},
+			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
+		)
+		{
+			const intptr diff = reinterpret_cast<uintptr>(pointer) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
+
+			// The stack is pre-adjusted to reserved bytes in the secondary springboard.
+			constexpr int32 stack_adjust = stack_realignment<true, ExternalCall, Realignment>;
+
+			const bool is_in_range = in_range<int32>(diff);
+
+			const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
+				edx :
+				ecx;
+
+			adjust_stack(stack_adjust, dummy);
+
+			if (!is_in_range)
 			{
-				push_stack();
-				call(ptr);
-				pop_stack();
-				
-				return false;
+				if (spill_tmp) { spill_tmp(tmp); }
+				set(tmp, intptr(pointer));
+				call(tmp);
 			}
 			else
 			{
-				if (spill_tmp) { spill_tmp(tmp); }
-				set(tmp, intptr(ptr));
-				push_stack();
-				call(tmp);
-				pop_stack();
+				call(pointer);
+			}
+
+			adjust_stack(-stack_adjust, dummy);
+
+			if (!is_in_range)
+			{
 				if (restore_tmp) { restore_tmp(tmp); }
 			}
 
-			return true;
+			return !is_in_range;
 		}
 
 		template <bool ExternalCall = false, uint32 Realignment = 0U>
@@ -433,136 +455,57 @@ namespace mips
 			const Xbyak::Operand& target
 		)
 		{
-			uint32 stack_add = Realignment;
+			constexpr int32 stack_adjust = stack_realignment<true, ExternalCall, Realignment>;
 
-#if 0 // stack space is added in springboard, and we do not use the stack ourselves
-			if constexpr (ExternalCall)
-			{
-				stack_add = 40;
-			}
-#endif
+			const Xbyak::Reg& dummy = ecx;
 
-			const auto push_stack = [stack_add, this]
-			{
-				const Xbyak::Reg& dummy = ecx;
+			adjust_stack(stack_adjust, dummy);
 
-				switch (stack_add)
-				{
-					case 0:
-						break;
-					case 1:
-						push(dummy.cvt8());
-						break;
-					case 2:
-						push(dummy.cvt16());
-						break;
-					case 4:
-						push(dummy.cvt32());
-						break;
-					case 8:
-						push(dummy.cvt64());
-						break;
-					default:
-						sub_ex(rsp, 40);
-						break;
-				}
-			};
-
-			const auto pop_stack = [stack_add, this]
-			{
-				const Xbyak::Reg& dummy = ecx;
-
-				switch (stack_add)
-				{
-					case 0:
-						break;
-					case 1:
-						pop(dummy.cvt8());
-						break;
-					case 2:
-						pop(dummy.cvt16());
-						break;
-					case 4:
-						pop(dummy.cvt32());
-						break;
-					case 8:
-						pop(dummy.cvt64());
-						break;
-					default:
-						add_ex(rsp, 40);
-						break;
-				}
-			};
-
-			push_stack();
 			call(target);
-			pop_stack();
+
+			adjust_stack(-stack_adjust, dummy);
 		}
 
 		// returns `true` if temporary register was used
 		template <bool ExternalCall = false, uint32 Realignment = 0U>
 		[[nodiscard]]
 		bool jmp_ex(
-			const void* const ptr,
+			const void* const pointer,
 			const Xbyak::Reg& tmp,
 			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {}
 		)
 		{
-			const intptr diff = uintptr(ptr) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
+			const intptr diff = reinterpret_cast<uintptr>(pointer) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
 
-			uint32 stack_add = Realignment;
+			constexpr int32 stack_adjust = stack_realignment<false, ExternalCall, Realignment>;
 
-#if 0 // stack space is added in springboard, and we do not use the stack ourselves
-			if constexpr (ExternalCall)
-			{
-				stack_add = 40;
-			}
+			const bool is_in_range = in_range<int32>(diff);
+
+			const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
+				edx :
+				ecx;
+
+#if !WITH_WIN64_ABI
+			adjust_stack(-stack_adjust, dummy);
+#else
+			static_assert(Realignment == 0U);
+
+			// Copy the return pointer to the top of the stack, which also will realign the stack.
+			push(qword[rsp + mips::jit::abi::win64::caller_stack_reserve]);
 #endif
 
-			const auto push_stack = [&tmp, stack_add, this]
+			if (!is_in_range)
 			{
-				const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
-					edx :
-					ecx;
-
-				switch (stack_add)
-				{
-					case 0:
-						break;
-					case 1:
-						push(dummy.cvt8());
-						break;
-					case 2:
-						push(dummy.cvt16());
-						break;
-					case 4:
-						push(dummy.cvt32());
-						break;
-					case 8:
-						push(dummy.cvt64());
-						break;
-					default:
-						sub_ex(rsp, 40);
-						break;
-				}
-			};
-
-			if (in_range<int32>(diff))
-			{
-				push_stack();
-				jmp(ptr);
-				
-				return false;
+				if (spill_tmp) { spill_tmp(tmp); }
+				set(tmp, intptr(pointer));
+				jmp(tmp);
 			}
 			else
 			{
-				if (spill_tmp) { spill_tmp(tmp); }
-				set(tmp, intptr(ptr));
-				push_stack();
-				jmp(tmp);
+				jmp(pointer);
 			}
 
-			return true;
+			return !is_in_range;
 		}
 
 		template <bool ExternalCall = false, uint32 Realignment = 0U>
@@ -570,37 +513,20 @@ namespace mips
 			const Xbyak::Operand& target
 		)
 		{
-			uint32 stack_add = Realignment;
-
-#if 0 // stack space is added in springboard, and we do not use the stack ourselves
-			if constexpr (ExternalCall)
-			{
-				stack_add = 40;
-			}
-#endif
+			// The stack is pre-adjusted to reserved bytes in the secondary springboard 
+			// We need to restore it prior to an external jump, so the `ret` gets the return address correctly.
+			constexpr int32 stack_adjust = stack_realignment<false, ExternalCall, Realignment>;
 
 			const Xbyak::Reg& dummy = ecx;
 
-			switch (stack_add)
-			{
-				case 0:
-					break;
-				case 1:
-					push(dummy.cvt8());
-					break;
-				case 2:
-					push(dummy.cvt16());
-					break;
-				case 4:
-					push(dummy.cvt32());
-					break;
-				case 8:
-					push(dummy.cvt64());
-					break;
-				default:
-					sub_ex(rsp, 40);
-					break;
-			}
+#if !WITH_WIN64_ABI
+			adjust_stack(-stack_adjust, dummy);
+#else
+			static_assert(Realignment == 0U);
+
+			// Copy the return pointer to the top of the stack, which also will realign the stack.
+			push(qword[rsp + mips::jit::abi::win64::caller_stack_reserve]);
+#endif
 
 			jmp(target);
 		}
@@ -621,7 +547,7 @@ namespace mips
 					dec(dst);
 					break;
 				default:
-					if (operand < 0)
+					if (operand != 0x80)
 					{
 						sub(dst, operand);
 					}
@@ -649,7 +575,7 @@ namespace mips
 					inc(dst);
 					break;
 				default:
-					if (operand < 0)
+					if (operand != 0x80)
 					{
 						add(dst, operand);
 					}
@@ -661,34 +587,15 @@ namespace mips
 			}
 		}
 
-		template <uint32 StackAdjust = 0>
+		template <int32 StackAdjust = 0>
 		void escape_ret()
 		{
-			const uint32 stack_adjust = 40 + StackAdjust;
+			constexpr int32 stack_adjust = stack_realignment<false, true, StackAdjust>;
 
 			const Xbyak::Reg& dummy = ecx;
 
-			switch (stack_adjust)
-			{
-				case 0:
-					break;
-				case 1:
-					pop(dummy.cvt8());
-					break;
-				case 2:
-					pop(dummy.cvt16());
-					break;
-				case 4:
-					pop(dummy.cvt32());
-					break;
-				case 8:
-					pop(dummy.cvt64());
-					break;
-				default:
-					add_ex(rsp, 40);
-					break;
-			}
-
+			// Copy the return pointer to the top of the stack, which also will realign the stack.
+			push(qword[rsp + mips::jit::abi::win64::caller_stack_reserve]);
 			ret();
 		}
 

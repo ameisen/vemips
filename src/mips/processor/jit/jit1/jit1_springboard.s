@@ -1,39 +1,41 @@
-.data
+include abi/jit1_abi_win64.s
 
-signal_sp:
-	dq 0
+.data
 
 .code
 
-unwind_stack:
-	mov r12, qword ptr [rsp + 20h]
-	mov r13, qword ptr [rsp + 28h]
-	mov r14, qword ptr [rsp + 30h]
-	mov r15, qword ptr [rsp + 38h]
-	mov rdi, qword ptr [rsp + 40h]
-	mov rsi, qword ptr [rsp + 48h]
-	mov rbx, qword ptr [rsp + 50h]
-	mov rbp, qword ptr [rsp + 58h]
-	add rsp, 104
+jit1_unwind_stack PROC PRIVATE
+	; handle the reserved space from the second springboard as well, and handle parity to fix alignment.
+	mov r12, qword ptr [rsp + 20h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	mov r13, qword ptr [rsp + 28h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	mov r14, qword ptr [rsp + 30h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	mov r15, qword ptr [rsp + 38h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	mov rdi, qword ptr [rsp + 40h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	mov rsi, qword ptr [rsp + 48h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	mov rbp, qword ptr [rsp + 50h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	mov rbx, qword ptr [rsp + 58h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY]
+	; XMM6 through XMM15
+	add rsp, 70h + CALLEE_STACK_RESERVE + CALLEE_STACK_RESERVE + CALLER_STACK_PARITY
 	ret
+jit1_unwind_stack endp
 
-jit1_drop_signal PROC
-	mov rsp, qword ptr [signal_sp]
-	jmp unwind_stack
-jit1_drop_signal endp
+jit1_springboard PROC FRAME
+	sub rsp, 70h + CALLEE_STACK_RESERVE
+	.allocstack 70h + CALLEE_STACK_RESERVE
+	mov qword ptr [rsp + 20h + CALLEE_STACK_RESERVE], r12
+	mov qword ptr [rsp + 28h + CALLEE_STACK_RESERVE], r13
+	mov qword ptr [rsp + 30h + CALLEE_STACK_RESERVE], r14
+	mov qword ptr [rsp + 38h + CALLEE_STACK_RESERVE], r15
+	mov qword ptr [rsp + 40h + CALLEE_STACK_RESERVE], rdi
+	mov qword ptr [rsp + 48h + CALLEE_STACK_RESERVE], rsi
+	mov qword ptr [rsp + 50h + CALLEE_STACK_RESERVE], rbp
+	mov qword ptr [rsp + 58h + CALLEE_STACK_RESERVE], rbx
+	; XMM6 through XMM15
 
-jit1_springboard PROC
-	sub rsp, 104
-	mov qword ptr [rsp + 20h], r12
-	mov qword ptr [rsp + 28h], r13
-	mov qword ptr [rsp + 30h], r14
-	mov qword ptr [rsp + 38h], r15
-	mov qword ptr [rsp + 40h], rdi
-	mov qword ptr [rsp + 48h], rsi
-	mov qword ptr [rsp + 50h], rbx
-	mov qword ptr [rsp + 58h], rbp
-	
-	mov qword ptr [signal_sp], rsp
+	.setframe rsp, 0h
+	.endprolog
+
+	; mov qword ptr [signal_sp], rsp
 
 	;xor r12, r12
 	xor r13, r13
@@ -54,13 +56,12 @@ jit1_springboard PROC
 
 	sub r12, -128
 	mov rdi, r8
-	;mov qword ptr [rsp], offset after_second_springboard
-	call second_springboard
-	jmp unwind_stack;
-	
-	second_springboard:
-
-	sub rsp, 40
-	jmp rcx
+	call jit1_second_springboard
+	jmp jit1_unwind_stack
 jit1_springboard endp
+
+jit1_second_springboard PROC PRIVATE
+	sub rsp, CALLEE_STACK_RESERVE
+	jmp rcx
+jit1_second_springboard endp
 end

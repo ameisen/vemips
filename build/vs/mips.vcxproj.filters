@@ -71,6 +71,9 @@
     <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp">
       <Filter>platform\win32</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\jit1\abi\jit1_abi_win64.hpp">
+      <Filter>processor\jit\jit1\abi</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\mips\pch.cpp" />
@@ -154,10 +157,16 @@
     <Filter Include="platform\win32">
       <UniqueIdentifier>{f7c076f1-84d9-4723-bb79-f1b5ca34a311}</UniqueIdentifier>
     </Filter>
+    <Filter Include="processor\jit\jit1\abi">
+      <UniqueIdentifier>{9e8be2d0-4fb5-4f1d-8b38-136892b9ddad}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="..\..\src\mips\processor\jit\jit1\jit1_springboard.s">
       <Filter>processor\jit\jit1</Filter>
+    </MASM>
+    <MASM Include="..\..\src\mips\processor\jit\jit1\abi\jit1_abi_win64.s">
+      <Filter>processor\jit\jit1\abi</Filter>
     </MASM>
   </ItemGroup>
   <ItemGroup>

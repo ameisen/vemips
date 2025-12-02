@@ -177,12 +177,6 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 		{
 			static constexpr const auto offsets = processor::recompiler_offsets<>::get<int8>();
 
-			cg.mov(cg.qword[cg.rbp + offsets.ic], cg.rdi);		// save instruction count
-			cg.mov(cg.dword[cg.rbp + offsets.flags], cg.ebx);
-			cg.mov(cg.dword[cg.rbp + offsets.dbt], cg.esi);  // set it in the interpreter
-			cg.mov(cg.dword[cg.rbp + instructions::GPRegister<>{Jit1_CodeGen::mips_fp}.get_offset()], cg.r15d);
-			cg.set(cg.rax, reinterpret_cast<intptr>(&jit1_drop_signal));
-			cg.jmp_ex<true>(cg.rax);
 			{
 				const Xbyak::Label no_redirect;
 

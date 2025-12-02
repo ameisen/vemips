@@ -386,6 +386,7 @@
     <ClInclude Include="..\..\src\mips\platform\win32\platform_headers_win32.hpp" />
     <ClInclude Include="..\..\src\mips\platform\win32\platform_win32.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit.hpp" />
+    <ClInclude Include="..\..\src\mips\processor\jit\jit1\abi\jit1_abi_win64.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\codegen.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1.hpp" />
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1_branch_common.hpp" />
@@ -431,6 +432,18 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="..\..\src\mips\processor\jit\jit1\jit1_register_assignments.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\..\src\mips\processor\jit\jit1\abi\jit1_abi_win64.s">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Development|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-LLVM|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-ASan|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">true</ExcludedFromBuild>
+      <FileType>Document</FileType>
+    </MASM>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
