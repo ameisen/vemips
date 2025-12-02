@@ -15,4 +15,4 @@ sdk/.build.linux/
 sdk/.build.windows/
 sdk/.vscode/
 vemips_sdk/MipsTest/MipsTest/
-vemips.dmp
+vemips_sdk/MIPS_SDK/
