@@ -1,7 +1,9 @@
 #pragma once
 
+#include <common.hpp>
+
 
 namespace vemips
 {
-	void print_changes();
+	_nothrow void print_changes() noexcept;
 }

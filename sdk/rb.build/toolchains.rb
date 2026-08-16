@@ -1,6 +1,21 @@
 require_relative 'platform.rb'
+require 'open3'
 
 CCACHE_PATH = where_async?('ccache')
+
+def is_microsoft?(path)
+	out, status = Open3.capture2e(path.to_s, "/?")
+	return false unless status.success?
+
+	return out.split('\n')[0].include?("Microsoft")
+end
+
+def is_llvm?(path)
+	out, status = Open3.capture2e(path.to_s, "/?")
+	return false unless status.success?
+
+	return out.split('\n')[0].include?("LLVM")
+end
 
 class KeyValue
 	attr_accessor :key, :value
@@ -91,6 +106,11 @@ module CMake
 		:CMAKE_AR =>                :ARCHIVER,
 		:CMAKE_NM =>                :NM,
 		:CMAKE_RANLIB =>            :RANLIB,
+		:CMAKE_RC =>                :RC,
+		:CMAKE_OBJCOPY =>           :OBJCOPY,
+		:CMAKE_OBJDUMP =>           :OBJDUMP,
+		:CMAKE_READOBJ =>           :READOBJ,
+		:CMAKE_STRIP =>             :STRIP,
 	}.freeze
 
 	TOOLS_ENV_MAP = {
@@ -103,6 +123,11 @@ module CMake
 		:AR =>			:ARCHIVER,
 		:NM =>			:NM,
 		:RANLIB =>	:RANLIB,
+		:RC =>      :RC,
+		:OBJCOPY => :OBJCOPY,
+		:OBJDUMP => :OBJDUMP,
+		:READOBJ => :READOBJ,
+		:STRIP =>   :STRIP,
 	}.freeze
 
 	def self.define(name, value, delimiter: ' ', condition: true)
@@ -129,6 +154,11 @@ module AutoConf
 		:AR =>			:ARCHIVER,
 		:NM =>			:NM,
 		:RANLIB =>	:RANLIB,
+		:RC =>      :RC,
+		:OBJCOPY => :OBJCOPY,
+		:OBJDUMP => :OBJDUMP,
+		:READOBJ => :READOBJ,
+		:STRIP =>   :STRIP,
 	}.freeze
 
 	TOOLS_ENV_MAP = TOOLS_MAP
@@ -180,38 +210,128 @@ def get_add_env_flags(env_var, *tokens)
 	return "#{env} #{escaped}"
 end
 
+def is_windows? = (/cygwin|mswin|mingw|bccwin|wince|emx/ =~ RUBY_PLATFORM) ? true : false
+
+def is_mingw? = (/cygwin|mingw/ =~ RUBY_PLATFORM) ? true : false
+
+CLANG_PATH = where?('clang')
+
+def get_tool(name, host:)
+	where_sys = lambda { |bin|
+		path = where?(bin)
+		is_llvm = bin.start_with?('lld') || bin.start_with?('llvm')
+		if !path.nil? && is_llvm && CLANG_PATH.dirname != path.dirname # TODO : better way to determine this?
+			path = nil
+		end
+		return path
+	}
+
+	names = nil
+
+	for_windows = host && is_windows?
+
+	clang_names = [
+		for_windows ? 'clang-cl' : 'clang',
+	]
+
+	gcc_names = [
+		for_windows ? nil : 'gcc'
+	]
+
+	cc_names = [
+		*clang_names,
+		for_windows ? 'cl' : nil,
+		*gcc_names
+	]
+
+	case name
+		when /^cc$/i
+			names = cc_names
+		when /^c\+\+$/i
+			names = [
+				for_windows ? 'clang-cl' : 'clang++',
+				for_windows ? 'cl' : nil,
+				for_windows ? nil : 'g++'
+			]
+		when /^ld$/i
+			names = [
+				for_windows ? 'lld-link' : 'lld',
+				for_windows ? 'link' : nil,
+				for_windows ? nil : 'ld'
+			]
+		when /^as$/i
+			names = [
+				'llvm-as',
+				*clang_names,
+				for_windows ? nil : 'as',
+				*gcc_names
+			]
+		when /^masm$/i
+			names = [
+				for_windows ? 'llvm-ml64' : 'llvm-as',
+				for_windows ? 'llvm-ml' : nil, # -m64
+				for_windows ? 'ml64' : nil,
+				for_windows ? 'ml' : nil,
+				*clang_names,
+				for_windows ? nil : 'as',
+				*gcc_names
+			]
+		else
+			names = [
+				"llvm-#{name}",
+				name
+			]
+	end
+
+	names.each { |n|
+		next if n.nil?
+
+		n = where_sys[n]
+		return n unless n.nil?
+	}
+	return nil
+end
+
 module ToolchainOptions
 	module LLVM_Binaries
 		def self.gcc_flags? = true
 		def self.msvc_flags? = false
 
-		COMPILER_C = where? 'clang'
-		COMPILER_CXX = where? 'clang++'
-		LINKER = where? 'lld'
-		ASSEMBLER = where? 'clang' #'llvm-as'
-		ASSEMBLER_MASM = where? 'llvm-as'
-		ARCHIVER = where? 'llvm-ar'
-		RANLIB = where? 'llvm-ranlib'
-		NM = where? 'llvm-nm'
-		OBJCOPY = where? 'llvm-objcopy'
-		OBJDUMP = where? 'llvm-objdump'
-		#LIB = 'llvm-lib'
-		RC = where? 'llvm-rc'
-		READOBJ = where? 'llvm-readobj'
-		STRIP = where? 'llvm-strip'
+		COMPILER_C = get_tool('cc', host: false)
+		COMPILER_CXX = get_tool('c++', host: false)
+		LINKER = get_tool('ld', host: false)
+		ASSEMBLER = get_tool('as', host: false) #'llvm-as'
+		ASSEMBLER_MASM = get_tool('masm', host: false)
+		ARCHIVER = get_tool('ar', host: false)
+		RANLIB = get_tool('ranlib', host: false)
+		NM = get_tool('nm', host: false)
+		OBJCOPY = get_tool('objcopy', host: false)
+		OBJDUMP = get_tool('objdump', host: false)
+		#LIB = 'lib', host: false)
+		RC = get_tool('rc', host: false)
+		READOBJ = get_tool('readobj', host: false)
+		STRIP = get_tool('strip', host: false)
 	end
 
 	module LLVM_CL_Binaries
 		def self.gcc_flags? = true
 		def self.msvc_flags? = true
 
-		COMPILER_C = 'clang-cl'
-		COMPILER_CXX = 'clang-cl'
-		LINKER = 'lld-link'
-		ASSEMBLER = 'clang-cl'
-		ASSEMBLER_MASM = 'ml64' #'llvm-ml' #'llvm-ml' #'clang-cl'
-		#ASSEMBLER = 'llvm-ml' #ml64
-		#ASSEMBLER_MASM = 'llvm-ml' #ml64
+		COMPILER_C = get_tool('cc', host: true)
+		COMPILER_CXX = get_tool('c++', host: true)
+		LINKER = get_tool('ld', host: true)
+		ASSEMBLER = get_tool('as', host: true)
+		ASSEMBLER_MASM = get_tool('masm', host: true)
+
+		ARCHIVER = get_tool('lib', host: true)
+		RANLIB = get_tool('ranlib', host: true)
+		NM = get_tool('nm', host: true)
+		OBJCOPY = get_tool('objcopy', host: true)
+		OBJDUMP = get_tool('objdump', host: true)
+		LIB = get_tool('lib', host: true)
+		RC = get_tool('rc', host: true)
+		READOBJ = get_tool('readobj', host: true)
+		STRIP = get_tool('strip', host: true)
 	end
 
 	module Common
@@ -258,8 +378,10 @@ module ToolchainOptions
 			"-O2",
 			"-g0",
 			"-fcolor-diagnostics",
+			"-fdeclspec",
 			"-Wno-user-defined-literals",
 			"-Wno-unused-command-line-argument",
+			*(Options::configuration == "Debug" ? [] : ["-fomit-frame-pointer", "-momit-leaf-frame-pointer"]),
 			*xcc1("-fno-pch-timestamp"),
 		].normalize!
 
@@ -279,7 +401,17 @@ module ToolchainOptions
 
 		CMAKE_FLAGS = LazyArray.new{[
 			*parent::Common::cmake_flags(host: true),
-			Common::conditional(Platform::windows?) { CMake::define('CMAKE_ASM_MASM_FLAGS', ["/nologo", "/quiet", "/Gy"]) },
+			Common::conditional(Platform::windows?) {
+				CMake::define(
+					'CMAKE_ASM_MASM_FLAGS',
+					[
+						"/nologo",
+						"/quiet",
+						LLVM_CL_Binaries::ASSEMBLER_MASM.basename.to_s.include?("64") ? nil : "-m64",
+						(is_microsoft?(LLVM_CL_Binaries::ASSEMBLER_MASM) ? "/Gy" : nil)
+					]
+				)
+			},
 		].normalize!}
 
 		AUTOCONF_FLAGS = LazyArray.new{[
@@ -693,6 +825,13 @@ module Environment
 
 		updated_flags.each { |key, func|
 			puts "'#{key.light_yellow}'#{' ' * (max_key - key.length)} = '#{ENV[key].light_yellow}'"
+		}
+
+		env_mapping.each { |k, v|
+			key = k.to_s
+			next if updated_flags.include? key
+
+			puts "'#{key.to_s.light_red}'#{' ' * (max_key - key.length)} = #{"nil".light_red}"
 		}
 
 		self.current = mod

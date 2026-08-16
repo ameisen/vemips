@@ -12,6 +12,7 @@ set "errorCode="
 for %%x in (%*) do (
 	set "isArg="
 	set "currentArg=%%x"
+	set "currentArgRaw=%%x"
 
 	if defined withinArgs (
 
@@ -35,17 +36,17 @@ for %%x in (%*) do (
 				set /A passArgsCount+=1
 			)^
 			else (
-				>&2 echo Unknown Argument: '%%x'
-				set "errorCode=1"
+				set "passArgsArray[!passArgsCount!]=!currentArgRaw!"
+				set /A passArgsCount+=1
 			)
 		)^
 		else (
-			set "passArgsArray[!passArgsCount!]=!currentArg!"
+			set "passArgsArray[!passArgsCount!]=!currentArgRaw!"
 			set /A passArgsCount+=1
 		)
 	)^
 	else (
-		set "passArgsArray[!passArgsCount!]=!currentArg!"
+		set "passArgsArray[!passArgsCount!]=!currentArgRaw!"
 		set /A passArgsCount+=1
 	)
 )
@@ -87,7 +88,7 @@ else (
 )
 
 if "!passArgsConcat!"=="" (
-	set "rubyFullArgs=%rubyArgs%"
+	set "rubyFullArgs=%rubyArgs% --"
 )^
 else (
 	set "rubyFullArgs=%rubyArgs% -- !passArgsConcat!"

@@ -29,11 +29,11 @@
 [submodule "sdk/libxml2"]
 	path = sdk/libxml2
 	url = https://github.com/GNOME/libxml2.git
-	branch = v2.14.3
+	branch = v2.15.1
 [submodule "sdk/zlib-ng"]
 	path = sdk/zlib-ng
 	url = https://github.com/zlib-ng/zlib-ng.git
-	branch = 2.2.4
+	branch = 2.2.5
 [submodule "ext/xbyak"]
 	path = ext/xbyak
 	url = https://github.com/vemips/xbyak.git

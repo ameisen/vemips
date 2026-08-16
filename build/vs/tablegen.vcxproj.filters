@@ -16,12 +16,6 @@
     <Filter Include="mips\coprocessor\coprocessor1">
       <UniqueIdentifier>{5665ac4d-b651-4a4b-8913-f663cca788f3}</UniqueIdentifier>
     </Filter>
-    <Filter Include="platform">
-      <UniqueIdentifier>{7273a660-31aa-49be-8d6b-5b8a833762a7}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="platform\win32">
-      <UniqueIdentifier>{1875eae5-5163-4b50-b46f-bc04ba613ae4}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\mips\instructions\coprocessor1_inst.cpp">

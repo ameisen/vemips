@@ -1,7 +1,10 @@
 #pragma once
-/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Jul 21 2025 18:53:48) */
+/* WARNING: THIS IS AN AUTO-GENERATED FILE ('D:\Projects\vemips\src\tablegen\writers.cpp', Aug 16 2026 16:22:11) */
 // ReSharper disable CppClangTidyClangDiagnosticUnreachableCodeReturn IdentifierTypo CommentTypo
 #include "mips/mips_common.hpp"
+#include "mips/instructions/instructions_common.hpp"
+#include <array>
+#include <functional>
 
 _define_segment(vemips_itable, read)
 
@@ -17,190 +20,207 @@ namespace mips {
 #else
 #	define VEMIPS_ITABLE_IMPORT /* __declspec(dllimport) */ extern
 #endif
+/*
+// Workaround for Visual C++ not properly handling templated noexcept when the declaration 
+// uses a bool for noexcept.
+*/
+#if !__clang__ && _MSC_VER
+#	define VEMIPS_TEMPLATED_NOEXCEPT(...)
+#else
+#	define VEMIPS_TEMPLATED_NOEXCEPT(...) noexcept(__VA_ARGS__)
+#endif
+
 
 namespace mips::instructions {
-	namespace COP1_ABS_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_ADD_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_BC1EQZ_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_BC1NEZ_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CEIL_L_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CEIL_W_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CFC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CLASS_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CMP_condn_d_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CMP_condn_s_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CTC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CVT_D_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CVT_L_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CVT_S_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_CVT_W_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_DIV_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_FLOOR_L_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_FLOOR_W_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_LDC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_LWC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MADDF_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MAX_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MAXA_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MFC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MFHC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MIN_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MINA_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MOV_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MSUBF_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MTC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MTHC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_MUL_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_NEG_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_RECIP_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_RINT_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_ROUND_L_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_ROUND_W_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_RSQRT_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_SDC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_SEL_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_SELEQZ_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_SELNEZ_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_SQRT_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_SUB_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_SWC1_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_TRUNC_L_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace COP1_TRUNC_W_NS { template <typename format_t> VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ADD_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ADDIU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ADDIUPC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ADDU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ALIGN_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ALUIPC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_AND_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ANDI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_AUI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_AUIPC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BAL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BALC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BEQ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BEQZC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BGEZ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BGTZ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BGTZALC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BGTZC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BITSWAP_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BLEZ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BLEZALC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BLEZC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BLTZ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BNE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BNEZC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_BREAK_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_CACHE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_CLO_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_CLZ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_DIV_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_DIVU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_EHB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ERET_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ERETNC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_EXT_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_GINVI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_INS_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_J_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_JAL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_JALR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_JALR_HB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_JIALC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_JIC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_JR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_JR_HB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LBE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LBU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LBUE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LH_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LHE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LHU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LHUE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LLE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LLWP_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LLWPE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LSA_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LW_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LWE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_LWPC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MFC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MFC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MFHC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MFHC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MOD_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MODU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MOVE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MTC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MTC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MTHC0_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MTHC2_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MUH_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MUHU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MUL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_MULU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_NAL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_NOP_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_NOR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_OR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ORI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_PAUSE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_POP06_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_POP07_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_POP10_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_POP26_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_POP27_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_POP30_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_PREF_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_PREFE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_RDHWR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ROTR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_ROTRV_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SBE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SCE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SCWP_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SCWPE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SDBBP_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SEB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SEH_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SELEQZ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SELNEZ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SH_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SHE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SIGRIE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SLL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SLLV_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SLT_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SLTI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SLTIU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SLTU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SRA_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SRAV_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SRL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SRLV_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SSNOP_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SUB_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SUBU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SW_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SWE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SYNC_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SYNCI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_SYSCALL_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_TEQ_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_TGE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_TGEU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_TLT_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_TLTU_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_TNE_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_WSBH_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_XOR_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
-	namespace PROC_XORI_NS { VEMIPS_ITABLE_IMPORT uint64 Execute(instruction_t, mips::processor & __restrict); }
+	static constexpr size_t num_instructions = 220;
+
+	namespace COP1_ABS_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_ADD_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_BC1EQZ_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_BC1NEZ_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CEIL_L_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CEIL_W_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CFC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CLASS_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_CMP_condn_d_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CMP_condn_s_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CTC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CVT_D_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CVT_L_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CVT_S_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_CVT_W_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_DIV_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_FLOOR_L_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_FLOOR_W_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_LDC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_LWC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_MADDF_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_MAX_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_MAXA_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_MFC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_MFHC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_MIN_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_MINA_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_MOV_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_MSUBF_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_MTC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_MTHC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_MUL_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_NEG_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_RECIP_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_RINT_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_ROUND_L_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_ROUND_W_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_RSQRT_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_SDC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_SEL_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_SELEQZ_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_SELNEZ_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) VEMIPS_TEMPLATED_NOEXCEPT(true); }
+	namespace COP1_SQRT_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_SUB_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_SWC1_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_TRUNC_L_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace COP1_TRUNC_W_NS { template <typename format_t> VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_ADD_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_ADDIU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ADDIUPC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ADDU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ALIGN_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ALUIPC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_AND_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ANDI_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_AUI_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_AUIPC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_BAL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BALC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BEQ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BEQZC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BGEZ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BGTZ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BGTZALC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BGTZC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BITSWAP_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_BLEZ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BLEZALC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BLEZC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BLTZ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BNE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BNEZC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_BREAK_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_CACHE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_CLO_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_CLZ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_DIV_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_DIVU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_EHB_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ERET_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_ERETNC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_EXT_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_GINVI_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_INS_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_J_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_JAL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_JALR_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_JALR_HB_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_JIALC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_JIC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_JR_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_JR_HB_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LB_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LBE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_LBU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LBUE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_LH_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LHE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_LHU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LHUE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_LL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LLE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_LLWP_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LLWPE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_LSA_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_LW_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_LWE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_LWPC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_MFC0_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MFC2_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MFHC0_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MFHC2_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MOD_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_MODU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_MOVE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_MTC0_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MTC2_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MTHC0_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MTHC2_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_MUH_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_MUHU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_MUL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_MULU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_NAL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_NOP_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_NOR_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_OR_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ORI_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_PAUSE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_POP06_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_POP07_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_POP10_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_POP26_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_POP27_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_POP30_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_PREF_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_PREFE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_RDHWR_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_ROTR_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_ROTRV_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SB_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_SBE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_SC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_SCE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_SCWP_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_SCWPE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_SDBBP_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_SEB_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SEH_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SELEQZ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SELNEZ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SH_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_SHE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_SIGRIE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_SLL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SLLV_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SLT_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SLTI_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SLTIU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SLTU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SRA_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SRAV_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SRL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SRLV_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SSNOP_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SUB_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_SUBU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SW_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_SWE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_SYNC_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SYNCI_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_SYSCALL_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_TEQ_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_TGE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_TGEU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_TLT_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_TLTU_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_TNE_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict); }
+	namespace PROC_WAIT_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT _noreturn_pre void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) _noreturn_post; }
+	namespace PROC_WSBH_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_XOR_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+	namespace PROC_XORI_NS { VEMIPS_JIT_ABI VEMIPS_ITABLE_IMPORT void VEMIPS_JIT_ABI_INFIX Execute(instruction_t, processor& __restrict) noexcept; }
+
+	extern const std::array<const std::reference_wrapper<const InstructionInfo>, 220> AllInstructions;
+
+	extern const std::array<const instructionexec_t, 220> AllInstructionsProcs;
 }
 
 namespace mips::instructions {
@@ -220,16 +240,16 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CMP_condn_d_v; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CMP_condn_s_v; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CTC1_v; 
-	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_D_f; 
-	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_D_d; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_D_w; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_D_l; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_D_f; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_D_d; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_L_f; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_L_d; 
-	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_S_f; 
-	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_S_d; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_S_w; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_S_l; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_S_f; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_S_d; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_W_f; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_CVT_W_d; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_COP1_DIV_f; 
@@ -420,15 +440,37 @@ namespace mips::instructions {
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_TLT; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_TLTU; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_TNE; 
+	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_WAIT; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_WSBH; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_XOR; 
 	_segment(vemips_itable) VEMIPS_ITABLE_IMPORT const InstructionInfo StaticProc_PROC_XORI; 
 }
 
 namespace mips::instructions {
-	const InstructionInfo * get_instruction (instruction_t i);
+	_nothrow const InstructionInfo* get_instruction(instruction_t instruction) noexcept;
 
-	bool execute_instruction (instruction_t i, mips::processor & __restrict p);
+	bool execute_instruction(instruction_t instruction, processor& __restrict processor);
+
+	template <bool AssumeSafe = false, bool AlternateImplementation = false>
+	std::conditional_t<AssumeSafe, void, bool> execute_instruction(
+		uint32 instruction_index,
+		instruction_t instruction,
+		processor& __restrict processor
+	);
+
+	_nothrow uint32 get_instruction_index(instruction_t instruction) noexcept;
+
+	static constexpr _nothrow _forceinline uint32 get_instruction_index(
+		const instructionexec_t instruction_proc_ptr
+	) {
+		for (uint32 i = 0; i < uint32(std::size(AllInstructions)); ++i) {
+			if (instruction_proc_ptr == AllInstructions[i].get().Proc) [[likely]] {
+				return i;
+			}
+		}
+
+		xunreachable("Unknown Instruction");
+	}
 }
 
 #	undef VEMIPS_ITABLE_IMPORT

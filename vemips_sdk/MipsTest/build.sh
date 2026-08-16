@@ -17,15 +17,28 @@ COMMON_FLAGS=( \
 	-fexceptions \
 	-fcxx-exceptions \
 	-Wno-assume \
+	-fomit-frame-pointer \
+	-momit-leaf-frame-pointer
 )
 
 DEBUG_FLAGS=( \
 	"${COMMON_FLAGS[@]}" \
 	-g3 \
-	-Og \
+	-O0 \
 )
 	
-RELEASE_FLAGS=( \
+RELEASE_HOST_FLAGS=( \
+	"${COMMON_FLAGS[@]}" \
+	'-Wl,-LARGEADDRESSAWARE' \
+	'-Wl,-LTCG' \
+	'-Wl,-OPT:ICF=4' \
+	'-Wl,-OPT:REF' \
+	-flto=full \
+)
+
+# -fno-optimize-sibling-calls \
+# -fno-omit-frame-pointer \
+RELEASE_TARGET_FLAGS=( \
 	"${COMMON_FLAGS[@]}" \
 	-Wl,--gc-sections \
 	-Wl,--icf=all \
@@ -59,32 +72,42 @@ any_job=false
 
 get_target_host() {
 	compiler="clang++"
-	flags+=( "${RELEASE_FLAGS[@]}" )
-	flags+=( "${HOST_FLAGS[@]}" )
-	flags+=( "${HOST_RELEASE_FLAGS[@]}" )
+	flags+=( \
+		"${RELEASE_HOST_FLAGS[@]}" \
+		"${HOST_FLAGS[@]}" \
+		"${HOST_RELEASE_FLAGS[@]}" \
+	)
 	ext=".exe"
 }
 
 get_target_host_debug() {
 	compiler="clang++"
-	flags+=( "${DEBUG_FLAGS[@]}" )
-	flags+=( "${HOST_FLAGS[@]}" )
+	flags+=( \
+		"${DEBUG_FLAGS[@]}" \
+		"${HOST_FLAGS[@]}" \
+		"-fsanitize=undefined" \
+		"-fsanitize=address" \
+	)
 	ext="D.exe"
 }
 
 get_target_target() {
 	compiler="$VEMIPS_CXX"
-	flags+=( "${RELEASE_FLAGS[@]}" )
-	flags+=( "${TARGET_FLAGS[@]}" )
-	flags+=( "${TARGET_RELEASE_FLAGS[@]}" )
-	ext=".bin"
+	flags+=( \
+		"${RELEASE_TARGET_FLAGS[@]}" \
+		"${TARGET_FLAGS[@]}" \
+		"${TARGET_RELEASE_FLAGS[@]}" \
+	)
+	ext=".vebin"
 }
 
 get_target_target_debug() {
 	compiler="$VEMIPS_CXX"
-	flags+=( "${DEBUG_FLAGS[@]}" )
-	flags+=( "${TARGET_FLAGS[@]}" )
-	ext="D.bin"
+	flags+=( \
+		"${DEBUG_FLAGS[@]}" \
+		"${TARGET_FLAGS[@]}" \
+	)
+	ext="D.vebin"
 }
 
 exec_job() {

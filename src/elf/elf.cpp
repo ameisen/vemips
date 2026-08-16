@@ -2,7 +2,10 @@
 #include "elf.hpp"
 
 #include <algorithm>
-#include <cassert>
+#include <exception>
+#include <limits>
+#include <utility>
+
 
 /* For details about the ELF format: */
 /* http://www.sco.com/developers/gabi/latest/ch5.pheader.html */
@@ -13,28 +16,26 @@
 #	define _packed_struct struct __attribute__((packed))
 #endif
 
-#define _unused(var) (void)(var)
-
-namespace elf {
+namespace mips::elf {
 	namespace {
-		enum class elf_class : uint8_t {
+		enum class elf_class : uint8 {
 			ELF32 = 1,
 			ELF64 = 2,
 		};
 
-		enum class elf_endian : uint8_t {
+		enum class elf_endian : uint8 {
 			Little = 1,
 			Big = 2,
 		};
 
-		enum class elf_type : uint16_t {
+		enum class elf_type : uint16 {
 			Relocatable = 1,
 			Executable = 2,
 			Shared = 3,
 			Core = 4,
 		};
 
-		enum class program_header_type : uint32_t {
+		enum class program_header_type : uint32 {
 			Null = 0,										// ignore
 			Load = 1,										// this should be loaded
 			DynamicLink = 2,						// DynamicLink linking information
@@ -50,7 +51,7 @@ namespace elf {
 			GNU_EH_FRAME = 0x6474e550,
 		};
 
-		enum class program_header_access_bits : uint32_t {
+		enum class program_header_access_bits : uint32 {
 			None = 0,
 			Execute = 1,
 			Write = 2,
@@ -59,19 +60,9 @@ namespace elf {
 			MaskProc = 0xF0000000,
 		};
 
-		static inline program_header_access_bits operator | (program_header_access_bits a, program_header_access_bits b)
-		{
-			using underlying_t = std::underlying_type_t<program_header_access_bits>;
-			return program_header_access_bits(underlying_t(a) | underlying_t(b));
-		}
+		MAKE_BITFLAG_ENUM(program_header_access_bits);
 
-		static inline program_header_access_bits operator & (program_header_access_bits a, program_header_access_bits b)
-		{
-			using underlying_t = std::underlying_type_t<program_header_access_bits>;
-			return program_header_access_bits(underlying_t(a) & underlying_t(b));
-		}
-
-		enum class section_type : uint32_t {
+		enum class section_type : uint32 {
 			Null = 0,											// ignore
 			ProgramBits = 1,							// Program-defined contents
 			SymbolTable = 2,							// Symbol Table
@@ -99,22 +90,24 @@ namespace elf {
 			MIPS_ABIFlags = 0x7000002A,
 		};
 
-		enum class section_flags : uint32_t {
+		enum class section_flags : uint32 {
 			Write = 1,
 			Alloc = 2,
 			ExecInstr = 4,
 			Rela_LivePatch = 0x00100000,
 			MaskProc = 0xF0000000,
 		};
+
+		MAKE_BITFLAG_ENUM(section_flags);
 	}
 
-	static constinit const uint32_t magic_number = 0X464C457F;
+	static constexpr const uint32 magic_number = 0X464C457F;
 
 	binary::binary(const std::span<char> binary_data) : raw_data_stream_(binary_data) {
-		data_stream stream_data = { binary_data };
+		data_stream stream_data { binary_data };
 
 		// validate magic number.
-		if _unlikely(stream_data.pop<uint32_t>() != magic_number) [[unlikely]] {
+		if _unlikely(stream_data.pop<uint32>() != magic_number) [[unlikely]] {
 			throw std::runtime_error("ELF Binary magic number mismatch");
 		}
 
@@ -123,10 +116,10 @@ namespace elf {
 		switch (stream_data.pop<elf_class>()) {
 			case elf_class::ELF32:
 				[[likely]]
-				read_binary<uint32_t>(stream_data);
+				read_binary<uint32>(stream_data);
 				break;
 			case elf_class::ELF64:
-				read_binary<uint64_t>(stream_data);
+				read_binary<uint64>(stream_data);
 				break;
 			default:
 				[[unlikely]]
@@ -136,17 +129,17 @@ namespace elf {
 
 	template <typename PtrType> struct program_header;
 
-	template <> _packed_struct program_header<uint32_t> {
-		using elfptr_t = uint32;
+	template <> _packed_struct program_header<uint32> {
+		using elfptr = uint32;
 
 		program_header_type Type;
-		elfptr_t Offset;
-		elfptr_t VirtualAddr;
-		elfptr_t PhysicalAddr;
-		elfptr_t FileSize;
-		elfptr_t MemorySize;
+		elfptr Offset;
+		elfptr VirtualAddr;
+		elfptr PhysicalAddr;
+		elfptr FileSize;
+		elfptr MemorySize;
 		program_header_access_bits Flags;
-		elfptr_t MemoryAlign;
+		elfptr MemoryAlign;
 
 		void validate() const {
 			if _unlikely(MemoryAlign > 1 && ((VirtualAddr % MemoryAlign) != (PhysicalAddr % MemoryAlign))) [[unlikely]] {
@@ -155,17 +148,17 @@ namespace elf {
 		}
 	};
 
-	template <> _packed_struct program_header<uint64_t> {
-		using elfptr_t = uint64;
+	template <> _packed_struct program_header<uint64> {
+		using elfptr = uint64;
 
 		program_header_type Type;
 		program_header_access_bits Flags;
-		elfptr_t Offset;
-		elfptr_t VirtualAddr;
-		elfptr_t PhysicalAddr;
-		elfptr_t FileSize;
-		elfptr_t MemorySize;
-		elfptr_t MemoryAlign;
+		elfptr Offset;
+		elfptr VirtualAddr;
+		elfptr PhysicalAddr;
+		elfptr FileSize;
+		elfptr MemorySize;
+		elfptr MemoryAlign;
 
 		void validate() const {
 			if _unlikely(MemoryAlign > 1 && ((VirtualAddr % MemoryAlign) != (PhysicalAddr % MemoryAlign))) [[unlikely]] {
@@ -174,77 +167,68 @@ namespace elf {
 		}
 	};
 
-	template <typename elfptr_t> _packed_struct SectionHeader {
-		uint32_t NameOffset;
+	template <typename elfptr> _packed_struct SectionHeader {
+		uint32 NameOffset;
 		section_type Type;
 		section_flags Flags;
-		elfptr_t Address;
-		elfptr_t Offset;
-		elfptr_t Size;
-		uint32_t Link;
-		uint32_t Info;
-		elfptr_t AddrAlign;
-		elfptr_t EntSize;
+		elfptr Address;
+		elfptr Offset;
+		elfptr Size;
+		uint32 Link;
+		uint32 Info;
+		elfptr AddrAlign;
+		elfptr EntSize;
 	};
 
 	template <typename PtrType>
 	void binary::read_binary(data_stream & __restrict stream_data) {
-		using elfptr_t = PtrType;
+		using elfptr = PtrType;
 
 		if _unlikely(stream_data.pop<elf_endian>() != elf_endian::Little) [[unlikely]] {
 			throw std::runtime_error("Only Little Endian ELF binaries supported");
 		}
 
-		const uint8_t ElfIdenVersion = stream_data.pop<uint8_t>();
-		_unused(ElfIdenVersion);
-		const uint8_t ABI = stream_data.pop<uint8_t>();
-		_unused(ABI);
-		const uint8_t ABIVersion = stream_data.pop<uint8_t>();
-		_unused(ABIVersion);
+		[[maybe_unused]] const uint8 ElfIdenVersion = stream_data.pop<uint8>();
+		[[maybe_unused]] const uint8 ABI = stream_data.pop<uint8>();
+		[[maybe_unused]] const uint8 ABIVersion = stream_data.pop<uint8>();
 		stream_data.skip(7);
 
-		const elf_type ObjectType = stream_data.pop<elf_type>();
-		_unused(ObjectType);
+		[[maybe_unused]] const elf_type ObjectType = stream_data.pop<elf_type>();
 
 		// We only support a single ISA, so a full enum is unnecessary.
-		static const uint16_t MIPS_ISA = 0x08;
-		if _unlikely(stream_data.pop<uint16_t>() != MIPS_ISA) [[unlikely]] {
+		static constexpr const uint16 MIPS_ISA = 0x08;
+		if _unlikely(stream_data.pop<uint16>() != MIPS_ISA) [[unlikely]] {
 			throw std::runtime_error("Only MIPS binaries are supported");
 		}
 
-		const uint32_t ElfVersion = stream_data.pop<uint32_t>();
-		_unused(ElfVersion);
+		[[maybe_unused]] const uint32 ElfVersion = stream_data.pop<uint32>();
 
-		const elfptr_t entryOffset = stream_data.pop<elfptr_t>();
-		if _unlikely(entryOffset > 0xFFFFFFFF) [[unlikely]] {
+		const elfptr entryOffset = stream_data.pop<elfptr>();
+		if _unlikely(entryOffset > std::numeric_limits<uptr_guest>::max()) [[unlikely]] {
 			throw std::runtime_error("ELF Entry Address out of range");
 		}
-		entry_address_ = uint32_t(entryOffset);
+		entry_address_ = uptr_guest(entryOffset);
 
-		const elfptr_t programHeaderOffset = stream_data.pop<elfptr_t>();
-		const elfptr_t sectionHeaderOffset = stream_data.pop<elfptr_t>();
-		_unused(sectionHeaderOffset);
+		const elfptr programHeaderOffset = stream_data.pop<elfptr>();
+		[[maybe_unused]] const elfptr sectionHeaderOffset = stream_data.pop<elfptr>();
 
-		const uint32_t Flags = stream_data.pop<uint32_t>();
-		_unused(Flags);
-		const uint16_t HeaderSize = stream_data.pop<uint16_t>();
-		_unused(HeaderSize);
-		const uint16_t ProgramHeaderSize = stream_data.pop<uint16_t>();
-		const uint16_t ProgramHeaderEntries = stream_data.pop<uint16_t>();
-		const uint16_t SectionHeaderSize = stream_data.pop<uint16_t>();
-		_unused(SectionHeaderSize);
-		const uint16_t SectionHeaderEntries = stream_data.pop<uint16_t>();
-		const uint16_t SectionHeaderNamesIndex = stream_data.pop<uint16_t>();
+		[[maybe_unused]] const uint32 Flags = stream_data.pop<uint32>();
+		[[maybe_unused]] const uint16 HeaderSize = stream_data.pop<uint16>();
+		const uint16 ProgramHeaderSize = stream_data.pop<uint16>();
+		const uint16 ProgramHeaderEntries = stream_data.pop<uint16>();
+		[[maybe_unused]] const uint16 SectionHeaderSize = stream_data.pop<uint16>();
+		const uint16 SectionHeaderEntries = stream_data.pop<uint16>();
+		const uint16 SectionHeaderNamesIndex = stream_data.pop<uint16>();
 		if (SectionHeaderNamesIndex >= SectionHeaderEntries) {
 			throw std::runtime_error("Section Header Names Index out of range");
 		}
 
 		// Validate that the entry point is in-range. The program may crash if it's near the end, but that's Not Our Problem (tm)
-		if _unlikely(entryOffset >= 0x100000000ull) [[unlikely]] {
+		if _unlikely(entryOffset >= 0x1'0000'0000ull) [[unlikely]] {
 			throw std::runtime_error("ELF offsets out of range (32-bit only)");
 		}
 
-		sections_.reserve(size_t(ProgramHeaderEntries + SectionHeaderEntries));
+		sections_.reserve(usize(ProgramHeaderEntries + SectionHeaderEntries));
 
 		xassert(programHeaderOffset <= std::numeric_limits<decltype(program_headers_)>::max());
 		program_headers_ = uint32(programHeaderOffset);
@@ -253,9 +237,9 @@ namespace elf {
 
 		// Now we need to parse the program header table. 32-bit and 64-bit for some reason have different types.
 		{
-			using Header = program_header<elfptr_t>;
-			size_t curEntryOffset = programHeaderOffset;
-			for (size_t entry = 0; entry < ProgramHeaderEntries; ++entry) {
+			using Header = program_header<elfptr>;
+			usize curEntryOffset = programHeaderOffset;
+			for (usize entry = 0; entry < ProgramHeaderEntries; ++entry) {
 				const Header &programHeader = raw_data_stream_.offset<Header>(curEntryOffset);
 				programHeader.validate();
 
@@ -272,7 +256,7 @@ namespace elf {
 				}
 
 				if (programHeader.Type == program_header_type::ProgramHeader) {
-					program_headers_ = uint32_t(programHeader.VirtualAddr);
+					program_headers_ = uptr_guest(programHeader.VirtualAddr);
 				}
 
 				if (programHeader.MemorySize == 0) {
@@ -281,104 +265,106 @@ namespace elf {
 
 				// Make sure that the size is valid.
 				// we don't care about the result, only that it succeeds.
-				const auto _ = raw_data_stream_.offset<char>(programHeader.Offset + (programHeader.FileSize - 1));
-				_unused(_);
+				[[maybe_unused]] const auto _ = raw_data_stream_.offset<char>(programHeader.Offset + (programHeader.FileSize - 1));
 				if _unlikely((programHeader.VirtualAddr + programHeader.MemorySize) >= 0x100000000ull) [[unlikely]] {
 					throw std::runtime_error("ELF Program Header out of virtual address range");
 				}
 
-				xassert(programHeader.Offset <= std::numeric_limits<uint32>::max());  // NOLINT(clang-diagnostic-assume)
-				xassert(programHeader.VirtualAddr <= std::numeric_limits<uint32>::max()); // NOLINT(clang-diagnostic-assume)
-				xassert(programHeader.FileSize <= std::numeric_limits<uint32>::max()); // NOLINT(clang-diagnostic-assume)
-				xassert(programHeader.MemorySize <= std::numeric_limits<uint32>::max()); // NOLINT(clang-diagnostic-assume)
+				xassert(programHeader.Offset <= std::numeric_limits<uptr_guest>::max());  // NOLINT(clang-diagnostic-assume)
+				xassert(programHeader.VirtualAddr <= std::numeric_limits<uptr_guest>::max()); // NOLINT(clang-diagnostic-assume)
+				xassert(programHeader.FileSize <= std::numeric_limits<usize_guest>::max()); // NOLINT(clang-diagnostic-assume)
+				xassert(programHeader.MemorySize <= std::numeric_limits<usize_guest>::max()); // NOLINT(clang-diagnostic-assume)
 				 
 				sections_.push_back(
 					{
 						.name = "",
-						.file_extent = { uint32(programHeader.Offset), uint32(std::min(programHeader.FileSize, programHeader.MemorySize)) },
-						.memory_extent = { uint32_t(programHeader.VirtualAddr), uint32_t(programHeader.MemorySize) },
-						.executable = (programHeader.Flags & program_header_access_bits::Execute) != program_header_access_bits::None
+						.file_extent = { uptr_guest(programHeader.Offset), usize_guest(std::min(programHeader.FileSize, programHeader.MemorySize)) },
+						.memory_extent = { uptr_guest(programHeader.VirtualAddr), usize_guest(programHeader.MemorySize) },
+						.executable = (programHeader.Flags & program_header_access_bits::Execute) != program_header_access_bits::None,
 					}
 				);
 			}
 		}
 
 		// And now we need to parse the section table.
-		//const size_t StringSectionOffset = (SectionHeaderSize * SectionHeaderNamesIndex) + sectionHeaderOffset;
-		//const SectionHeader<elfptr_t> &stringSectionHeader = m_RawDataStream.offset<SectionHeader<elfptr_t>>(StringSectionOffset);
-		//{
-		//	using Header = SectionHeader<elfptr_t>;
-		//	size_t curEntryOffset = sectionHeaderOffset;
-		//	for (size_t entry = 0; entry < SectionHeaderEntries; ++entry)
-		//	{
-		//		const Header &sectionHeader = m_RawDataStream.offset<Header>(curEntryOffset);
-		//
-		//		curEntryOffset += SectionHeaderSize;
-		//
-		//		// Read Section Name.
-		//		std::string sectionName;
-		//		sectionName.reserve(16);
-		//		size_t curNameOffset = stringSectionHeader.Offset + sectionHeader.NameOffset;
-		//		char curChar;
-		//		while ((curChar = m_RawDataStream.offset<char>(curNameOffset++)) != '\0')
-		//		{
-		//			sectionName += curChar;
-		//		}
-		//
-		//		switch (sectionHeader.Type)
-		//		{
-		//			case section_type::Null:
-		//			case section_type::Note:
-		//			case section_type::SharedLib:
-		//				continue; // ignore
-		//			default: break;
-		//		}
-		//
-		//		if (sectionHeader.Size == 0)
-		//		{
-		//			continue;
-		//		}
-		//
-		//		if (uint32_t(sectionHeader.Flags) == 0)
-		//		{
-		//			continue;
-		//		}
-		//		if (uint32_t(sectionHeader.Flags) > (uint32_t(section_flags::Write) | uint32_t(section_flags::Alloc) | uint32_t(section_flags::ExecInstr)))
-		//		{
-		//			continue;
-		//		}
-		//
-		//		if (sectionHeader.Type != section_type::NoBits)
-		//		{
-		//			// Make sure that the size is valid.
-		//			m_RawDataStream.offset<char>(sectionHeader.Offset + (sectionHeader.Size - 1));
-		//		}
-		//		if ((sectionHeader.Address + sectionHeader.Size) >= 0x100000000ull)
-		//		{
-		//			throw std::runtime_error("ELF Section Header out of virtual address range");
-		//		}
-		//
-		//		if (sectionName == ".reginfo" || sectionName == ".MIPS.abiflags")
-		//		{
-		//			continue;
-		//		}
-		//
-		//		Section section = {
-		//			sectionName,
-		//			(uint32)sectionHeader.Offset,
-		//			uint32((sectionHeader.Type == section_type::NoBits) ? 0 : sectionHeader.Size),
-		//			uint32_t(sectionHeader.Address),
-		//			uint32_t(sectionHeader.Size),
-		//			(uint32_t(sectionHeader.Flags) & uint32(section_flags::ExecInstr)) != 0
-		//		};
-		//		m_Sections.emplace_back(section);
-		//
-		//		if (sectionName.length())
-		//		{
-		//			m_NamedSections[sectionName] = &m_Sections.back();
-		//		}
-		//	}
-		//}
+		const usize StringSectionOffset = (SectionHeaderSize * SectionHeaderNamesIndex) + sectionHeaderOffset;
+		const SectionHeader<elfptr> &stringSectionHeader = raw_data_stream_.offset<SectionHeader<elfptr>>(StringSectionOffset);
+		{
+			using Header = SectionHeader<elfptr>;
+			usize curEntryOffset = sectionHeaderOffset;
+			for (usize entry = 0; entry < SectionHeaderEntries; ++entry)
+			{
+				const Header &sectionHeader = raw_data_stream_.offset<Header>(curEntryOffset);
+		
+				curEntryOffset += SectionHeaderSize;
+		
+				// Read Section Name.
+				std::string sectionName;
+				sectionName.reserve(16);
+				usize curNameOffset = stringSectionHeader.Offset + sectionHeader.NameOffset;
+				char curChar;
+				while ((curChar = raw_data_stream_.offset<char>(curNameOffset++)) != '\0')
+				{
+					sectionName += curChar;
+				}
+		
+				switch (sectionHeader.Type)
+				{
+					case section_type::Null:
+					case section_type::Note:
+					case section_type::SharedLib:
+						continue; // ignore
+					default: break;
+				}
+		
+				if (sectionHeader.Size == 0)
+				{
+					continue;
+				}
+		
+				if (uint32(sectionHeader.Flags) == 0)
+				{
+					continue;
+				}
+				if (uint32(sectionHeader.Flags) > (uint32(section_flags::Write) | uint32(section_flags::Alloc) | uint32(section_flags::ExecInstr)))
+				{
+					continue;
+				}
+		
+				if (sectionHeader.Type != section_type::NoBits)
+				{
+					// Make sure that the size is valid.
+					std::ignore = raw_data_stream_.offset<char>(sectionHeader.Offset + (sectionHeader.Size - 1));
+				}
+				if ((sectionHeader.Address + sectionHeader.Size) >= 0x1'0000'0000ull)
+				{
+					throw std::runtime_error("ELF Section Header out of virtual address range");
+				}
+		
+				if (
+					sectionName == ".reginfo" ||
+					sectionName == ".MIPS.abiflags"
+				)
+				{
+					continue;
+				}
+
+				if (sectionName != ".bss")
+				{
+					continue;
+				}
+
+				sections_.push_back(
+					{
+						.name = sectionName,
+						.file_extent = { 0, 0 },
+						.memory_extent = { uptr_guest(sectionHeader.Address), usize_guest(sectionHeader.Size) },
+						.executable = (sectionHeader.Flags & section_flags::ExecInstr) != section_flags{},
+						.zero_init = sectionName == ".bss"
+					}
+				);
+			}
+		}
 
 		std::stable_sort(sections_.begin(), sections_.end());
 	}

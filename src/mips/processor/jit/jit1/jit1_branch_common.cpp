@@ -2,11 +2,123 @@
 #include "jit1_branch_common.hpp"
 
 #include "codegen.hpp"
+#include "jit1.hpp"
 #include "processor/processor.hpp"
+
+#include <cstddef>
+#include <utility>
+
+#include "global_state.hpp"
+
+#if _MSC_VER
+#	pragma intrinsic(_ReturnAddress)
+#	pragma intrinsic(_AddressOfReturnAddress)
+#endif
+// __builtin_frame_address does not work consistently
 
 
 namespace mips
 {
+	namespace
+	{
+		static constexpr usize max_full_jump_patch_size = 0x100;
+		static constexpr usize expected_jump_patch_size = 12;
+
+		#if !_MSC_VER
+		[[nodiscard]]
+		#endif
+		VEMIPS_JIT_ABI static _nothrow
+		#if _MSC_VER
+		void
+		#else
+		uptr
+		#endif
+		VEMIPS_JIT_ABI_INFIX get_and_patch_instruction(
+			const uint16 patch_index
+		)
+		{
+			// TODO : make sure it isn't significantly faster overall to pass the JIT or chunk pointer.
+			auto* const jit = reinterpret_cast<jit1*>(global_state::jit::get_current());
+			xassert(jit != nullptr);
+
+			#if __GNUC__ || __clang__
+			void* const return_address = __builtin_extract_return_addr(__builtin_return_address(0));
+			#elif _MSC_VER
+			void* const return_address = _ReturnAddress();
+			#else
+			#	error unimplemented platform
+			#endif
+
+			const auto* chunk = jit->get_chunk_by_pointer(uptr_cast(return_address));
+			xassert(chunk != nullptr);
+
+			const auto& patch = chunk->patches[patch_index];
+
+			const uptr_guest target_address = patch.target;
+			const uptr patch_address = patch.base_address;
+
+			if (patch.set_pc)
+			{
+				jit->get_processor().set_program_counter(target_address);
+			}
+
+			const jit1::jit_instructionexec_t destination_address = jit->get_instruction(target_address);
+
+			xassert(destination_address != nullptr);
+
+			//#pragma message("validate that this is optimal over `patch + 2`, `patch + 10`, etc")
+			// TODO : Use a new, temporary codegen to do this.
+			/*
+			** movabs rax, ADDRESS
+			** jmp rax
+			*/
+
+			static constexpr uint16 patch_prefix = 0xB848;
+			// static constexpr uint16 patch_suffix = 0xE0FF;
+
+			uint8* const write_target = reinterpret_cast<uint8*>(patch_address);
+
+			Jit1_CodeGen temp_cg0 { *jit, write_target, max_full_jump_patch_size};
+			temp_cg0.dw(patch_prefix);                        // movabs rax, ...
+			temp_cg0.dq(uptr_cast(destination_address)); // address
+			temp_cg0.jmp(temp_cg0.rax);
+			const usize patch_length = temp_cg0.getSize();
+			xassert(patch_length == expected_jump_patch_size);
+
+			{
+				std::array<uint8, max_full_jump_patch_size> temporary_buffer;
+				Jit1_CodeGen temp_cg1{ *jit, temporary_buffer.data(), temporary_buffer.size() };
+
+				const usize required_patch_size = temp_cg1.intrinsic_write_patch_jump_patcher(
+					target_address,
+					reinterpret_cast<const void* const>(patch.base_address),
+					patch_index,
+					patch.set_pc
+				);
+
+				// We don't overwrite this part because it actually contains the `jmp` that consumes the return value of this function.
+				if (
+					const ssize patch_diff = static_cast<ssize>(required_patch_size - patch_length);
+					patch_diff > 0
+				)
+				{
+					temp_cg0.nop(patch_diff, true);
+				}
+			}
+
+			// If we are not direct-returning, make sure that a jmp is there
+			#if !_MSC_VER
+			*(uint16*)return_address = 0xE0FF; // jmp rax
+			#endif
+
+			#if _MSC_VER
+			*static_cast<uptr*>(_AddressOfReturnAddress()) = uptr_cast(destination_address);
+			#else
+			return uptr_cast(destination_address);
+			#endif
+		}
+	}
+
 	processor::flag Jit1_CodeGen::intrinsic_set_cti_flag()
 	{
 		const auto flag =
@@ -31,7 +143,7 @@ namespace mips
 					processor::flag::no_cti
 			);
 
-		if (hazard_barrier)
+		if (hazard_barrier && jit_.get_processor().handles_instruction_hazards())
 		{
 			flags |= processor::flag::instruction_hazard;
 		}
@@ -42,97 +154,110 @@ namespace mips
 		return flags;
 	}
 
-	Xbyak::Label Jit1_CodeGen::intrinsic_write_patch_prolog(const jit1::Chunk& __restrict chunk, void* const patch_address, const uint32 patch_target_address, const Xbyak::Reg& patch_target_address_reg)
+	uptr Jit1_CodeGen::intrinsic_write_patch_jump_patcher(
+		const uptr_guest target_address,
+		const void* const start_address,
+		const uint16 patch_index,
+		const bool set_pc
+	)
 	{
-		// Start with a set of no-ops so that we have somewhere to write patch code.
-		const auto patch = L(); // patch should be 12 bytes. Enough to copy an 8B pointer to rax, and then to jump to it.
-		xassert(getSize() <= std::numeric_limits<uint32>::max());
+		const auto* const patcher_start = getCurr();
 
-		// TODO : make this pointer-size generic - this is 64-bit only
-		// patch no-op
-		if (patch_address == nullptr) {
-			nop(12, true);
-		}
-		else {
-			static constexpr uint16 patch_prefix = 0xB848;
-			static constexpr uint16 patch_suffix = 0xE0FF;
-			dw(patch_prefix);
-			dq(uint64(patch_address));
-			dw(patch_suffix);
-		}
-
-		const uint32 patch_offset = uint32(getSize());
-		auto &patch_pair = chunk.m_patches->emplace_back(patch_offset, 0, jit1::Chunk::patch::types::full);
-		uint32 &patch_target = patch_pair.target;
-
-		// TODO : highly unsafe presently, though OK for now since it's in a std::list. This address cannot move.
+		mov(cx, patch_index);
+		// TODO : enable this for non-GCC/MSVC targets
+		/*
+		set(ecx, target_address);
+		// TODO : move this to an intrinsic? Would simplify this and make it constant-sized at this point.
+		if (set_pc)
 		{
-			intptr patch_target_ptr_address = intptr(&patch_target);
+			mov(dword[rbp + offsets.pc], ecx);
+		}
+		
+		mov(rdx, uptr_cast(start_address));
+		*/
+		std::ignore = call_ex<JumpFlags::ExternalCall | JumpFlags::AlwaysOutOfRange>(ptr_cast(&get_and_patch_instruction), rax);
+		#if !_MSC_VER
+		jmp(rax);
+		#endif
 
-			const intptr diff = patch_target_ptr_address - intptr(get_current_address());
-
-			if (in_range<int32>(diff))
-			{
-				mov(dword[rip + diff], edx);
-			}
-			else if (in_range<int32>(patch_target_ptr_address))
-			{
-				putSeg(ds);
-				mov(dword[&patch_target], edx);  // NOLINT(performance-no-int-to-ptr)
-			}
-			else
-			{
-				set(rcx, patch_target_ptr_address);
-				mov(dword[rcx], edx);
-			}
+		if (
+			const ssize patch_size_diff = static_cast<ssize>(expected_jump_patch_size - static_cast<uptr>(getCurr() - patcher_start));
+			patch_size_diff > 0
+		)
+		{
+			nop(patch_size_diff, true);
 		}
 
-		set(patch_target_address_reg, patch_target_address);
-
-		return patch;
+		return static_cast<usize>(getCurr() - patcher_start);
 	}
 
-	void Jit1_CodeGen::intrinsic_write_patch_epilog(const Xbyak::Label& patch)
-	{
-		static constexpr uint16 patch_prefix = 0xB848;
-		static constexpr uint16 patch_suffix = 0xE0FF;
-
-		auto* address = patch.getAddress();
-
-		#pragma message("validate that this is optimal over `patch + 2`, `patch + 10`, etc")
-		mov(rcx, patch);
-		mov(word[rcx], patch_prefix);
-		mov(qword[rcx + 2], rax);
-		mov(word[rcx + 10], patch_suffix);
-	}
-
-	void Jit1_CodeGen::intrinsic_write_patch_jump(const jit1::Chunk& __restrict chunk, const uint32 target_address, const Xbyak::Reg& patch_target_address_reg, const bool set_pc)
+	void Jit1_CodeGen::intrinsic_write_patch_jump(
+		jit1::Chunk& __restrict chunk,
+		const uptr_guest target_address,
+		const bool set_pc
+	)
 	{
 		auto& jit = jit_;
 		const auto current_address = jit.fetch_instruction(target_address);
 
-		// In this case, we need to find the address in order to jump to it.
-		auto&& patch = intrinsic_write_patch_prolog(
-			chunk,
-			std::bit_cast<void*>(current_address),
+		const auto* const start_address = getCurr();
+
+		const auto get_patch_length = [&]
+		{
+			return static_cast<usize>(getCurr() - start_address);
+		};
+
+		xassert(getSize() <= std::numeric_limits<uint32>::max());
+
+		chunk.patches.emplace_back(
+			uptr_cast(start_address),
 			target_address,
-			patch_target_address_reg
+			jit1::patch::types::indeterminate,
+			set_pc
 		);
-		if (set_pc)
+
+		const uint16 patch_index = checked_cast<uint16>(chunk.patches.size() - 1);
+
+		if (current_address != nullptr)
 		{
-			mov(dword[rbp + offsets.pc], patch_target_address_reg);
+			/*
+			** movabs rax, ADDRESS
+			** jmp rax
+			*/
+			static constexpr uint16 patch_prefix = 0xB848;
+			dw(patch_prefix);                    // movabs rax, ...
+			dq(uptr_cast(current_address)); // address
+			jmp(rax);                        // E0FF
+
+			const usize patch_length = get_patch_length();
+			xassert(patch_length == expected_jump_patch_size);
+
+			{
+				std::array<uint8, max_full_jump_patch_size> temporary_buffer;
+				Jit1_CodeGen temporary_codegen{ jit_, temporary_buffer.data(), temporary_buffer.size() };
+				const usize patcher_size = temporary_codegen.intrinsic_write_patch_jump_patcher(target_address, start_address, patch_index, set_pc);
+
+				if (
+					const ssize patch_size_diff = static_cast<ssize>(patcher_size - patch_length);
+					patch_size_diff > 0
+				)
+				{
+					nop(patch_size_diff, true);
+				}
+			}
 		}
-		if (!is_same(edx, patch_target_address_reg))
+		else
 		{
-			mov(edx, eax);
+			std::ignore = intrinsic_write_patch_jump_patcher(target_address, start_address, patch_index, set_pc);
 		}
-		set(rcx, std::bit_cast<uintptr>(&jit));
-		std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
-		intrinsic_write_patch_epilog(patch);
-		jmp(rax);
 	}
 
-	void Jit1_CodeGen::intrinsic_insert_jump(const jit1::Chunk & __restrict chunk, const jit1::ChunkOffset &__restrict chunk_offset, const uint32 address, const Xbyak::Operand& target_address)
+	void Jit1_CodeGen::intrinsic_insert_jump(
+		const jit1::Chunk & __restrict chunk,
+		const jit1::ChunkOffset &__restrict chunk_offset,
+		const uptr_guest address,
+		const Xbyak::Operand& target_address
+	)
 	{
 		// 8A 42 7F 84 C0 74 6A 48 FF 42 7F C6 42 7F 00 8B 42 7F B9 FF FF FF 7F 39 C8 72 2B 3D FF FF FF 7F 77 24 29 C8 48 B9 FF FF FF FF FF FF FF 7F 8B 04 01 48 B9 FF FF FF FF FF FF FF 7F 48 01 C8 45 31 C0 48 31 C9 FF E0 52 48 89 C2 48 83 EC 20 48 B8 FF FF FF FF FF FF FF 7F 48 B9 FF FF FF FF FF FF FF 7F FF D0 48 83 C4 20 5A 45 31 C0 48 31 C9 FF E0 
 		// mov al, byte [rdx + 0x7F]			  ; load [pcc_offset] (program counter changed)
@@ -203,8 +328,38 @@ namespace mips
 
 		mov(rdx, rax);
 		set(rcx, uintptr(&jit_));
-		std::ignore = call_ex<true>(ptr_cast(&jit1::get_instruction), rax);
+		std::ignore = call_ex<JumpFlags::ExternalCall>(ptr_cast(&jit1::get_instruction), rax);
 
 		jmp(rax);
+	}
+
+	namespace jit1_common::branch
+	{
+		void emit_local_jmp(
+			Jit1_CodeGen& cg,
+			const jit1::ChunkOffset& __restrict chunk_offset,
+			const uint32 target_offset,
+			const uint32 current_offset
+		)
+		{
+			static constexpr uint32 max_short_jump_look_ahead = 2;
+
+			const auto& target_label = cg.get_instruction_offset_label(target_offset);
+
+			if (
+				(
+					target_offset <= current_offset &&
+					(chunk_offset[current_offset] - chunk_offset[target_offset]) <= 128
+				) ||
+				(target_offset - current_offset) <= max_short_jump_look_ahead
+			)
+			{
+				cg.jmp(target_label, Xbyak::CodeGenerator::T_AUTO);
+			}
+			else
+			{
+				cg.jmp(target_label, Xbyak::CodeGenerator::T_NEAR);
+			}
+		}
 	}
 }

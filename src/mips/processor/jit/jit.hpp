@@ -8,4 +8,8 @@ namespace mips
 		None,
 		Jit,
 	};
+
+	class jit_base
+	{
+	};
 }

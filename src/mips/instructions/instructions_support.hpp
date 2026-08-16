@@ -28,6 +28,6 @@ namespace mips
 
 	namespace instructions
 	{
-		memory_hazards parse_sync_type(uint8 type);
+		_nothrow memory_hazards parse_sync_type(uint8 type) noexcept;
 	}
 }

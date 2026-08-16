@@ -1,14 +1,36 @@
 #include "pch.hpp"
-
-#include "fmt/format.h"
-
 #include "system_vemix.hpp"
+#include <common.hpp>
 
-#include "../../vemips_sdk/MIPS_SDK/include/bits/syscall.h"
+#include <cerrno>
+#include <cstdio>
+#include <expected>
+#include <limits>
+#include <optional>
+#include <tuple>
+#include <fmt/format.h>
+
+#include "../../vemips_sdk/MIPS_SDK/include_c/mipsisa32r6el-vemips-generic-musl/bits/syscall.h"
+#include "mips/exception.hpp"
 #include "mips/system.hpp"
+#include "mips/processor/processor.hpp"
+#include "mips/processor/jit/jit.hpp"
 
 
 using namespace vemips;
+
+namespace mips
+{
+	namespace elf
+	{
+		class binary;
+	}
+
+	struct CPU_Exception;
+
+	static constexpr uptr_guest vemips_syscall_flag = 1u << 31;
+}
+
 
 namespace {
 	enum class map_bits : uint32 {
@@ -39,20 +61,27 @@ namespace {
 	};
 }
 
-system_vemix::system_vemix(const options & __restrict init_options, const elf::binary & __restrict binary)
+system_vemix::system_vemix(const options& __restrict init_options, const mips::elf::binary& __restrict binary)
+	: system_vemix(
+		init_options,
+		binary,
+		false
+	) {}
+
+system_vemix::system_vemix(const options& __restrict init_options, const mips::elf::binary& __restrict binary, const bool silent)
 	: system(
 		capabilities{
 			.can_handle_syscalls_inline = true
 		},
 		init_options,
 		binary
-	) {}
+	), silent_(silent) {}
 
 void system_vemix::clock(const uint64 clocks) __restrict {
 	system::clock(clocks);
 }
 
-uint32 system_vemix::handle_exception(const mips::CPU_Exception & __restrict ex) {
+uint32 system_vemix::handle_exception(const mips::CPU_Exception& __restrict ex) {
 	if (ex.m_ExceptionType == mips::CPU_Exception::Type::Sys) [[likely]] {
 		return handle_syscall(ex);
 	}
@@ -62,16 +91,32 @@ uint32 system_vemix::handle_exception(const mips::CPU_Exception & __restrict ex)
 }
 
 _forceinline
-void system_vemix::set_syscall_result(const bool success, const uint32 result)
+_nothrow void system_vemix::set_syscall_result(
+	const bool success,
+	const uptr_guest result
+) noexcept
 {
 	xassert(processor_ != nullptr);
 
-	processor_->set_register<uint32>(2, result);
-	processor_->set_register<uint32>(7, success ? 0U : 1U);
+	processor_->set_register<uptr_guest>(2, result);
+	processor_->set_register<uptr_guest>(7, success ? 0U : 1U);
 }
 
 _forceinline
-uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
+_nothrow void system_vemix::set_syscall_result_vemips(
+	const bool success,
+	const sptr_guest result0,
+	const sptr_guest result1
+) noexcept
+{
+	xassert(processor_ != nullptr);
+
+	processor_->set_register<sptr_guest>(2, result0);
+	processor_->set_register<sptr_guest>(7, success ? result1 : -result1);
+}
+
+_forceinline
+uint32 system_vemix::handle_syscall(const mips::CPU_Exception& __restrict ex) {
 	xassert(processor_ != nullptr);
 	xassert(ex.m_ExceptionType == mips::CPU_Exception::Type::Sys);
 
@@ -92,6 +137,61 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 		return true;
 	};
 
+	const auto unhandled_syscall = [&] (const uint32 code)
+	{
+		fmt::println(stderr, "** Unhandled System Call Code: {} @ 0x{:08X}", code, ex.m_InstructionAddress);
+	};
+
+	struct syscall_result {
+		uptr_guest result0;
+		std::expected<uptr_guest, int32> result1;
+	};
+
+	const auto brk_impl = [&] (uptr_guest end_address) -> syscall_result {
+		if (end_address == 0U) {
+			return { system_break_, uptr_guest{} };
+		}
+
+		// align address
+		end_address = mips::align<sizeof(uptr_guest)>(end_address);
+
+		if (!check_brk(end_address)) [[unlikely]]
+		{
+			return { system_break_, std::unexpected(ENOMEM) };
+		}
+
+		// todo move to system object
+		system_break_ = end_address;
+
+		return { end_address, uptr_guest{0} };
+	};
+
+	const auto sbrk_impl = [&] (ssize_guest increment) -> syscall_result {
+		// todo move to system object
+		const uptr_guest system_break = system_break_;
+
+		if (increment == 0U) [[unlikely]] {
+			return { system_break, uptr_guest{} };
+		}
+
+		// Align increment to 32-bit word
+		increment = mips::align<sizeof(uptr_guest)>(increment);
+
+		// make sure it just makes sense, first.
+		const uint64 end_address = uint64(system_break) + increment;
+		if (
+			end_address > std::numeric_limits<uptr_guest>::max() ||
+			end_address < system_break_base_ ||
+			!check_brk(uptr_guest(end_address))
+		) [[unlikely]] {
+			return { system_break, std::unexpected(ENOMEM) };
+		}
+
+		// Otherwise, we can allocate away.
+		system_break_ = uptr_guest(end_address);
+		return { system_break, uptr_guest( increment ) };
+	};
+
 	// 4
 	// 5
 	// 6
@@ -107,6 +207,7 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 			//const uint32 address2 = processor_->get_register<uint32>(8);
 			//const uint32 value3 = processor_->get_register<uint32>(9);
 
+			unhandled_syscall(code);
 			set_syscall_result(false, ENOSYS);
 		} break;
 		case __NR_debug:
@@ -124,46 +225,66 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 
 			set_syscall_result(true, 0);
 		} break;
-		case __NR_brk: {
-			const uint32 end_address = processor_->get_register<uint32>(4);
+		case __NR_brk:
+		case __NR_brk | mips::vemips_syscall_flag: {
+			const uptr_guest end_address = processor_->get_register<uptr_guest>(4);
+			const auto result = brk_impl(end_address);
 
-			if (!check_brk(end_address)) [[unlikely]]
+			if (result.result1.has_value())
 			{
-				set_syscall_result(false, ENOMEM);
-				break;
+				if ((code & mips::vemips_syscall_flag) != 0)
+				{
+					set_syscall_result_vemips(true, result.result0, *result.result1);
+				}
+				else
+				{
+					set_syscall_result(true, result.result0);
+				}
 			}
-
-			// todo move to system object
-			system_break_ = end_address;
-			set_syscall_result(true, 0);
+			else
+			{
+				if ((code & mips::vemips_syscall_flag) != 0)
+				{
+					set_syscall_result_vemips(false, result.result0, result.result1.error());
+				}
+				else
+				{
+					set_syscall_result(false, result.result1.error());
+				}
+			}
+			
+			break;
 		} break;
-		case __NR_sbrk: { // sbrk
-			// todo move to system object
-			const uint32 system_break = system_break_;
+		case __NR_sbrk:
+		case __NR_sbrk | mips::vemips_syscall_flag: { // sbrk
+			ssize_guest increment = processor_->get_register<ssize_guest>(4);
+			const auto result = sbrk_impl(increment);
 
-			const uint32 increment = processor_->get_register<uint32>(4);
-
-			if (!increment) [[unlikely]] {
-				set_syscall_result(true, system_break);
-				break;
-			}
-
-			// make sure it just makes sense, first.
-			const uint32 end_address = system_break + increment;
-			if (end_address < system_break) [[unlikely]] {
-				set_syscall_result(false, ENOMEM);
-				break;
-			}
-
-			if (!check_brk(end_address)) [[unlikely]]
+			if (result.result1.has_value())
 			{
-				set_syscall_result(false, ENOMEM);
-				break;
+				if ((code & mips::vemips_syscall_flag) != 0)
+				{
+					set_syscall_result_vemips(true, result.result0, *result.result1);
+				}
+				else
+				{
+					set_syscall_result(true, result.result0);
+				}
 			}
+			else
+			{
+				if ((code & mips::vemips_syscall_flag) != 0)
+				{
+					set_syscall_result_vemips(false, result.result0, result.result1.error());
+				}
+				else
+				{
+					set_syscall_result(false, result.result1.error());
+				}
+			}
+			
+			break;
 
-			// Otherwise, we can allocate away.
-			system_break_ = end_address;
-			set_syscall_result(true, system_break);
 		} break;
 		case __NR_mmap2: {
 			// what... what do we do with memory mapping?
@@ -180,14 +301,17 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 			// THe only thing we are going to do is keep track of what has already
 			// been mapped, and try to make it so we don't map things that would
 			// pass the stack pointer ($29)
+			unhandled_syscall(code);
 			set_syscall_result(false, ENOSYS);
 		} break;
 		case __NR_rt_sigaction: {
 			// do nothing substantial for now, though we do need to actually handle this.
+			unhandled_syscall(code);
 			set_syscall_result(false, ENOSYS);
 		} break;
 		case SYS_rt_sigprocmask: {
 			// do nothing substantial for now, though we do need to actually handle this.
+			unhandled_syscall(code);
 			set_syscall_result(false, ENOSYS);
 		} break;
 		case __NR_writev: [[likely]] {
@@ -241,7 +365,10 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 						faulted = true;
 						break;
 					}
-					std::ignore = std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
+					if (!silent_)
+					{
+						std::ignore = std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
+					}
 				}
 
 				for (; offset < _iovec.iov_len; ++offset)
@@ -253,7 +380,10 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 						faulted = true;
 						break;
 					}
-					std::ignore = std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
+					if (!silent_)
+					{
+						std::ignore = std::fwrite(&c.value(), 1, sizeof(c.value()), fp);
+					}
 				}
 
 
@@ -270,10 +400,12 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 		} break;
 		case __NR__llseek:
 		{
+			unhandled_syscall(code);
 			set_syscall_result(false, ENOSYS);
 		} break;
 		case __NR_truncate: {
 			// ignore, we lack file ops right now.
+			unhandled_syscall(code);
 			set_syscall_result(false, ENOSYS);
 		} break;
 		case __NR_ioctl: {
@@ -302,37 +434,44 @@ uint32 system_vemix::handle_syscall(const mips::CPU_Exception & __restrict ex) {
 			//	mem_write<winsize>(arg1, ws);
 			//} break;
 			//default:
+			unhandled_syscall(code);
 			set_syscall_result(true, 0);
 		}  break;
 		case __NR_exit_group:
-		case __NR_exit:
-			execution_success_ = true;
-			execution_complete_ = true;
+		case __NR_exit: {
+			const int32 exit_code = processor_->get_register<int32>(4);
+
+			execution_result_code_ = exit_code;
+			execution_state_ = execution_state::complete_success;
+#if SET_RESULT_REGISTER_ON_SYSCALL_EXIT
 			if (processor_->get_jit_type() != mips::JitType::None) {
 				return 1;
 			}
-			throw mips::ExecutionCompleteException();
+#endif
+			throw mips::ExecutionCompleteException{exit_code};
 			break;
+		}
 		case __NR_set_thread_area:
 			// m_user_value
-			processor_->user_value_ = processor_->get_register<uint32>(4);
+			processor_->user_value = processor_->get_register<uint32>(4);
 			set_syscall_result(true, 0);
 			break; //do nothing.
 		case __NR_set_tid_address: {
-			// pretend to do something meaningful.
-			/*
+			// pretend to do something meaningful. Just set it to thread ID '1'.
 			const uint32 ptr = processor_->get_register<uint32>(4);
-			*/
-			//processor_->mem_write<uint32>(ptr, 0);
+			processor_->mem_write<uint32>(ptr, 1);
 			set_syscall_result(true, 0);
 		}  break;
 		case __NR_gettid: {
-			set_syscall_result(true, 0);
+			// pretend to do something meaningful. Just set it to thread ID '1'.
+			set_syscall_result(true, 1);
 		}  break;
 		case __NR_tkill: {
+			unhandled_syscall(code);
 			set_syscall_result(true, 0);
 		}  break;
 		case __NR_poll: {
+			unhandled_syscall(code);
 			set_syscall_result(false, ENOSYS);
 		}  break;
 		default: [[unlikely]]
@@ -347,9 +486,9 @@ _noinline _cold
 uint32 system_vemix::handle_unknown_syscall(const uint32 code, const uint32 address)
 {
 	set_syscall_result(false, ENOSYS);
-	fmt::println("** Unknown System Call Code: {} @ 0x{:08X}", code, address);
-	execution_success_ = false;
-	execution_complete_ = true;
+	fmt::println(stderr, "** Unknown System Call Code: {} @ 0x{:08X}", code, address);
+	execution_result_code_ = std::numeric_limits<int32>::max();
+	execution_state_ = execution_state::complete_fail;
 	if (processor_->get_jit_type() != mips::JitType::None) [[likely]]
 	{
 		return 1;
@@ -375,10 +514,10 @@ uint32 system_vemix::handle_sys_exception(const mips::CPU_Exception & __restrict
 		case TLBS:
 			ex_name = "TLBS"; break;
 		case AdEL: [[likely]]
-			fmt::println("** Unhandled Address Load CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
+			fmt::println(stderr, "** Unhandled Address Load CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
 			throw mips::ExecutionFailException();
 		case AdES: [[likely]]
-			fmt::println("** Unhandled Address Store CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
+			fmt::println(stderr, "** Unhandled Address Store CPU Exception: 0x{:08X} @ 0x{:08X}", ex.m_Code, ex.m_InstructionAddress);
 			throw mips::ExecutionFailException();
 		case IBE:
 			ex_name = "IBE"; break;
@@ -428,13 +567,13 @@ uint32 system_vemix::handle_sys_exception(const mips::CPU_Exception & __restrict
 			ex_name = "Unknown"; break;
 	}
 
-	execution_success_ = false;
-	execution_complete_ = true;
+	execution_result_code_ = std::numeric_limits<int32>::max() - 1;
+	execution_state_ = execution_state::complete_fail;
 	if (processor_->in_jit) [[likely]] {
 		return 1;
 	}
 
-	fmt::println("** Unhandled {} CPU Exception: {:X} @ 0x{:08X}", ex_name, ex.m_Code, ex.m_InstructionAddress);
+	fmt::println(stderr, "** Unhandled {} CPU Exception: {:X} @ 0x{:08X}", ex_name, ex.m_Code, ex.m_InstructionAddress);
 	throw mips::ExecutionFailException();
 }
 _pragma_default_code

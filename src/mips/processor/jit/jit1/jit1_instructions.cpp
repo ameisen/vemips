@@ -13,58 +13,148 @@
 
 using namespace mips;
 
-void Jit1_CodeGen::insert_procedure(const uint32 address, const void* const procedure, const uint32 argument0) {
+namespace
+{
+	VEMIPS_JIT_ABI static _nothrow void VEMIPS_JIT_ABI_INFIX ForwardInstructionCall(
+		const instruction_t instruction,
+		processor& __restrict processor,
+		const instructions::instructionexec_t procedure
+	) noexcept
+	{
+		try
+		{
+			procedure(instruction, processor);	
+		}
+		catch (const CPU_Exception &ex)
+		{
+			//if constexpr (HasFlag(InsT::Flags, OpFlags::WritesGPRegister))
+			{
+				// Clear zero register
+				_block_forceinline
+				processor.set_register(0, 0U);
+			}
 
+			//if (processor.get_jit_type() == JitType::Jit) [[likely]]
+			{
+				_block_forceinline
+				processor.set_trapped_exception(ex);
+			}
+		}
+	}
+}
+
+void Jit1_CodeGen::insert_instruction_procedure(
+	const uptr_guest address,
+	const void* const procedure,
+	const uint32 argument0
+)
+{
 	mov(dword[rbp + offsets.pc], address);
 	mov(dword[rbp + offsets.flags], ebx);
 	set(ecx, argument0);
 	lea(rdx, qword[rbp - 128]);
-	std::ignore = call_ex<true>(procedure, rax);
+	set(r8, ptr_cast(procedure));
+	std::ignore = call_ex<JumpFlags::ExternalCall>(ptr_cast(&ForwardInstructionCall), rax);
 	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 	mov(ebx, dword[rbp + offsets.flags]);
 }
 
-void Jit1_CodeGen::insert_procedure(const uint32 address, const void* const procedure, const Xbyak::Operand& argument0) {
-
+void Jit1_CodeGen::insert_instruction_procedure(
+	const uptr_guest address,
+	const void* const procedure,
+	const Xbyak::Operand& argument0
+)
+{
 	std::ignore = mov_ex(ecx, argument0);
 	mov(dword[rbp + offsets.pc], address);
 	mov(dword[rbp + offsets.flags], ebx);
 	lea(rdx, qword[rbp - 128]);
-	std::ignore = call_ex<true>(procedure, rax);
+	set(r8, ptr_cast(procedure));
+	std::ignore = call_ex<JumpFlags::ExternalCall>(ptr_cast(&ForwardInstructionCall), rax);
 	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 	mov(ebx, dword[rbp + offsets.flags]);
 }
 
-void Jit1_CodeGen::insert_procedure_hazard(const uint32 address [[maybe_unused]], const void* const procedure, const uint32 argument0) {
+void Jit1_CodeGen::insert_procedure(
+	const uptr_guest address,
+	const void* const procedure,
+	const uint32 argument0
+) {
+	mov(dword[rbp + offsets.pc], address);
+	mov(dword[rbp + offsets.flags], ebx);
+	set(ecx, argument0);
+	lea(rdx, qword[rbp - 128]);
+	std::ignore = call_ex<JumpFlags::ExternalCall>(procedure, rax);
+	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
+	mov(ebx, dword[rbp + offsets.flags]);
+}
+
+void Jit1_CodeGen::insert_procedure(
+	const uptr_guest address,
+	const void* const procedure,
+	const Xbyak::Operand& argument0
+)
+{
+	std::ignore = mov_ex(ecx, argument0);
+	mov(dword[rbp + offsets.pc], address);
+	mov(dword[rbp + offsets.flags], ebx);
+	lea(rdx, qword[rbp - 128]);
+	std::ignore = call_ex<JumpFlags::ExternalCall>(procedure, rax);
+	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
+	mov(ebx, dword[rbp + offsets.flags]);
+}
+
+void Jit1_CodeGen::insert_procedure_hazard(
+	const uptr_guest address [[maybe_unused]],
+	const void* const procedure,
+	const uint32 argument0
+)
+{
+	xassert(jit_.get_processor().handles_instruction_hazards());
+
 	const Xbyak::Label return_label;
 
 	set(rax, reinterpret_cast<uintptr>(procedure));
 	mov(rdx, return_label);
 	set(ecx, address);
 	set(r9, argument0);
-	std::ignore = call_ex<true>(jit_.call_instruction_hazard_ptr_, r8);
+	std::ignore = call_ex<JumpFlags::ExternalCall>(jit_.call_instruction_hazard_ptr_, r8);
 	L(return_label);
 	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 	mov(ebx, dword[rbp + offsets.flags]);
 }
 
-void Jit1_CodeGen::insert_procedure_hazard(const uint32 address [[maybe_unused]], const void* const procedure, const Xbyak::Operand& argument0) {
+void Jit1_CodeGen::insert_procedure_hazard(
+	const uptr_guest address [[maybe_unused]],
+	const void* const procedure,
+	const Xbyak::Operand& argument0
+)
+{
+	xassert(jit_.get_processor().handles_instruction_hazards());
+
 	const Xbyak::Label return_label;
 
-	std::ignore = mov_ex(r9, argument0);
+	std::ignore = mov_ex(r9d, argument0);
 	set(rax, reinterpret_cast<uintptr>(procedure));
 	mov(rdx, return_label);
 	set(ecx, address);
-	std::ignore = call_ex<true>(jit_.call_instruction_hazard_ptr_, r8);
+	std::ignore = call_ex<JumpFlags::ExternalCall>(jit_.call_instruction_hazard_ptr_, r8);
 
 	L(return_label);
 	//mov(dword[rbp + instructions::GPRegister<>{0}.get_offset(true)], 0); //clear register
 	mov(ebx, dword[rbp + offsets.flags]);
 }
 
-Jit1_CodeGen::except_result Jit1_CodeGen::insert_procedure_check_hazard(const uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info, const uint32 argument0)
+Jit1_CodeGen::except_result Jit1_CodeGen::insert_instruction_procedure_check_hazard(
+	const uptr_guest address,
+	const mips::instructions::InstructionInfo& __restrict instruction_info,
+	const uint32 argument0
+)
 {
-	if (instructions::HasAnyFlags(instruction_info.OpFlags, instructions::OpFlags::InstructionHazard)) [[unlikely]]
+	if (
+		jit_.get_processor().handles_instruction_hazards() &&
+		instructions::HasAnyFlags(instruction_info.OpFlags, instructions::OpFlags::InstructionHazard)
+	) [[unlikely]]
 	{
 		mov(eax, int32(address));
 		or_(ebx, processor::flag::instruction_hazard);
@@ -74,7 +164,49 @@ Jit1_CodeGen::except_result Jit1_CodeGen::insert_procedure_check_hazard(const ui
 	}
 	else
 	{
-		insert_procedure(address, std::bit_cast<void*>(instruction_info.Proc), argument0);
+		except_result result;
+
+		if (instructions::HasAnyFlags(instruction_info.OpFlags, instructions::OpFlags::Throws | instructions::OpFlags::Signals_All))
+		{
+			insert_instruction_procedure(address, ptr_cast(instruction_info.Proc), argument0);
+			result = except_result::can_except;
+		}
+		else
+		{
+			insert_procedure(address, ptr_cast(instruction_info.Proc), argument0);
+			result = except_result::none;
+		}
+
+		// Reset 0 register _just in case_
+		if (instructions::HasAllFlags(instruction_info.OpFlags, instructions::OpFlags::WritesGPRegister))
+		{
+			set(get_register_gp_mem_operand(0), 0);
+		}
+
+		return result;
+	}
+}
+
+Jit1_CodeGen::except_result Jit1_CodeGen::insert_procedure_check_hazard(
+	const uptr_guest address,
+	const mips::instructions::InstructionInfo& __restrict instruction_info,
+	const uint32 argument0
+)
+{
+	if (
+		jit_.get_processor().handles_instruction_hazards() &&
+		instructions::HasAnyFlags(instruction_info.OpFlags, instructions::OpFlags::InstructionHazard)
+	) [[unlikely]]
+	{
+		mov(eax, int32(address));
+		or_(ebx, processor::flag::instruction_hazard);
+		jmp(intrinsics_.save_return_eax_pc, T_NEAR);
+
+		return except_result::always_exits;
+	}
+	else
+	{
+		insert_procedure(address, ptr_cast(instruction_info.Proc), argument0);
 		if (instructions::HasAnyFlags(instruction_info.OpFlags, instructions::OpFlags::Throws | instructions::OpFlags::Signals_All))
 		{
 			return except_result::can_except;
@@ -86,9 +218,15 @@ Jit1_CodeGen::except_result Jit1_CodeGen::insert_procedure_check_hazard(const ui
 	}
 }
 
-bool Jit1_CodeGen::interpret_if_hazard(const uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info)
+bool Jit1_CodeGen::interpret_if_hazard(
+	const uptr_guest address,
+	const mips::instructions::InstructionInfo& __restrict instruction_info
+)
 {
-	if (instructions::HasAnyFlags(instruction_info.OpFlags, instructions::OpFlags::InstructionHazard)) [[unlikely]]
+	if (
+		jit_.get_processor().handles_instruction_hazards() &&
+		instructions::HasAnyFlags(instruction_info.OpFlags, instructions::OpFlags::InstructionHazard)
+	) [[unlikely]]
 	{
 		mov(eax, address);
 		or_(ebx, processor::flag::instruction_hazard);
@@ -103,8 +241,13 @@ bool Jit1_CodeGen::interpret_if_hazard(const uint32 address, const mips::instruc
 
 namespace
 {
-	_nothrow static void ClearExecutionHazards(const uint32, processor & __restrict processor) noexcept
+	_nothrow static void ClearExecutionHazards(
+		const uptr_guest,
+		processor& __restrict processor
+	) noexcept
 	{
+		xassert(processor.handles_execution_hazards());
+
 		//const uint32 chunk_size = jit1::get_static_chunk_size();
 		//const uint32 current_address = processor.get_program_counter();
 		//const uint32 chunk_base = current_address & (~(chunk_size - 1));
@@ -119,21 +262,26 @@ namespace
 		}
 	}
 
-	_nothrow static void* ClearInstructionHazards(const uint32 target_address, processor & __restrict processor) noexcept
+	_nothrow static void* ClearInstructionHazards(
+		const uptr_guest target_address,
+		processor& __restrict processor
+	) noexcept
 	{
+		xassert(processor.handles_instruction_hazards());
+
 		const uint32 chunk_size = jit1::get_static_chunk_size();
-		const uint32 current_address = processor.get_program_counter();
-		const uint32 chunk_base = current_address & (~(chunk_size - 1));
+		const uptr_guest current_address = processor.get_program_counter();
+		const uptr_guest chunk_base = current_address & (~(chunk_size - 1));
 
 		try
 		{
 			processor.clear_execution_hazards();
-			if (processor.clear_instruction_hazards({{chunk_base, chunk_size}}))
+			if (processor.clear_instruction_hazards({chunk_base, chunk_size}))
 			{
-				const uint32 next_address = target_address;
+				const uptr_guest next_address = target_address;
 
 				const auto* const return_chunk = (*std::get_if<jit1* __restrict>(&processor.jit_))->get_chunk(next_address);
-				const uint32 instruction_offset = (next_address - return_chunk->m_offset) / sizeof(uint32);
+				const usize_guest instruction_offset = (next_address - return_chunk->m_offset) / sizeof(uint32);
 				const uint32 chunk_offset = (*(return_chunk->m_chunk_offset))[instruction_offset];
 
 				return return_chunk->m_data + chunk_offset;
@@ -147,7 +295,10 @@ namespace
 		}
 	}
 
-	_nothrow static void SyncInstruction(const uint32 target_address, processor & __restrict processor) noexcept
+	_nothrow static void SyncInstruction(
+		const uptr_guest target_address,
+		processor& __restrict processor
+	) noexcept
 	{
 		try
 		{
@@ -161,25 +312,58 @@ namespace
 	}
 }
 
-void Jit1_CodeGen::intrinsic_clear_execution_hazards(const uint32 address)
+void Jit1_CodeGen::intrinsic_clear_execution_hazards(const uptr_guest address)
 {
 	// suboptimal
-	insert_procedure(address, std::bit_cast<void*>(&ClearExecutionHazards), 0U);
+	insert_procedure(address, ptr_cast(&ClearExecutionHazards), 0U);
 }
 
-void Jit1_CodeGen::intrinsic_clear_instruction_hazards(const uint32 address, const uint32 target_address)
+void Jit1_CodeGen::intrinsic_clear_instruction_hazards(
+	const uptr_guest current_address,
+	const uptr_guest target_address,
+	const instruction_hazard_flags flags
+)
 {
+	xassert(jit_.get_processor().handles_instruction_hazards());
+
 	// suboptimal
-	insert_procedure_hazard(address, std::bit_cast<void*>(&ClearInstructionHazards), target_address);
+	if (flags.delay_branch)
+	{
+		set(ecx, current_address);
+		jmp(intrinsics_.internal_flow, T_NEAR);
+	}
+	else
+	{
+		insert_procedure_hazard(current_address, ptr_cast(&ClearInstructionHazards), target_address);
+	}
 }
 
-void Jit1_CodeGen::intrinsic_clear_instruction_hazards(const uint32 address, const Xbyak::Reg& target_address_reg)
+void Jit1_CodeGen::intrinsic_clear_instruction_hazards(
+	const uptr_guest current_address,
+	const Xbyak::Reg& target_address_reg,
+	const instruction_hazard_flags flags
+)
 {
+	xassert(jit_.get_processor().handles_instruction_hazards());
+
 	// suboptimal
-	insert_procedure_hazard(address, std::bit_cast<void*>(&ClearInstructionHazards), target_address_reg);
+	if (flags.delay_branch)
+	{
+		set(ecx, current_address);
+		jmp(intrinsics_.internal_flow, T_NEAR);
+	}
+	else
+	{
+		insert_procedure_hazard(current_address, ptr_cast(&ClearInstructionHazards), target_address_reg);
+	}
 }
 
-void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
+void Jit1_CodeGen::write_PROC_SUBU(
+	jit1::ChunkOffset & __restrict chunk_offset,
+	uptr_guest address,
+	const instruction_t instruction,
+	const mips::instructions::InstructionInfo& __restrict instruction_info
+) {
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
@@ -251,7 +435,7 @@ void Jit1_CodeGen::write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -296,7 +480,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SUB(jit1::ChunkOffset & __r
 	}
 }
 
-void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs | rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -358,7 +542,7 @@ void Jit1_CodeGen::write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, ui
 	}
 }
 
-void Jit1_CodeGen::write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs \/ rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -429,7 +613,7 @@ void Jit1_CodeGen::write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs & rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -480,7 +664,7 @@ void Jit1_CodeGen::write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs | zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -532,7 +716,7 @@ void Jit1_CodeGen::write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs & zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -572,7 +756,7 @@ void Jit1_CodeGen::write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, 
 }
 
 // TODO optimize
-void Jit1_CodeGen::write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt ? 0 : rs
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -663,7 +847,7 @@ void Jit1_CodeGen::write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset
 }
 
 // TODO optimize
-void Jit1_CodeGen::write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt ? rs : 0
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -757,7 +941,7 @@ void Jit1_CodeGen::write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset
 	}
 }
 
-void Jit1_CodeGen::write_PROC_MOVE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_MOVE(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -786,7 +970,7 @@ void Jit1_CodeGen::write_PROC_MOVE(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs + immediate
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -891,7 +1075,7 @@ void Jit1_CodeGen::write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset,
 	}
 }
 
-Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs + immediate
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -908,23 +1092,8 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 	}
 	else if (rs.is_zero()) [[unlikely]]
 	{
-		if (immediate == 0) [[unlikely]]
-		{
-			// This just sets rt to 0.
-			// 89 4A EE
-			// mov dword [rdx + 0xEE], ecx ; EE = 'rt' offset
-			set(op_rt, 0);
-			return except_result::none;
-		}
-		// // // // // // TODO 128/-128
-		else
-		{
-			// This just sets rt to the immediate value.
-			// C7 42 EE FF FF FF FF
-			// mov dword [rdx + 0xEE], 0xFFFFFFFF		 ; EE = 'rt' offset | FFFF = 16-bit immediate value
-			set(op_rt, immediate);
-			return except_result::none;
-		}
+		set(op_rt, immediate);
+		return except_result::none;
 	}
 	else if (rs == rt)
 	{
@@ -1005,7 +1174,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADDI(jit1::ChunkOffset & __
 	}
 }
 
-void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1087,7 +1256,7 @@ void Jit1_CodeGen::write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1157,7 +1326,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_ADD(jit1::ChunkOffset & __r
 	}
 }
 
-void Jit1_CodeGen::write_PROC_AUI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_AUI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs + simm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1214,7 +1383,7 @@ void Jit1_CodeGen::write_PROC_AUI(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SLT(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SLT(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs < rt
 
@@ -1268,7 +1437,7 @@ void Jit1_CodeGen::write_PROC_SLT(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs < rt
 
@@ -1286,8 +1455,8 @@ void Jit1_CodeGen::write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 	else if (rt.is_zero() || rt == rs) [[unlikely]]
 	{
-		// rd = rs < 0
-		// rd = x < x
+		// rd = rs < 0 - impossible
+		// rd = x < x  - impossible
 		set(op_rd, 0);
 	}
 	else
@@ -1299,7 +1468,7 @@ void Jit1_CodeGen::write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, 
 			// rd = rt != 0
 			xor_(ecx, ecx);
 			cmp_ex(op_rt, 0);
-			setz(cl);
+			setnz(cl);
 			mov(op_rd, ecx);
 		}
 		else
@@ -1316,7 +1485,7 @@ void Jit1_CodeGen::write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs < simm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1398,7 +1567,7 @@ void Jit1_CodeGen::write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs < zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1469,7 +1638,7 @@ void Jit1_CodeGen::write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset,
 	}
 }
 
-void Jit1_CodeGen::write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
@@ -1488,7 +1657,7 @@ void Jit1_CodeGen::write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_COP1_MTC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_COP1_MTC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
@@ -1497,18 +1666,20 @@ void Jit1_CodeGen::write_COP1_MTC1(jit1::ChunkOffset & __restrict chunk_offset, 
 
 	auto&& op_rt = get_register_op32(rt);
 
+	const auto& dst = dword[r12 + fs_offset];
+
 	if (rt.is_zero())
 	{
 		// write 0 to [fs]
-		set(dword[r12 + fs_offset], 0);
+		set(dst, 0);
 	}
 	else
 	{
-		std::ignore = mov_ex(dword[r12 + fs_offset], op_rt, eax);
+		std::ignore = mov_ex(dst, op_rt, eax);
 	}
 }
 
-void Jit1_CodeGen::write_COP1_MFHC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_COP1_MFHC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
@@ -1523,11 +1694,11 @@ void Jit1_CodeGen::write_COP1_MFHC1(jit1::ChunkOffset & __restrict chunk_offset,
 	}
 	else
 	{
-		std::ignore = mov_ex(op_rt, dword[r12 + fs_offset + 4], eax);
+		std::ignore = mov_ex(op_rt, dword[r12 + (fs_offset + 4)], eax);
 	}
 }
 
-void Jit1_CodeGen::write_COP1_MTHC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_COP1_MTHC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 
@@ -1536,18 +1707,20 @@ void Jit1_CodeGen::write_COP1_MTHC1(jit1::ChunkOffset & __restrict chunk_offset,
 
 	auto&& op_rt = get_register_op32(rt);
 
+	const auto& dst = dword[r12 + (fs_offset + 4)];
+
 	if (rt.is_zero())
 	{
 		// write 0 to [fs]
-		set(dword[r12 + (fs_offset + 4)], 0);
+		set(dst, 0);
 	}
 	else
 	{
-		std::ignore = mov_ex(dword[r12 + fs_offset + 4], op_rt, eax);
+		std::ignore = mov_ex(dst, op_rt, eax);
 	}
 }
 
-void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	auto* coprocessor = jit_.processor_.get_fpu_coprocessor();
 
@@ -1559,37 +1732,53 @@ void Jit1_CodeGen::write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, u
 	const int16 fs_offset = fs.get_offset();
 	const int16 fd_offset = fd.get_offset();
 
-	if (instruction_info.Type == mips::instructions::instruction_type::single_fp)
+	const bool fp32 = (instruction_info.Type == mips::instructions::instruction_type::single_fp);
+
+	const Xbyak::Reg& temp_reg = fp32 ? static_cast<const Xbyak::Reg&>(eax) : static_cast<const Xbyak::Reg&>(rax);
+	const Xbyak::AddressFrame& frame = fp32 ? dword : qword;
+
+	// fd = fd.bit[0] ? ft : fs
+	if (ft == fs)
 	{
-		// float
-		// fd = fd.bit[0] ? ft : fs
-		mov(eax, dword[r12 + fd_offset]);
-		xor_(ecx, ecx);
-		and_(eax, 1);
-		sub(ecx, eax);
-		dec(eax);
-		and_(ecx, dword[r12 + ft_offset]);
-		and_(eax, dword[r12 + fs_offset]);
-		or_(ecx, eax);
-		mov(dword[r12 + fd_offset], ecx);
+		if (ft != fd)
+		{
+			mov(temp_reg, frame[r12 + ft_offset]);
+			mov(frame[r12 + fd_offset], temp_reg);
+		}
 	}
 	else
 	{
-		// double
-		// fd = fd.bit[0] ? ft : fs
-		mov(eax, dword[r12 + fd_offset]);
-		xor_(ecx, ecx);
-		and_(eax, 1);
-		sub(rcx, rax);
-		dec(rax);
-		and_(rcx, qword[r12 + ft_offset]);
-		and_(rax, qword[r12 + fs_offset]);
-		or_(rcx, rax);
-		mov(qword[r12 + fd_offset], rcx);
+		if (fd == ft)
+		{
+			const Xbyak::Label is_unset;
+
+			mov(temp_reg, frame[r12 + fd_offset]);
+			test(temp_reg.cvt8(), 1);
+			cmove(temp_reg, frame[r12 + fs_offset]);
+			mov(frame[r12 + fd_offset], temp_reg);
+		}
+		else if (fd == fs)
+		{
+			const Xbyak::Label is_set;
+
+			mov(temp_reg, frame[r12 + fd_offset]);
+			test(temp_reg.cvt8(), 1);
+			cmovne(temp_reg, frame[r12 + ft_offset]);
+			mov(frame[r12 + fd_offset], temp_reg);
+		}
+		else
+		{
+			test(byte[r12 + fd_offset], 1);
+			lea(rax, frame[r12 + ft_offset]);
+			lea(rcx, frame[r12 + fs_offset]);
+			cmovne(rcx, rax);
+			mov(temp_reg, frame[rcx]);
+			mov(frame[r12 + fd_offset], temp_reg);
+		}
 	}
 }
 
-void Jit1_CodeGen::write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1643,7 +1832,7 @@ void Jit1_CodeGen::write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1697,7 +1886,7 @@ void Jit1_CodeGen::write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1751,7 +1940,7 @@ void Jit1_CodeGen::write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1808,7 +1997,7 @@ void Jit1_CodeGen::write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, 
 // TODO consider scanning forward for further DIV/MOD instructions using these parameters.
 // Values might be able to be cached.
 
-void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs / rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1819,59 +2008,59 @@ void Jit1_CodeGen::write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, u
 	auto&& op_rt = get_register_op32(rt);
 	auto&& op_rd = get_register_op32(rd);
 
-	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.is_zero()) [[unlikely]]
 	{
-		// TODO should we throw an exception?
 		// nop
 	}
 	else if (rt.is_zero()) [[unlikely]]
 	{
 		// divzero
 		// set [rd] to 0.
-		// TODO should we throw an exception?
 		set(op_rd, 0);
 	}
 	else if (rs.is_zero()) [[unlikely]]
 	{
 		set(op_rd, 0);
 	}
-	else if (rs == rd)
-	{
-		// move [rt] to [rd]
-		mov(ecx, op_rt);
-		xor_(eax, eax);
-		test(ecx, ecx);
-		jz(divzero);
-		mov(eax, op_rd);
-		xor_(edx, edx);
-		idiv(ecx);
-		L(divzero);
-		mov(op_rd, eax);
-	}
 	else if (rs == rt) [[unlikely]]
 	{
-		// TODO should we throw an exception?
-		set(op_rd, 1);
+		// rd = (rs|rt == 0) ? 0 : 1
+		// divzero
+		// set [rd] to 0.
+		xor_(eax, eax);
+		if (!op_rt.isREG())
+		{
+			cmp(op_rt, 0);
+			setnz(al);
+		}
+		else
+		{
+			const auto rt32 = op_rt.as_reg().cvt32();
+			test(rt32, rt32);
+			setnz(al);
+		}
+		mov(op_rd, eax);
 	}
 	else
 	{
+		const Xbyak::Label div_zero;
+
 		// add [rs] and [rt] to [rd]
 		mov(ecx, op_rt);
 		xor_(eax, eax);
 		test(ecx, ecx);
-		jz(divzero);
+		jz(div_zero);
 		mov(eax, op_rs);
-		xor_(edx, edx);
+		cdq();
 		idiv(ecx);
-		L(divzero);
+		L(div_zero);
 		mov(op_rd, eax);
 	}
 }
 
-void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs / rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1882,58 +2071,59 @@ void Jit1_CodeGen::write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, 
 	auto&& op_rt = get_register_op32(rt);
 	auto&& op_rd = get_register_op32(rd);
 
-	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.is_zero()) [[unlikely]]
 	{
-		// TODO should we throw an exception?
 		// nop
 	}
 	else if (rt.is_zero()) [[unlikely]]
 	{
 		// divzero
 		// set [rd] to 0.
-		// TODO should we throw an exception?
 		set(op_rd, 0);
 	}
 	else if (rs.is_zero()) [[unlikely]]
 	{
 		set(op_rd, 0);
 	}
-	else if (rs == rd)
-	{
-		mov(ecx, op_rt);
-		xor_(eax, eax);
-		test(ecx, ecx);
-		jz(divzero);
-		mov(eax, op_rd);
-		xor_(edx, edx);
-		div(ecx);
-		L(divzero);
-		mov(op_rd, eax);
-	}
 	else if (rs == rt) [[unlikely]]
 	{
-		// TODO should we throw an exception?
-		set(op_rd, 1);
+		// rd = (rs|rt == 0) ? 0 : 1
+		// divzero
+		// set [rd] to 0.
+		xor_(eax, eax);
+		if (!op_rt.isREG())
+		{
+			cmp(op_rt, 0);
+			setnz(al);
+		}
+		else
+		{
+			const auto rt32 = op_rt.as_reg().cvt32();
+			test(rt32, rt32);
+			setnz(al);
+		}
+		mov(op_rd, eax);
 	}
 	else
 	{
+		const Xbyak::Label div_zero;
+
 		// add [rs] and [rt] to [rd]
 		mov(ecx, op_rt);
 		xor_(eax, eax);
 		test(ecx, ecx);
-		jz(divzero);
+		jz(div_zero);
 		mov(eax, op_rs);
 		xor_(edx, edx);
 		div(ecx);
-		L(divzero);
+		L(div_zero);
 		mov(op_rd, eax);
 	}
 }
 
-void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs % rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -1944,59 +2134,44 @@ void Jit1_CodeGen::write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, u
 	auto&& op_rt = get_register_op32(rt);
 	auto&& op_rd = get_register_op32(rd);
 
-	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.is_zero()) [[unlikely]]
 	{
-		// TODO should we throw an exception?
 		// nop
 	}
 	else if (rt.is_zero()) [[unlikely]]
 	{
 		// divzero
 		// set [rd] to 0.
-		// TODO should we throw an exception?
 		set(op_rd, 0);
 	}
 	else if (rs.is_zero()) [[unlikely]]
 	{
 		set(op_rd, 0);
 	}
-	else if (rs == rd)
-	{
-		// move [rt] to [rd]
-		mov(ecx, op_rt);
-		xor_(eax, eax);
-		test(ecx, ecx);
-		jz(divzero);
-		mov(eax, op_rd);
-		xor_(edx, edx);
-		idiv(ecx);
-		L(divzero);
-		mov(op_rd, eax);
-	}
 	else if (rs == rt) [[unlikely]]
 	{
-		// TODO should we throw an exception?
 		set(op_rd, 0);
 	}
 	else
 	{
+		const Xbyak::Label div_zero;
+
 		// add [rs] and [rt] to [rd]
 		mov(ecx, op_rt);
-		xor_(eax, eax);
-		test(ecx, ecx);
-		jz(divzero);
-		mov(eax, op_rs);
 		xor_(edx, edx);
+		test(ecx, ecx);
+		jz(div_zero);
+		mov(eax, op_rs);
+		cdq();
 		idiv(ecx);
-		L(divzero);
-		mov(op_rd, eax);
+		L(div_zero);
+		mov(op_rd, edx);
 	}
 }
 
-void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs * rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -2007,59 +2182,43 @@ void Jit1_CodeGen::write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, 
 	auto&& op_rt = get_register_op32(rt);
 	auto&& op_rd = get_register_op32(rd);
 
-	const Xbyak::Label divzero;
 	// [rd] = [rs] / [rt]
 
 	if (rd.is_zero()) [[unlikely]]
 	{
-		// TODO should we throw an exception?
 		// nop
 	}
 	else if (rt.is_zero()) [[unlikely]]
 	{
 		// divzero
 		// set [rd] to 0.
-		// TODO should we throw an exception?
 		set(op_rd, 0);
 	}
 	else if (rs.is_zero()) [[unlikely]]
 	{
 		set(op_rd, 0);
 	}
-	else if (rs == rd)
-	{
-		// move [rt] to [rd]
-		mov(ecx, op_rt);
-		xor_(edx, edx);
-		test(ecx, ecx);
-		jz(divzero);
-		mov(eax, op_rd);
-		xor_(edx, edx);
-		div(ecx);
-		L(divzero);
-		mov(op_rd, edx);
-	}
 	else if (rs == rt) [[unlikely]]
 	{
-		// TODO should we throw an exception?
 		set(op_rd, 0);
 	}
 	else
 	{
+		const Xbyak::Label div_zero;
+
 		// add [rs] and [rt] to [rd]
 		mov(ecx, op_rt);
 		xor_(edx, edx);
 		test(ecx, ecx);
-		jz(divzero);
+		jz(div_zero);
 		mov(eax, op_rs);
-		xor_(edx, edx);
 		div(ecx);
-		L(divzero);
+		L(div_zero);
 		mov(op_rd, edx);
 	}
 }
 
-void Jit1_CodeGen::write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rs ^ rt
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -2135,7 +2294,7 @@ void Jit1_CodeGen::write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rt = rs | zimm
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -2185,7 +2344,7 @@ void Jit1_CodeGen::write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SEB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SEB(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = sbyte(rt)
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -2216,7 +2375,7 @@ void Jit1_CodeGen::write_PROC_SEB(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = sword(rt)
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -2247,7 +2406,7 @@ void Jit1_CodeGen::write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_EHB(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_EHB(jit1::ChunkOffset & __restrict chunk_offset, const uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt <<< sa but hazard barrier instead
 
@@ -2257,13 +2416,13 @@ void Jit1_CodeGen::write_PROC_EHB(jit1::ChunkOffset & __restrict chunk_offset, c
 
 	xassert(rt.is_zero() && rd.is_zero() && sa == 0b00011);
 
-	if (jit_.processor_.handles_execution_hazards())
+	if (jit_.processor_.handles_execution_hazards()) [[unlikely]]
 	{
 		intrinsic_clear_execution_hazards(address);
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, const uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt <<< sa
 
@@ -2319,7 +2478,7 @@ void Jit1_CodeGen::write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, c
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt >>> sa
 
@@ -2371,7 +2530,7 @@ void Jit1_CodeGen::write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt >> sa
 
@@ -2423,7 +2582,7 @@ void Jit1_CodeGen::write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, u
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt <<< rs
 
@@ -2462,25 +2621,20 @@ void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, 
 		{
 			// rd == rs == rt
 			mov(ecx, op_rd);
-			and_(ecx, int32(instructions::Bits(5)));
 			shl(op_rd, cl);
 		}
 		else
 		{
-			if (op_rd.isREG())
+			if (op_rd.isREG() && op_rd.as_reg().cvt8() == cl)
 			{
-				mov(ecx, op_rs);
-				mov(op_rd, op_rs.if_reg(ecx));
-				and_(ecx, int32(instructions::Bits(5)));
-				shl(op_rd, cl);
+				mov(op_rd, op_rs);
+				shl(op_rd, op_rd.as_reg().cvt8());
 			}
 			else
 			{
 				mov(ecx, op_rs);
-				mov(eax, op_rs.if_reg(ecx));
-				and_(ecx, int32(instructions::Bits(5)));
-				shl(eax, cl);
-				mov(op_rd, eax);
+				shl(ecx, cl);
+				mov(op_rd, ecx);
 			}
 		}
 	}
@@ -2489,45 +2643,34 @@ void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, 
 		if (rd == rt)
 		{
 			mov(ecx, op_rs);
-			and_(ecx, int32(instructions::Bits(5)));
 			shl(op_rd, cl);
 		}
 		else if (rs == rt)
 		{
-			if (op_rd.isREG())
+			if (op_rd.isREG() && op_rd.as_reg().cvt8() == cl)
 			{
-				mov(ecx, op_rs);
-				mov(op_rd, op_rs.if_reg(ecx));
-				and_(ecx, int32(instructions::Bits(5)));
-				shl(op_rd, cl);
+				mov(op_rd, op_rs);
+				shl(op_rd, op_rd.as_reg().cvt8());
 			}
 			else
 			{
 				mov(ecx, op_rs);
-				mov(eax, ecx);
-				and_(ecx, int32(instructions::Bits(5)));
-				shl(eax, cl);
-				mov(op_rd, eax);
+				shl(ecx, cl);
+				mov(op_rd, ecx);
 			}
 		}
 		else
 		{
-			mov(ecx, op_rs);
 			if (op_rd.isREG())
 			{
-				mov(op_rd, op_rs.if_reg(ecx));
-			}
-			else
-			{
-				mov(eax, op_rt);
-			}
-			and_(ecx, int32(instructions::Bits(5)));
-			if (op_rd.isREG())
-			{
+				mov(ecx, op_rs);
+				mov(op_rd, op_rt);
 				shl(op_rd, cl);
 			}
 			else
 			{
+				mov(ecx, op_rs);
+				mov(eax, op_rt);
 				shl(eax, cl);
 				mov(op_rd, eax);
 			}
@@ -2535,7 +2678,7 @@ void Jit1_CodeGen::write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	// rd = rt >>> rs
 	const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
@@ -2567,22 +2710,19 @@ void Jit1_CodeGen::write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, 
 	else if (rs == rt)
 	{
 		mov(ecx, op_rs);
-		mov(eax, ecx);
-		and_(ecx, int32(instructions::Bits(5)));
-		shr(eax, cl);
-		mov(op_rd, eax);
+		shr(ecx, cl);
+		mov(op_rd, ecx);
 	}
 	else
 	{
 		mov(ecx, op_rs);
 		mov(eax, op_rt);
-		and_(ecx, int32(instructions::Bits(5)));
 		shr(eax, cl);
 		mov(op_rd, eax);
 	}
 }
 
-void Jit1_CodeGen::write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, const uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const uint8 stype = instructions::TinyInt<5>(instruction >> 6).zextend<uint8>();
 
@@ -2605,18 +2745,18 @@ void Jit1_CodeGen::write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, 
 	}
 
 	// Defer to the emulator for this. In the end, we're going to call into host code anyway, so might as well let the emulator do it.
-	insert_procedure(address, std::bit_cast<const void*>(instruction_info.Proc), instruction);
+	insert_procedure(address, ptr_cast(instruction_info.Proc), instruction);
 	// `SYNC` does not throw.
 }
 
-Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYNCI(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYNCI(jit1::ChunkOffset & __restrict chunk_offset, const uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 	const int32 offset = instructions::TinyInt<16>(instruction).sextend<int32>();
 
 	if (base.is_zero())
 	{
-		insert_procedure(address, std::bit_cast<const void*>(&SyncInstruction), offset);
+		insert_procedure(address, ptr_cast(&SyncInstruction), offset);
 	}
 	else
 	{
@@ -2627,18 +2767,18 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_SYNCI(jit1::ChunkOffset & _
 			auto&& tmp = is_same(op_base, eax) ? ecx : eax;
 			set(tmp, offset);
 			add(tmp, op_base);
-			insert_procedure(address, std::bit_cast<const void*>(&SyncInstruction), tmp);
+			insert_procedure(address, ptr_cast(&SyncInstruction), tmp);
 		}
 		else
 		{
-			insert_procedure(address, std::bit_cast<const void*>(&SyncInstruction), op_base);
+			insert_procedure(address, ptr_cast(&SyncInstruction), op_base);
 		}
 	}
 
 	return except_result::none; // TODO : for now
 }
 
-Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
+Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, const uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info)
 {
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
 	const instructions::GPRegister<11, 5> rd(instruction, jit_.processor_);
@@ -2665,7 +2805,7 @@ Jit1_CodeGen::except_result Jit1_CodeGen::write_PROC_RDHWR(jit1::ChunkOffset & _
 	return except_result::always_throw;
 }
 
-void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
 {
 	// rt <= extract([rs, msbd, lsb])
 	// msbd = size - 1
@@ -2736,7 +2876,7 @@ void Jit1_CodeGen::write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, ui
 }
 
 // TODO : test me
-void Jit1_CodeGen::write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
 {
 	// TODO : BMI1
 
@@ -2856,7 +2996,7 @@ void Jit1_CodeGen::write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, ui
 	}
 }
 
-void Jit1_CodeGen::write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
 {
 	// rd = signed( ([rs] << (sa + 1)) + [rt] )
 
@@ -2921,7 +3061,7 @@ void Jit1_CodeGen::write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, ui
 	}
 }
 
-void Jit1_CodeGen::write_PROC_CLZ(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_CLZ(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
 {
 	// rd <= count leading zeroes in rs
 
@@ -2941,30 +3081,24 @@ void Jit1_CodeGen::write_PROC_CLZ(jit1::ChunkOffset& __restrict chunk_offset, ui
 	}
 	else if (rs == rd && op_rs.isREG())
 	{
-		if (platform::get_host_features().bmi1)
+		if (platform::get_host_features().lzcnt)
 		{
-			tzcnt(op_rd.as_reg(), op_rd);
+			lzcnt(op_rd.as_reg(), op_rd);
 		}
 		else
 		{
-			auto&& tmp = is_same(op_rd, eax) ? edx : eax;
-			mov(tmp, 32);
-			if (!is_same(op_rd, ecx))
-			{
-				mov(ecx, op_rd);
-			}
-			rep(); bsf(eax, op_rd);
-			if (!is_same(op_rd, eax))
-			{
-				mov(op_rd, eax);
-			}
+			auto&& tmp = is_same(op_rs, eax) ? edx : eax;
+			set(tmp, 63);
+			bsr(tmp, op_rs);
+			xor_(tmp, 31);
+			mov(op_rd, tmp);
 		}
 	}
 	else
 	{
-		if (platform::get_host_features().bmi1)
+		if (platform::get_host_features().lzcnt)
 		{
-			tzcnt(ecx, op_rs);
+			lzcnt(ecx, op_rs);
 			mov(op_rd, ecx);
 		}
 		else
@@ -2973,14 +3107,14 @@ void Jit1_CodeGen::write_PROC_CLZ(jit1::ChunkOffset& __restrict chunk_offset, ui
 			{
 				mov(ecx, op_rs);
 			}
-			mov(eax, 32);
-			rep(); bsf(eax, ecx);
+			mov(eax, 63);
+			bsr(eax, ecx);
 			mov(op_rd, eax);
 		}
 	}
 }
 
-void Jit1_CodeGen::write_PROC_CLO(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
+void Jit1_CodeGen::write_PROC_CLO(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, const instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info)
 {
 	// rd <= count leading ones in rs
 
@@ -3001,25 +3135,17 @@ void Jit1_CodeGen::write_PROC_CLO(jit1::ChunkOffset& __restrict chunk_offset, ui
 	else if (rs == rd && op_rs.isREG())
 	{
 		not_(op_rd);
-		if (platform::get_host_features().bmi1)
+		if (platform::get_host_features().lzcnt)
 		{
-			tzcnt(op_rd.as_reg(), op_rd);
+			lzcnt(op_rd.as_reg(), op_rd);
 		}
 		else
 		{
-			auto&& tmp = is_same(op_rd, eax) ? edx : eax;
-			mov(tmp, 32);
-			if (!is_same(op_rd, ecx))
-			{
-				mov(ecx, op_rd);
-			}
-			{
-				rep(); bsf(eax, op_rd);
-				if (!is_same(op_rd, eax))
-				{
-					mov(op_rd, eax);
-				}
-			}
+			auto&& tmp = is_same(op_rs, eax) ? edx : eax;
+			set(tmp, 63);
+			bsr(tmp, op_rs);
+			xor_(tmp, 31);
+			mov(op_rd, tmp);
 		}
 	}
 	else
@@ -3027,15 +3153,19 @@ void Jit1_CodeGen::write_PROC_CLO(jit1::ChunkOffset& __restrict chunk_offset, ui
 		mov(ecx, op_rs);
 		not_(ecx);
 
-		if (platform::get_host_features().bmi1)
+		if (platform::get_host_features().lzcnt)
 		{
-			tzcnt(ecx, ecx);
+			lzcnt(ecx, ecx);
 			mov(op_rd, ecx);
 		}
 		else
 		{
-			mov(eax, 32);
-			rep(); bsf(eax, ecx);
+			if (!op_rs.isREG() || !is_same(op_rs, ecx))
+			{
+				mov(ecx, op_rs);
+			}
+			mov(eax, 63);
+			bsr(eax, ecx);
 			mov(op_rd, eax);
 		}
 	}

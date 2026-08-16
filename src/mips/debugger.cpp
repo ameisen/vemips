@@ -3,42 +3,59 @@
 #include "pch.hpp"
 #include "debugger.hpp"
 
-#include <cassert>
-
+#include <algorithm>
+#include <array>
 #include <bit>
+#include <cctype>
+#include <cstdio>
+#include <cstring>
+#include <exception>
+#include <limits>
+#include <mutex>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+#include <fmt/format.h>
+
+#define NOMINMAX 1
+#include <WinSock2.h>
+#include <ws2def.h>
+#include <WS2tcpip.h>
+#undef NOMINMAX
+#include "platform/platform_headers.hpp"
 
 #include "elf/elf.hpp"
 #include "mips/system.hpp"
 #include "mips/coprocessor/coprocessor1/coprocessor1.hpp"
-#include "platform/platform_headers.hpp"
 
-#include <WS2tcpip.h>
-#include <WinSock2.h>
 
 using namespace mips;
 
 namespace {
-	static std::array<char, 2> checksum_to_chars(const uint32 sum) {
+	[[nodiscard]]
+	static constexpr _func_const _nothrow std::array<char, 2> checksum_to_chars(const uint32 sum) noexcept {
 		xassert(sum <= std::numeric_limits<uint8>::max());
 
-		const auto nibble_to_char = [](const uint8_t nibble) {
+		const auto nibble_to_char = [] (const uint8 nibble) noexcept {
 			if (nibble < 10) {
 				return char('0' + nibble);
 			}
 			else {
-				return char('a' + uint8_t(nibble - 10));
+				return char('a' + uint8(nibble - 10));
 			}
 		};
 
-		const uint8_t low_nibble = sum & 0xF;
-		const uint8_t hi_nibble = (sum >> 4) & 0xF;
+		const uint8 low_nibble = sum & 0xF;
+		const uint8 hi_nibble = (sum >> 4) & 0xF;
 
 		return { nibble_to_char(hi_nibble), nibble_to_char(low_nibble) };
 	}
 
 	static WSADATA g_wsa_data;
 
-	static std::vector<char> assemble_packet(const std::span<const char> payload) {
+	[[nodiscard]]
+	static _nothrow std::vector<char> assemble_packet(const std::span<const char> payload) noexcept {
 		std::vector<char> packet;
 		packet.resize(payload.size() + 4);
 		packet[0] = '$';
@@ -52,7 +69,7 @@ namespace {
 
 		const auto checksum_chars = checksum_to_chars(sum);
 
-		memcpy(&packet[1], payload.data(), payload.size());
+		std::memcpy(&packet[1], payload.data(), payload.size());
 
 		packet[packet.size() - 3] = '#';
 		packet[packet.size() - 2] = checksum_chars[0];
@@ -61,12 +78,13 @@ namespace {
 		return packet;
 	}
 
-	static bool begins(const std::string_view str, const std::string_view ref) {
+	[[nodiscard]]
+	static _pure _nothrow bool begins(const std::string_view str, const std::string_view ref) noexcept {
 		if (str.length() < ref.length()) {
 			return false;
 		}
 
-		for (size_t i = 0; i < ref.length(); ++i) {
+		for (usize i = 0; i < ref.length(); ++i) {
 			if (str[i] != ref[i]) {
 				return false;
 			}
@@ -76,6 +94,7 @@ namespace {
 	}
 
 	struct debugger_init final {
+		[[nodiscard]]
 		debugger_init() {
 			if (WSAStartup(MAKEWORD(2, 2), &g_wsa_data) != 0) [[unlikely]] {
 				throw std::exception("Failed to initialize WinSock");
@@ -84,7 +103,7 @@ namespace {
 	};
 }
 
-debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
+debugger::debugger(const uint16 port, mips::system& sys) : m_system(sys) {
 	// ReSharper disable once CppDeclaratorNeverUsed
 	static debugger_init init_singleton = {};
 
@@ -95,6 +114,7 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 		.ai_protocol = IPPROTO_TCP
 	};
 
+	// TODO : change to std::unique_ptr bound to freeaddrinfo
 	addrinfo *result = nullptr;
 	char port_str[std::numeric_limits<uint16>::digits10 + 2];
 	*fmt::format_to(port_str, "{}", port) = '\0';
@@ -112,7 +132,10 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 
 		res = bind(m_ListenSocket, result->ai_addr, int(result->ai_addrlen));
 		if (res == SOCKET_ERROR) {
-			closesocket(m_ListenSocket);
+			if (0 != closesocket(m_ListenSocket))
+			{
+				// what to do when it fails...? We are already erroring out.
+			}
 			m_ListenSocket = INVALID_SOCKET;
 			throw std::exception("socket bind failed");
 		}
@@ -120,9 +143,15 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 		freeaddrinfo(result);
 
 		DWORD value = 1;
-		setsockopt(m_ListenSocket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&value), sizeof(value));
+		if (0 != setsockopt(m_ListenSocket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&value), sizeof(value)))
+		{
+			throw std::exception("Failed to set TCP_NODELAY on socket");
+		}
 		value = 0;
-		setsockopt(m_ListenSocket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&value), sizeof(value));
+		if (0 != setsockopt(m_ListenSocket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&value), sizeof(value)))
+		{
+			throw std::exception("Failed to set SO_SNDBUF on socket");
+		}
 	}
 	catch (...) {
 		closesocket(m_ListenSocket);
@@ -131,7 +160,10 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 
 	res = listen(m_ListenSocket, SOMAXCONN);
 	if (res == SOCKET_ERROR) {
-		closesocket(m_ListenSocket);
+		if (0 != closesocket(m_ListenSocket))
+		{
+			// what to do when it fails...? We are already erroring out.
+		}
 		m_ListenSocket = INVALID_SOCKET;
 		throw std::exception("socket listen failed");
 	}
@@ -150,14 +182,20 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 			m_non_stop = false;
 
 			DWORD value = 1;
-			setsockopt(m_ClientSocket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&value), sizeof(value));
+			if (0 != setsockopt(m_ClientSocket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<char*>(&value), sizeof(value)))
+			{
+				throw std::exception("Failed to set TCP_NODELAY on socket");
+			}
 			value = 0;
-			setsockopt(m_ClientSocket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&value), sizeof(value));
+			if (0 != setsockopt(m_ClientSocket, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<char*>(&value), sizeof(value)))
+			{
+				throw std::exception("Failed to set SO_SNDBUF on socket");
+			}
 
 			bool in_packet = false;
-			unsigned remaining_checksum = 0;
+			uint32 remaining_checksum = 0;
 
-			static constexpr size_t max_buffer_size = 8192;
+			static constexpr usize max_buffer_size = 8192;
 			std::vector<char> buffer;
 			while (m_ClientSocket != INVALID_SOCKET) {
 				char temp_buffer[512];
@@ -236,7 +274,7 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 									
 									std::string out;
 									out.resize(out_packet.size());
-									memcpy(out.data(), out_packet.data(), out_packet.size());
+									std::memcpy(out.data(), out_packet.data(), out_packet.size());
 									fmt::println("Sent: {}", out);
 								}
 								else {
@@ -245,17 +283,18 @@ debugger::debugger(const uint16 port, mips::system &sys) : m_system(sys) {
 								}
 							}
 							else {
-								handle_packet(buffer, response);
+								if (handle_packet(buffer, response))
+								{
+									auto out_packet = assemble_packet(response);
 
-								auto out_packet = assemble_packet(response);
+									xassert(out_packet.size() <= std::numeric_limits<int>::max());
+									send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
 
-								xassert(out_packet.size() <= std::numeric_limits<int>::max());
-								send(m_ClientSocket, out_packet.data(), int(out_packet.size()), 0);
-
-								std::string out;
-								out.resize(out_packet.size());
-								memcpy(out.data(), out_packet.data(), out_packet.size());
-								fmt::println("Sent: {}", out);
+									std::string out;
+									out.resize(out_packet.size());
+									std::memcpy(out.data(), out_packet.data(), out_packet.size());
+									fmt::println("Sent: {}", out);
+								}
 							}
 							buffer.clear();
 						}
@@ -277,13 +316,14 @@ debugger::~debugger() {
 }
 
 namespace {
-	static bool test_checksum(const std::vector<char> & __restrict packet) {
-		const std::array checksum = { packet[packet.size() - 2], packet[packet.size() - 1] };
+	[[nodiscard]]
+	static _pure _nothrow bool test_checksum(const std::vector<char>& __restrict packet) noexcept {
+		const std::array checksum { packet[packet.size() - 2], packet[packet.size() - 1] };
 
-		const size_t packet_len = packet.size() - 3;
+		const usize packet_len = packet.size() - 3;
 
 		uint32 sum = 0;
-		for (size_t i = 1; i < packet_len; ++i) {
+		for (usize i = 1; i < packet_len; ++i) {
 			sum += packet[i];
 		}
 		sum %= 256;
@@ -294,7 +334,7 @@ namespace {
 	}
 }
 
-bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::vector<char> & __restrict response) {
+bool debugger::handle_packet(const std::vector<char>& __restrict packet, std::vector<char>& __restrict response) {
 	fmt::println("Packet: {}", std::string_view{packet.data(), packet.size()});
 
 	if (!test_checksum(packet)) {
@@ -306,20 +346,20 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	};
 
 	const auto hash_iterator = std::find(packet.begin() + 1, packet.end(), '#');
-	auto in = std::string{ std::string_view{&packet[1], size_t((hash_iterator - packet.begin()) - 1)} };
+	auto in = std::string{ std::string_view{&packet[1], usize((hash_iterator - packet.begin()) - 1)} };
 
 	std::vector<std::string> tokens;
 
 	const auto get_token = [&](const size_t i) -> std::string_view {
 		if (i >= tokens.size()) {
-			return "";
+			return {};
 		}
 		return tokens[i];
 	};
 
 	{
 		const auto is_delim = [](const char c) -> bool {
-			return isspace(c) || c == ';' || c == ':';
+			return std::isspace(c) || c == ';' || c == ':';
 		};
 
 		std::string token;
@@ -640,7 +680,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 		// no idea
 	}
 	else if (begins(get_token(0), "c")) {
-		uint32 address = m_system.get_processor()->get_program_counter();
+		uptr_guest address = m_system.get_processor()->get_program_counter();
 		if (!get_token(1).empty())
 		{
 			std::sscanf(get_token(1).data(), "%x", &address);
@@ -672,13 +712,13 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	}
 	else if (get_token(0)[0] == 'm') {
 		// we're reading memory.
-		uint32 addr = 0;
-		uint32 length = 0;
+		uptr_guest addr = 0;
+		usize_guest length = 0;
 		std::sscanf(&get_token(0)[1], "%x,%x", &addr, &length);
 		
 		bool has_response = false;
 
-		for (uint32 i = 0; i < length; ++i) {
+		for (usize_guest i = 0; i < length; ++i) {
 			if (auto *ptr = m_system.get_processor()->mem_fetch_debugger<uint8>(addr)) {
 				char buffer[3];
 				*fmt::format_to(buffer, "{:02x}", *ptr) = '\0';
@@ -699,7 +739,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	else if (get_token(0)[0] == 'Z') {
 		// The command we get is malformed?
 		uint32 type;
-		uint32 address;
+		uptr_guest address;
 		uint32 kind;
 		std::sscanf(get_token(0).data(), "Z%x,%x,%x", &type, &address, &kind);
 
@@ -712,7 +752,7 @@ bool debugger::handle_packet(const std::vector<char> & __restrict packet, std::v
 	else if (get_token(0)[0] == 'z') {
 		// The command we get is malformed?
 		uint32 type;
-		uint32 address;
+		uptr_guest address;
 		uint32 kind;
 		std::sscanf(get_token(0).data(), "z%x,%x,%x", &type, &address, &kind);
 
@@ -829,7 +869,7 @@ void debugger::wait() {
 	}
 }
 
-void debugger::handle_kill() {
+_nothrow void debugger::handle_kill() noexcept {
 	m_should_kill = true;
 	if (!m_paused) {
 		if (m_system.is_debugger_owned()) {
@@ -842,7 +882,7 @@ void debugger::handle_kill() {
 	}
 }
 
-void debugger::handle_stop() {
+_nothrow void debugger::handle_stop() noexcept {
 	m_threads_to_pause = 1; // todo when threads.
 	m_paused = true;
 
@@ -851,13 +891,13 @@ void debugger::handle_stop() {
 	}
 }
 
-bool debugger::should_interrupt_execution() {
+_nothrow bool debugger::should_interrupt_execution() noexcept {
 	if (m_paused || m_should_kill) {
 		return true;
 	}
 
 	const uint32 thread = 1;
-	const uint32 pc = m_system.get_processor()->get_program_counter();
+	const uptr_guest pc = m_system.get_processor()->get_program_counter();
 	std::unique_lock _bplock(m_breakpoint_lock);
 
 	// check for breakpoints

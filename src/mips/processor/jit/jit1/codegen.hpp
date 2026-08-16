@@ -1,17 +1,19 @@
 #pragma once
 
+#include <array>
 #include <bit>
+#include <functional>
 #include <variant>
 
-#define XBYAK_STRICT_CHECK_MEM_REG_SIZE 0
-#include <xbyak.h>
-#undef XBYAK_STRICT_CHECK_MEM_REG_SIZE
+#include "jit1_xbyak.hpp"
 
 #include "mips_common.hpp"
 #include "abi/jit1_abi_win64.hpp"
 #include "instructions/instructions_common.hpp"
+#include "mips/coprocessor/coprocessor1/coprocessor1.hpp"
 #include "mips/processor/jit/jit1/jit1.hpp"
 #include "mips/processor/processor.hpp"
+#include "platform/win32/platform_win32.hpp"
 
 #define WITH_WIN64_ABI 1
 
@@ -26,12 +28,16 @@ namespace mips
 	#define _xbyak_nothrow
 #endif
 
-	static bool is_same(const Xbyak::Reg& a, const Xbyak::Reg& b)
+	[[nodiscard]]
+	_pure _nothrow
+	static bool is_same(const Xbyak::Reg& a, const Xbyak::Reg& b) noexcept
 	{
 		return a.getIdx() == b.getIdx();
 	}
 
-	static bool is_same(const Xbyak::Operand& a, const Xbyak::Operand& b)
+	[[nodiscard]]
+	_pure _nothrow
+	static bool is_same(const Xbyak::Operand& a, const Xbyak::Operand& b) noexcept
 	{
 		if (a.isREG() && b.isREG())
 		{
@@ -39,6 +45,15 @@ namespace mips
 		}
 		return a == b;
 	}
+
+	enum class JumpFlags : uint8
+	{
+		None = 0,
+		ExternalCall = 1U << 0,
+		AlwaysOutOfRange = 1U << 1,
+	};
+
+	MAKE_BITFLAG_ENUM(JumpFlags)
 
 	class jit1;
 	class Jit1_CodeGen final : public Xbyak::CodeGenerator
@@ -82,6 +97,7 @@ namespace mips
 			intrinsic ov;
 			intrinsic tr;
 			intrinsic cpu;
+			intrinsic internal_flow;
 			intrinsic check_ex;
 			intrinsic save_return_eax_pc;
 			intrinsic save;
@@ -93,35 +109,15 @@ namespace mips
 			intrinsic chunk_start;
 			intrinsic intrinsic_start;
 		} intrinsics_;
-		jit1 & __restrict jit_;
-		uint8* const address_;
+		jit1& __restrict jit_;
 
 	public:
 
-		Jit1_CodeGen(jit1 & __restrict jit, uint8 * const userptr, const size_t usersz)
-			: Xbyak::CodeGenerator(usersz, userptr)
+		Jit1_CodeGen(jit1& __restrict jit, uint8* const user_ptr, const usize user_size)
+			: Xbyak::CodeGenerator(user_size, user_ptr)
 			, jit_(jit)
-			, address_(userptr)
 		{}
 		virtual ~Jit1_CodeGen() override = default;
-
-		uint8* get_address() const {
-			return address_;
-		}
-
-		uint8* get_current_address() const {
-			return address_ + getSize();
-		}
-
-		void exchange(
-			const Xbyak::Reg& a,
-			const Xbyak::Reg& b
-		)
-		{
-			#pragma message("use three moves for proper chips instead of xchg")
-			#pragma message("fix reg sizes")
-			xchg(a, b);
-		}
 
 		// returns `true` if temporary was used
 		[[nodiscard]]
@@ -131,11 +127,37 @@ namespace mips
 			const Xbyak::Reg& tmp
 		)
 		{
-			#pragma message("use three moves for proper chips instead of xchg")
-			if (a.isREG() && b.isREG())
+			xassert(!is_same(a, b));
+			const uint32 bit_size = a.getBit();
+			xassert(bit_size == b.getBit());
+			xassert(bit_size >= 8 && bit_size <= (sizeof(void*) * CHAR_BIT));
+
+			const bool is_reg[2] = { a.isREG(), b.isREG() };
+
+			if (
+				(
+					platform::get_host_features().fast_xchg_rr8_16 &&
+					(bit_size >= 8 && bit_size <= 16 && is_reg[0] && is_reg[1])
+				) ||
+				(
+					platform::get_host_features().fast_xchg_rr32_64 &&
+					(bit_size >= 32 && bit_size <= 64 && is_reg[0] && is_reg[1])
+				) ||
+				(
+					platform::get_host_features().fast_xchg_rm &&
+					(is_reg[0] != is_reg[1])
+				)
+			)
 			{
-				exchange(a.getReg(), b.getReg());
+				xchg(a, b);
 				return false;
+			}
+			else if (!is_reg[0] && !is_reg[1])
+			{
+				mov(tmp, a);
+				xchg(b, tmp);
+				mov(a, tmp);
+				return true;
 			}
 			else
 			{
@@ -146,35 +168,32 @@ namespace mips
 			}
 		}
 
-		void set(const Xbyak::Operand& dst, const uint64 imm)
+		template <typename TImmediate>
+		requires ((std::is_integral_v<TImmediate> && sizeof(TImmediate) <= sizeof(uintptr)) || std::is_pointer_v<TImmediate>)
+		void set(const Xbyak::Operand& dst, const TImmediate imm)
 		{
+			const uintptr immediate = uintptr(imm);
+
 			if (!dst.isREG())
 			{
-				mov(dst, imm);
+				mov(dst, immediate);
 				return;
 			}
 
-			const auto& dest = [&]
-			{
-				if (dst.getBit() == 64 && in_range<uint32>(imm))
-				{
-					Xbyak::Operand result = dst;
-					result.setBit(32);
-					return result;
-				}
-				else
-				{
-					return dst;
-				}
-			}();
+			Xbyak::Operand dest = dst;
 
-			if (imm == 0ULL)
+			if (dst.getBit() == 64 && in_range<uint32>(immediate))
+			{
+				dest.setBit(32);
+			}
+
+			if (immediate == 0ULL)
 			{
 				xor_(dest, dest);
 			}
 			else
 			{
-				mov(dest, imm);
+				mov(dest, immediate);
 			}
 		}
 
@@ -406,8 +425,57 @@ namespace mips
 			adjust_stack(amount, ecx);
 		}
 
+		struct [[clang::trivial_abi]] stack_adjuster final
+		{
+			Jit1_CodeGen& cg;
+			int32 size = 0;
+			const Xbyak::Reg& dummy;
+
+			stack_adjuster() = delete;
+			[[nodiscard]]
+			_nothrow stack_adjuster(
+				Jit1_CodeGen* cg,
+				const int32 size,
+				const std::optional<std::reference_wrapper<const Xbyak::Reg>>& dummy = {}
+			) noexcept :
+				cg(*cg),
+				size(size),
+				dummy(dummy.value_or(cg->ebx).get())
+			{
+				cg->adjust_stack(size, this->dummy);
+			}
+			stack_adjuster(const stack_adjuster&&) = delete;
+			[[nodiscard]]
+			_nothrow stack_adjuster(stack_adjuster&& other) noexcept :
+				cg(other.cg),
+				size(other.size),
+				dummy(other.dummy)
+			{
+				other.size = 0;
+			}
+
+			_nothrow ~stack_adjuster() noexcept
+			{
+				cg.adjust_stack(-size, dummy);
+			}
+
+			stack_adjuster& operator=(const stack_adjuster&) = delete;
+			stack_adjuster& operator=(stack_adjuster&&) = delete;
+		};
+
+		[[nodiscard]]
+		_nothrow
+		stack_adjuster get_stack_adjuster(const int32 size, const std::optional<std::reference_wrapper<const Xbyak::Reg>>& dummy = {}) noexcept
+		{
+			return {
+				this,
+				size,
+				dummy
+			};
+		}
+
 		// returns `true` if temporary register was used
-		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		template <JumpFlags Flags = JumpFlags::None, uint32 Realignment = 0U>
 		[[nodiscard]]
 		bool call_ex(
 			const void* const pointer,
@@ -416,58 +484,66 @@ namespace mips
 			const std::function<void(const Xbyak::Reg&)>& restore_tmp = {}
 		)
 		{
-			const intptr diff = reinterpret_cast<uintptr>(pointer) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
-
 			// The stack is pre-adjusted to reserved bytes in the secondary springboard.
-			constexpr int32 stack_adjust = stack_realignment<true, ExternalCall, Realignment>;
+			constexpr int32 stack_adjust = stack_realignment<true, enumeration::has_all(Flags, JumpFlags::ExternalCall), Realignment>;
+			
+			const bool is_in_range = [&] {
+				if (enumeration::has_all(Flags, JumpFlags::AlwaysOutOfRange))
+				{
+					return false;
+				}
+				else
+				{
+					const intptr diff = reinterpret_cast<intptr>(pointer) - intptr(getCurr() + 5); // E8'xx'xx'xx'xx
+					return in_range<int32>(diff);
+				}
+			}();
 
-			const bool is_in_range = in_range<int32>(diff);
-
+			{
 			const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
 				edx :
 				ecx;
 
-			adjust_stack(stack_adjust, dummy);
+				stack_adjuster adjuster = get_stack_adjuster(stack_adjust, dummy);
 
-			if (!is_in_range)
-			{
-				if (spill_tmp) { spill_tmp(tmp); }
-				set(tmp, intptr(pointer));
-				call(tmp);
+				if (!is_in_range)
+				{
+					if (spill_tmp) { spill_tmp(tmp); }
+					set(tmp, intptr(pointer));
+					call(tmp);
+				}
+				else
+				{
+					call(pointer);
+				}
 			}
-			else
-			{
-				call(pointer);
-			}
 
-			adjust_stack(-stack_adjust, dummy);
-
-			if (!is_in_range)
+			if (!is_in_range && restore_tmp)
 			{
-				if (restore_tmp) { restore_tmp(tmp); }
+				restore_tmp(tmp);
 			}
 
 			return !is_in_range;
 		}
 
-		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		template <JumpFlags Flags = JumpFlags::None, uint32 Realignment = 0U>
 		void call_ex(
-			const Xbyak::Operand& target
+			const Xbyak::Reg& target
 		)
 		{
-			constexpr int32 stack_adjust = stack_realignment<true, ExternalCall, Realignment>;
+			constexpr int32 stack_adjust = stack_realignment<true, enumeration::has_all(Flags, JumpFlags::ExternalCall), Realignment>;
 
-			const Xbyak::Reg& dummy = ecx;
+			{
+				const Xbyak::Reg& dummy = ecx;
 
-			adjust_stack(stack_adjust, dummy);
+				stack_adjuster adjuster = get_stack_adjuster(stack_adjust, dummy);
 
-			call(target);
-
-			adjust_stack(-stack_adjust, dummy);
+				call(target);
+			}
 		}
 
 		// returns `true` if temporary register was used
-		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		template <JumpFlags Flags = JumpFlags::None, uint32 Realignment = 0U>
 		[[nodiscard]]
 		bool jmp_ex(
 			const void* const pointer,
@@ -475,17 +551,17 @@ namespace mips
 			const std::function<void(const Xbyak::Reg&)>& spill_tmp = {}
 		)
 		{
-			const intptr diff = reinterpret_cast<uintptr>(pointer) - uintptr(get_current_address() + 5); // E8'xx'xx'xx'xx
+			const intptr diff = reinterpret_cast<intptr>(pointer) - intptr(getCurr() + 5); // E8'xx'xx'xx'xx
 
-			constexpr int32 stack_adjust = stack_realignment<false, ExternalCall, Realignment>;
+			const bool is_in_range = !enumeration::has_all(Flags, JumpFlags::AlwaysOutOfRange) && in_range<int32>(diff);
 
-			const bool is_in_range = in_range<int32>(diff);
+#if !WITH_WIN64_ABI
+			constexpr int32 stack_adjust = stack_realignment<false, enumeration::has_all(Flags, JumpFlags::ExternalCall), Realignment>;
 
 			const Xbyak::Reg& dummy = is_same(tmp, ecx) ?
 				edx :
 				ecx;
 
-#if !WITH_WIN64_ABI
 			adjust_stack(-stack_adjust, dummy);
 #else
 			static_assert(Realignment == 0U);
@@ -508,18 +584,18 @@ namespace mips
 			return !is_in_range;
 		}
 
-		template <bool ExternalCall = false, uint32 Realignment = 0U>
+		template <JumpFlags Flags = JumpFlags::None, uint32 Realignment = 0U>
 		void jmp_ex(
-			const Xbyak::Operand& target
+			const Xbyak::Reg& target
 		)
 		{
 			// The stack is pre-adjusted to reserved bytes in the secondary springboard 
 			// We need to restore it prior to an external jump, so the `ret` gets the return address correctly.
-			constexpr int32 stack_adjust = stack_realignment<false, ExternalCall, Realignment>;
-
-			const Xbyak::Reg& dummy = ecx;
+			constexpr int32 stack_adjust = stack_realignment<false, enumeration::has_all(Flags, JumpFlags::ExternalCall), Realignment>;
 
 #if !WITH_WIN64_ABI
+			const Xbyak::Reg& dummy = ecx;
+
 			adjust_stack(-stack_adjust, dummy);
 #else
 			static_assert(Realignment == 0U);
@@ -590,9 +666,10 @@ namespace mips
 		template <int32 StackAdjust = 0>
 		void escape_ret()
 		{
-			constexpr int32 stack_adjust = stack_realignment<false, true, StackAdjust>;
+			//constexpr int32 stack_adjust = stack_realignment<false, true, StackAdjust>;
 
-			const Xbyak::Reg& dummy = ecx;
+			//const Xbyak::Reg& dummy = ecx;
+			//adjust_stack(stack_adjust, dummy);
 
 			// Copy the return pointer to the top of the stack, which also will realign the stack.
 			push(qword[rsp + mips::jit::abi::win64::caller_stack_reserve]);
@@ -642,6 +719,8 @@ namespace mips
 
 		public:
 			template <typename Self>
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow copy_qualifiers_ref<Self, Xbyak::Operand> get_operand(this Self&& self) noexcept
 			{
 				if (!self.operand_)
@@ -653,31 +732,43 @@ namespace mips
 				return *self.operand_;
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow const Xbyak::Operand& operator *() const noexcept
 			{
 				return get_operand();
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow const Xbyak::Operand* operator ->() const noexcept
 			{
 				return &get_operand();
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow operator const Xbyak::Operand&() const noexcept
 			{
 				return get_operand();
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow bool isMEM() const noexcept
 			{
 				return get_operand().isMEM();
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow bool isREG() const noexcept
 			{
 				return get_operand().isREG();
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			const Xbyak::Reg& as_reg() const
 			{
 				const Xbyak::Operand& operand = get_operand();
@@ -685,6 +776,8 @@ namespace mips
 				return static_cast<const Xbyak::Reg&>(operand);
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow Xbyak::Operand if_reg(const Xbyak::Operand& else_operand) const noexcept
 			{
 				auto&& operand = get_operand();
@@ -694,6 +787,8 @@ namespace mips
 						else_operand;
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow Xbyak::Operand if_mem(const Xbyak::Operand& else_operand) const noexcept
 			{
 				auto&& operand = get_operand();
@@ -719,6 +814,8 @@ namespace mips
 			variant_type storage_;
 
 			template <typename TVariant, typename T = copy_qualifiers_ref<TVariant, Xbyak::Operand>>
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			static _nothrow T get_reference(TVariant& variant) noexcept
 			{
 				T result = std::visit([](auto& ref) -> T { return static_cast<T&>(ref); }, variant);
@@ -733,12 +830,16 @@ namespace mips
 			{
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow operator const Xbyak::Operand&() const noexcept
 			{
 				const Xbyak::Operand& result = get_reference(storage_);
 				return result;
 			}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			_nothrow operator Xbyak::Operand&() noexcept
 			{
 				Xbyak::Operand& result = get_reference(storage_);
@@ -766,6 +867,8 @@ namespace mips
 				, storage_(register_info{_register, size})
 			{}
 
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			virtual _nothrow const Xbyak::Operand& get_value() const noexcept override
 			{
 				if (VariantOperand* variant = std::get_if<VariantOperand>(&storage_))
@@ -787,13 +890,15 @@ namespace mips
 					case 3: [[unlikely]]
 						return storage_.emplace<VariantOperand>(codegen.get_register_op64_internal(info.register_));
 					default: [[unlikely]]
-						xassert(false);
+						xunreachable("Unhandled Operand Size");
 				}
 			}
 
 		public:
 			template <usize Size>
 			requires(Size == 8 || Size == 16 || Size == 32 || Size == 64)
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
 			static _nothrow LazyRegisterOperand get(
 				Jit1_CodeGen& codegen,
 				const instructions::GPRegisterInfo& _register
@@ -812,6 +917,8 @@ namespace mips
 
 	private:
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		VariantOperand get_register_op8_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
 
@@ -824,6 +931,8 @@ namespace mips
 		}
 
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		VariantOperand get_register_op16_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
 		
@@ -836,6 +945,8 @@ namespace mips
 		}
 
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		VariantOperand get_register_op32_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
 		
@@ -848,6 +959,8 @@ namespace mips
 		}
 
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		VariantOperand get_register_op64_internal(const GPR &reg) const {
 			const auto reg_offset = reg.get_offset();
 		
@@ -859,28 +972,50 @@ namespace mips
 			}
 		}
 
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
+		_nothrow Xbyak::Address get_register_gp_mem_operand(const uint32 index) noexcept
+		{
+			//xassert(index != 0);
+			xassert(index < processor::num_registers);
+
+			const int8 offset = processor::recompiler_offsets<>::get<int8>().registers;
+
+			const int8 result = value_assert<int8>(offset + (sizeof(processor::register_type) * index));
+
+			return dword[rbp + result];
+		}
+
 	public:
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		LazyRegisterOperand get_register_op8(const GPR &reg) {
 			return LazyRegisterOperand::get<8>(*this, reg);
 		}
 
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		LazyRegisterOperand get_register_op16(const GPR &reg) {
 			return LazyRegisterOperand::get<16>(*this, reg);
 		}
 
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		LazyRegisterOperand get_register_op32(const GPR &reg) {
 			return LazyRegisterOperand::get<32>(*this, reg);
 		}
 
 		template <typename GPR>
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
 		LazyRegisterOperand get_register_op64(const GPR &reg) {
 			return LazyRegisterOperand::get<64>(*this, reg);
 		}
 
-		void write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update);
+		void write_chunk(jit1::ChunkOffset& __restrict chunk_offset, jit1::Chunk& __restrict chunk, uptr_guest start_address, bool update);
 		enum class except_result : uint32
 		{
 			none          = 0U,	     // neither throws nor sets exception
@@ -891,13 +1026,19 @@ namespace mips
 			always_exits  = 1U << 4, // always exits generated codestream
 		};
 
-		void insert_procedure(uint32 address, const void* procedure, uint32 argument0);
-		void insert_procedure(uint32 address, const void* procedure,  const Xbyak::Operand& argument0);
-		except_result insert_procedure_check_hazard(uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info, uint32 argument0);
-		void insert_procedure_hazard(uint32 address, const void* procedure, uint32 argument0);
-		void insert_procedure_hazard(uint32 address, const void* procedure, const Xbyak::Operand& argument0);
+		void insert_instruction_procedure(uptr_guest address, const void* procedure, uint32 argument0);
+		void insert_instruction_procedure(uptr_guest address, const void* procedure,  const Xbyak::Operand& argument0);
+		[[nodiscard]]
+		except_result insert_instruction_procedure_check_hazard(uptr_guest address, const mips::instructions::InstructionInfo& __restrict instruction_info, uint32 argument0);
+		void insert_procedure(uptr_guest address, const void* procedure, uint32 argument0);
+		void insert_procedure(uptr_guest address, const void* procedure,  const Xbyak::Operand& argument0);
+		[[nodiscard]]
+		except_result insert_procedure_check_hazard(uptr_guest address, const mips::instructions::InstructionInfo& __restrict instruction_info, uint32 argument0);
+		void insert_procedure_hazard(uptr_guest address, const void* procedure, uint32 argument0);
+		void insert_procedure_hazard(uptr_guest address, const void* procedure, const Xbyak::Operand& argument0);
 
-		bool interpret_if_hazard(uint32 address, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		[[nodiscard]]
+		bool interpret_if_hazard(uptr_guest address, const mips::instructions::InstructionInfo& __restrict instruction_info);
 
 		enum class insert_location : uint32
 		{
@@ -910,100 +1051,101 @@ namespace mips
 
 		using insert_function_type = void(const jit1::Chunk& __restrict, const jit1::ChunkOffset& __restrict, uint32);
 
-		void write_PROC_SUBU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SUBU(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_SUB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_OR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_NOR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_AND(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_MOVE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_ADDIU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_SUB(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_OR(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_NOR(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_AND(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_MOVE(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_ADDIU(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_ADDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_ADDI(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_ADDU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_AUI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SLT(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SEB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_EHB(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_ADD(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_AUI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_ORI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_ANDI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SELEQZ(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SELNEZ(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SLT(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SLTU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SLTI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SLTIU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_MUL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_MUH(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_MULU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_MUHU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_DIV(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_MOD(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_DIVU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_MODU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_XOR(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_XORI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SEB(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SEH(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_EHB(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SLL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SRL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SRA(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SLLV(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SRLV(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_RDHWR(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_SYNC(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_SYNCI(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
-		void write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
-		void write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
-		void write_PROC_CLZ(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
-		void write_PROC_CLO(jit1::ChunkOffset& __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		except_result write_PROC_SYNCI(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_PROC_EXT(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_INS(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_LSA(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_CLZ(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
+		void write_PROC_CLO(jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo& __restrict instruction_info);
 
 		[[nodiscard]]
-		except_result write_PROC_TEQ(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_TEQ(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_TGE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_TGE(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_TGEU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_TGEU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_TLT(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_TLT(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_TLTU(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		[[nodiscard]]
-		except_result write_PROC_TNE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		except_result write_PROC_TNE(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		[[nodiscard]]
-		except_result write_PROC_SYSCALL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex);
+		except_result write_PROC_SYSCALL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex);
 
 		[[nodiscard]]
-		except_result write_PROC_BREAK(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex);
+		except_result write_PROC_BREAK(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex);
 
 		[[nodiscard]]
-		except_result write_PROC_SIGRIE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex);
+		except_result write_PROC_SIGRIE(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, const Xbyak::Label& intrinsic_ex);
 
 		// returns empty if it was unhandled
 		[[nodiscard]]
-		std::optional<except_result> write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		std::optional<except_result> write_STORE(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 		// returns empty if it was unhandled
 		[[nodiscard]]
-		std::optional<except_result> write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		std::optional<except_result> write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		// FPU ops
-		void write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_COP1_MTC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_COP1_MFHC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_COP1_MTHC1(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		void write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_COP1_MFC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_COP1_MTC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_COP1_MFHC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_COP1_MTHC1(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		void write_COP1_SEL(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		// returns 'true' if compact branch patch is needed.
-		std::tuple<std::function<insert_function_type>, insert_location, except_result> write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		[[nodiscard]]
+		std::tuple<std::function<insert_function_type>, insert_location, except_result> write_compact_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
 
 		// returns 'true' if it was unhandled.
 		[[nodiscard]]
-		except_result write_delay_branch(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
-		enum class branch_type : uint32 {
+		except_result write_delay_branch(jit1::ChunkOffset & __restrict chunk_offset, uptr_guest address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info);
+		enum class branch_type : uint8 {
 			none = 0,
 			near_branch,				  // Branches within this chunk			
 			far_branch,						 // Branches outside this chunk
@@ -1012,7 +1154,14 @@ namespace mips
 			far_branch_unhandled,			// Branches outside this chunk, use pc state
 			indeterminate_unhandled		 // Branches to an unknown location, use pc state
 		};
-		void handle_delay_branch(jit1::Chunk & __restrict chunk, jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info, bool hazard);
+		void handle_delay_branch(
+			jit1::Chunk & __restrict chunk,
+			jit1::ChunkOffset & __restrict chunk_offset,
+			uptr_guest address,
+			instruction_t instruction,
+			const mips::instructions::InstructionInfo & __restrict instruction_info,
+			bool hazard
+		);
 
 		template <typename... Args>
 		_forceinline _nothrow void db(uint8 arg, Args... args) {
@@ -1038,37 +1187,43 @@ namespace mips
 		processor::flag intrinsic_set_cti_flag();
 		processor::flag intrinsic_set_delay_branch(bool hazard_barrier = false);
 
-		Xbyak::Label intrinsic_write_patch_prolog(const jit1::Chunk& __restrict chunk, void* patch_address, uint32 patch_target_address, const Xbyak::Reg& patch_target_address_reg);
-		void intrinsic_write_patch_epilog(const Xbyak::Label& patch);
-		void intrinsic_write_patch_jump(const jit1::Chunk& __restrict chunk, uint32 target_address, const Xbyak::Reg& patch_target_address_reg, bool set_pc);
-		void intrinsic_insert_jump(const jit1::Chunk& __restrict chunk, const jit1::ChunkOffset& __restrict chunk_offset, uint32 address, const Xbyak::Operand& target_address);
+		[[nodiscard]]
+		uptr intrinsic_write_patch_jump_patcher(
+			uptr_guest target_address,
+			const void* start_address,
+			uint16 patch_index,
+			bool set_pc
+		);
+		void intrinsic_write_patch_jump(jit1::Chunk& __restrict chunk, uptr_guest target_address, bool set_pc);
+		void intrinsic_insert_jump(const jit1::Chunk& __restrict chunk, const jit1::ChunkOffset& __restrict chunk_offset, uptr_guest address, const Xbyak::Operand& target_address);
 
-		void intrinsic_clear_execution_hazards(uint32 current_address);
-		void intrinsic_clear_instruction_hazards(uint32 current_address, uint32 target_address);
-		void intrinsic_clear_instruction_hazards(uint32 current_address, const Xbyak::Reg& target_address_reg);
-		inline void intrinsic_clear_instruction_hazards(const uint32 address)
+		struct alignas(uint8) instruction_hazard_flags final
 		{
-			intrinsic_clear_instruction_hazards(address, address + 4);
+			uint8 delay_branch : 1 = false;
+		};
+
+		void intrinsic_clear_execution_hazards(uptr_guest current_address);
+		void intrinsic_clear_instruction_hazards(uptr_guest current_address, uptr_guest target_address, instruction_hazard_flags flags);
+		void intrinsic_clear_instruction_hazards(uptr_guest current_address, const Xbyak::Reg& target_address_reg, instruction_hazard_flags flags);
+		inline void intrinsic_clear_instruction_hazards(const uptr_guest address, const instruction_hazard_flags flags)
+		{
+			intrinsic_clear_instruction_hazards(address, address + 4, flags);
 		}
 
-		processor& get_processor()
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
+		_nothrow processor& get_processor() noexcept
 		{
 			return jit_.processor_;
 		}
 
-		const processor& get_processor() const
+		[[nodiscard]]
+		_pure // not really pure, but acts like it
+		_nothrow const processor& get_processor() const noexcept
 		{
 			return jit_.processor_;
 		}
 	};
 
-	static constexpr Jit1_CodeGen::except_result operator | (const Jit1_CodeGen::except_result a, const Jit1_CodeGen::except_result b)
-	{
-		return Jit1_CodeGen::except_result(std::to_underlying(a) | std::to_underlying(b));
-	}
-
-	static constexpr Jit1_CodeGen::except_result operator & (const Jit1_CodeGen::except_result a, const Jit1_CodeGen::except_result b)
-	{
-		return Jit1_CodeGen::except_result(std::to_underlying(a) & std::to_underlying(b));
-	}
+	MAKE_BITFLAG_ENUM(Jit1_CodeGen::except_result)
 }

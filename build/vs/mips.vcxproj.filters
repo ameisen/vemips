@@ -74,6 +74,15 @@
     <ClInclude Include="..\..\src\mips\processor\jit\jit1\abi\jit1_abi_win64.hpp">
       <Filter>processor\jit\jit1\abi</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\mips\interpreter\cache\hash_cache.hpp">
+      <Filter>interpreter\cache</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\processor\jit\jit1\jit1_xbyak.hpp">
+      <Filter>processor\jit\jit1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\mips\global_state.hpp" />
+    <ClInclude Include="..\..\src\mips\statistics.hpp" />
+    <ClInclude Include="..\..\src\mips\llsc.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\mips\pch.cpp" />
@@ -131,6 +140,11 @@
     <ClCompile Include="..\..\src\mips\platform\win32\platform_win32.cpp">
       <Filter>platform\win32</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\mips\interpreter\cache\hash_cache.cpp">
+      <Filter>interpreter\cache</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mips\global_state.cpp" />
+    <ClCompile Include="..\..\src\mips\statistics.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="coprocessor">
@@ -160,6 +174,12 @@
     <Filter Include="processor\jit\jit1\abi">
       <UniqueIdentifier>{9e8be2d0-4fb5-4f1d-8b38-136892b9ddad}</UniqueIdentifier>
     </Filter>
+    <Filter Include="interpreter">
+      <UniqueIdentifier>{bc4f3c8d-ab36-4e03-9675-a921fdc13841}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="interpreter\cache">
+      <UniqueIdentifier>{a0446ad5-210a-462d-be98-b690c31d9589}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="..\..\src\mips\processor\jit\jit1\jit1_springboard.s">
@@ -173,5 +193,8 @@
     <Text Include="..\..\src\mips\processor\jit\jit1\jit1_register_assignments.txt">
       <Filter>processor\jit\jit1</Filter>
     </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\cpp.hint" />
   </ItemGroup>
 </Project>

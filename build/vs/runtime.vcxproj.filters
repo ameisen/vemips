@@ -6,12 +6,6 @@
   <ItemGroup>
     <ClInclude Include="..\..\src\common.hpp" />
     <ClInclude Include="..\..\src\elf\pch.hpp" />
-    <ClInclude Include="..\..\src\platform\platform.hpp">
-      <Filter>platform</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\src\platform\common.hpp">
-      <Filter>platform</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\runtime\directory_table.hpp">
       <Filter>runtime</Filter>
     </ClInclude>
@@ -62,9 +56,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="platform">
-      <UniqueIdentifier>{be21a840-8a2d-47d0-b66c-c303ad5aab42}</UniqueIdentifier>
-    </Filter>
     <Filter Include="runtime">
       <UniqueIdentifier>{5cd638f4-19de-4937-9dd3-c8ffc6bc7acc}</UniqueIdentifier>
     </Filter>
@@ -74,10 +65,5 @@
     <Filter Include="external\fmt">
       <UniqueIdentifier>{9f24f89c-ddac-44a9-bd4e-2f27dc55a7ad}</UniqueIdentifier>
     </Filter>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\src\platform\windows.inc">
-      <Filter>platform</Filter>
-    </None>
   </ItemGroup>
 </Project>

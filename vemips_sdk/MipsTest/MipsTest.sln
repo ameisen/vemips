@@ -1,28 +1,46 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.6.33712.159
+# Visual Studio Version 18
+VisualStudioVersion = 18.7.11903.348 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MipsTest", "MipsTest.vcxproj", "{DA676745-74F2-4030-B96B-76790E6B325B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
 		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
+		Debug-LLVM|Win32 = Debug-LLVM|Win32
+		Debug-LLVM|x64 = Debug-LLVM|x64
+		Debug-LLVM|x86 = Debug-LLVM|x86
+		Release|Win32 = Release|Win32
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
+		Release-LLVM|Win32 = Release-LLVM|Win32
 		Release-LLVM|x64 = Release-LLVM|x64
 		Release-LLVM|x86 = Release-LLVM|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug|Win32.Build.0 = Debug|Win32
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug|x64.ActiveCfg = Debug|x64
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug|x64.Build.0 = Debug|x64
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug|x86.ActiveCfg = Debug|Win32
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug|x86.Build.0 = Debug|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug-LLVM|Win32.ActiveCfg = Debug-LLVM|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug-LLVM|Win32.Build.0 = Debug-LLVM|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug-LLVM|x64.ActiveCfg = Debug-LLVM|x64
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug-LLVM|x64.Build.0 = Debug-LLVM|x64
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug-LLVM|x86.ActiveCfg = Debug-LLVM|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Debug-LLVM|x86.Build.0 = Debug-LLVM|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Release|Win32.ActiveCfg = Release|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Release|Win32.Build.0 = Release|Win32
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Release|x64.ActiveCfg = Release|x64
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Release|x64.Build.0 = Release|x64
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Release|x86.ActiveCfg = Release|Win32
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Release|x86.Build.0 = Release|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Release-LLVM|Win32.ActiveCfg = Release-LLVM|Win32
+		{DA676745-74F2-4030-B96B-76790E6B325B}.Release-LLVM|Win32.Build.0 = Release-LLVM|Win32
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Release-LLVM|x64.ActiveCfg = Release-LLVM|x64
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Release-LLVM|x64.Build.0 = Release-LLVM|x64
 		{DA676745-74F2-4030-B96B-76790E6B325B}.Release-LLVM|x86.ActiveCfg = Release-LLVM|Win32
@@ -30,5 +48,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {07D31B72-5552-46B0-AF6A-FB3255A34809}
 	EndGlobalSection
 EndGlobal

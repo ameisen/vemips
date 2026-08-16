@@ -1,0 +1,2 @@
+#define nothrow
+#define check(...)

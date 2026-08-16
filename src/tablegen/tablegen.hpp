@@ -1,10 +1,21 @@
 #pragma once
 
-#include "common.hpp"
+#include <common.hpp>
 #include "instructions/instructions.hpp"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
+#include <iterator>
+#include <span>
+#include <string>
+#include <tuple>
 #include <unordered_map>
+#include <utility>
+#include <fmt/format.h>
+
+#include "mips/instructions/instructions_common.hpp"
+
 
 namespace vemips::tablegen {
 	static constexpr const size_t max_signature_length = 4096;
@@ -13,20 +24,20 @@ namespace vemips::tablegen {
 
 	using crstring = const char* __restrict;
 
-	static inline _nothrow void PrintIndent(size_t indent) {
+	static inline _nothrow void PrintIndent(size_t indent) noexcept {
 		while (indent--) {
-			std::fputc('\t', out_stream);
+			std::ignore = std::fputc('\t', out_stream);
 		}
 	}
 
-	static _nothrow void newline() {
-		std::fputc('\n', out_stream);
+	static _nothrow void newline() noexcept {
+		std::ignore = std::fputc('\n', out_stream);
 	}
 
 #define _INDENTED for (bool once = true; once && ++indent; --indent, once = false)
 
 	template <typename... Tt>
-	static _nothrow void indented_print(const size_t indent, fmt::format_string<Tt...> format, Tt... args) {
+	static _nothrow void indented_print(const size_t indent, fmt::format_string<Tt...> format, Tt... args) noexcept {
 		PrintIndent(indent);
 
 		fmt::println(out_stream, format, std::forward<Tt>(args)...);
@@ -41,7 +52,8 @@ namespace vemips::tablegen {
 		char suffix;
 	};
 
-	static _nothrow const type_signature& GetTypeSignature(const info_t& __restrict info) {
+	[[nodiscard]]
+	static _nothrow const type_signature& GetTypeSignature(const info_t& __restrict info) noexcept {
 		static std::unordered_map<const info_t*, type_signature> signature_map;
 
 		if (const auto iter = signature_map.find(&info); iter != signature_map.end()) {
@@ -91,10 +103,10 @@ namespace vemips::tablegen {
 			suffix = 'n';
 			break;
 		default:  // NOLINT(clang-diagnostic-covered-switch-default)
-			xassert(false);
+			xunreachable("Unknown Procedure Type");
 		}
 
-		const auto result = signature_map.emplace(
+		const auto& result = signature_map.emplace(
 			std::make_pair(
 				&info,
 				type_signature{
@@ -109,7 +121,8 @@ namespace vemips::tablegen {
 		return result.first->second;
 	}
 
-	static _nothrow std::string BuildProcedureCall(const info_t& __restrict info) {
+	[[nodiscard]]
+	static _nothrow std::string BuildProcedureCall(const info_t& __restrict info) noexcept {
 		return fmt::format(
 			"{}_NS::Execute{}",
 			info.Name,
@@ -117,12 +130,26 @@ namespace vemips::tablegen {
 		);
 	}
 
-	static _nothrow std::string static_proc(const info_t& __restrict info) {
+	[[nodiscard]]
+	static _nothrow std::string static_proc(const info_t& __restrict info) noexcept {
 		return fmt::format("return &{};", GetTypeSignature(info).procedure_name);
 	}
 
-	static _nothrow std::string proc_call(const info_t& __restrict info) {
-		return fmt::format("{{ {}(i,p); return true; }}", BuildProcedureCall(info));
+	[[nodiscard]]
+	static _nothrow std::string proc_call(const info_t& __restrict info) noexcept {
+		// TODO : msvc::musttail
+		return fmt::format("{{ {}(instruction, processor); return true; }}", BuildProcedureCall(info));
+	}
+
+	[[nodiscard]]
+	static _nothrow std::string index_proc(
+		const std::span<const info_t* __restrict> proc_infos,
+		const info_t& __restrict info
+	) noexcept {
+		const auto fiter = std::find(proc_infos.begin(), proc_infos.end(), &info);
+		xassert(fiter != proc_infos.end());
+
+		return fmt::format("return {};", std::distance(proc_infos.begin(), fiter));
 	}
 
 	namespace _hash_detail {
@@ -151,41 +178,52 @@ namespace vemips::tablegen {
 #endif
 	}
 
-	static constexpr _nothrow size_t fnv_hash(crstring str)
+	[[nodiscard]]
+	static constexpr _pure _nothrow size_t fnv_hash_append(size_t hash, crstring str) noexcept
 	{
-		auto hash = _hash_detail::fnv_constants<size_t>::offset_basis;
-
 		for (char c; (c = *str) != '\0'; ++str)
 		{
 			hash *= _hash_detail::fnv_constants<size_t>::prime;
-			hash ^= uint8(c);
+			hash ^= static_cast<uint8>(c);
 		}
 
 		return hash;
 	}
 
+	[[nodiscard]]
+	static constexpr _pure _nothrow size_t fnv_hash(crstring str) noexcept
+	{
+		return fnv_hash_append(
+			_hash_detail::fnv_constants<size_t>::offset_basis,
+			str
+		);
+	}
+
 	struct proc_info_data final
 	{
-		const crstring name;
-		const crstring signature;
+		crstring name;
+		crstring signature;
 
-		_nothrow bool operator ==(const proc_info_data& __restrict other) const __restrict
+		[[nodiscard]]
+		_pure _nothrow bool operator ==(const proc_info_data& __restrict other) const __restrict noexcept
 		{
 			return std::strcmp(name, other.name) == 0 && signature == other.signature;
 		}
 
-		_nothrow bool operator !=(const proc_info_data& __restrict other) const __restrict
+		[[nodiscard]]
+		_pure _nothrow bool operator !=(const proc_info_data& __restrict other) const __restrict noexcept
 		{
 			return !(*this == other);
 		}
 
-		struct hash
+		struct hash final
 		{
-			_nothrow std::size_t operator()(proc_info_data const& __restrict s) const __restrict
+			[[nodiscard]]
+			_pure _nothrow std::size_t operator()(const proc_info_data& __restrict s) const __restrict noexcept
 			{
-				const auto hash0 = fnv_hash(s.name);
-				const auto hash1 = fnv_hash(s.signature);
-				return hash0 ^ (hash1 + 0x9e3779b9 + (hash0 << 6) + (hash0 >> 2));
+				auto hash = fnv_hash(s.name);
+				hash = fnv_hash_append(hash, s.signature);
+				return hash;
 			}
 		};
 	};

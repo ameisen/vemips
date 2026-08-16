@@ -1,4 +1,35 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <PropertyGroup />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LocalDebuggerCommandArguments>-jit0 $(SolutionDir)..\..\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArgumentsHistory>-jit0 D:\Projects\vemips\build\vs\..\..\vemips_sdk\MipsTest\MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-ASan|x64'">
+    <LocalDebuggerCommandArguments>-jit0 $(SolutionDir)..\..\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-LLVM|x64'">
+    <LocalDebuggerCommandArguments>-jit0 $(SolutionDir)..\..\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArgumentsHistory>-jit0 D:\Projects\vemips\build\vs\..\..\vemips_sdk\MipsTest\MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
+    <LocalDebuggerCommandArguments>-jit0 $(SolutionDir)..\..\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">
+    <LocalDebuggerCommandArguments>-jit0 $(SolutionDir)..\..\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LocalDebuggerCommandArguments>-jit0 $(SolutionDir)..\..\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArgumentsHistory>-jit0 D:\Projects\vemips\build\vs\..\..\vemips_sdk\MipsTest\MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release-LLVM|x64'">
+    <LocalDebuggerCommandArguments>-jit0 $(SolutionDir)..\..\vemips_sdk\MipsTest\MipsTest.bin</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArgumentsHistory>-jit0 D:\Projects\vemips\build\vs\..\..\vemips_sdk\MipsTest\MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
+  </PropertyGroup>
 </Project>

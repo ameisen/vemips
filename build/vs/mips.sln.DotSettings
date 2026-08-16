@@ -13,6 +13,15 @@
 	<s:Boolean x:Key="/Default/CodeStyle/CodeFormatting/CppFormatting/SPACE_BEFORE_PTR_IN_DATA_MEMBERS/@EntryValue">False</s:Boolean>
 	<s:Boolean x:Key="/Default/CodeStyle/CodeFormatting/CppFormatting/SPACE_BEFORE_REF_IN_DATA_MEMBERS/@EntryValue">False</s:Boolean>
 	<s:Int64 x:Key="/Default/CodeStyle/CodeFormatting/CppFormatting/TAB_WIDTH/@EntryValue">4</s:Int64>
+	<s:String x:Key="/Default/CodeStyle/CppSortIncludes/IncludeSortCategories/@EntryValue">&lt;CppIncludeCategories&gt;&#xD;
+  &lt;CppIncludeCategorySetting Pattern="^&amp;quot;&amp;quot;.*pch\.h(?:|pp)&amp;quot;&amp;quot;" Description="precompiled header" Group="0" Order="1" /&gt;&#xD;
+  &lt;CppIncludeCategorySetting Pattern="^&amp;quot;pch.hpp.*" Description="" Group="0" Order="2" /&gt;&#xD;
+  &lt;CppIncludeCategorySetting Pattern="^&amp;lt;c.*" Description="#include &amp;lt;cheader&amp;gt;" Group="1" Order="4" /&gt;&#xD;
+  &lt;CppIncludeCategorySetting Pattern="^&amp;lt;[^c].*" Description="#include &amp;lt;header&amp;gt;" Group="1" Order="5" /&gt;&#xD;
+  &lt;CppIncludeCategorySetting Pattern="^&amp;quot;.*" Description="#include &amp;quot;header&amp;quot;" Group="2" Order="6" /&gt;&#xD;
+&lt;/CppIncludeCategories&gt;</s:String>
+	<s:Int64 x:Key="/Default/CodeStyle/CppSortIncludes/MainHeaderOrder/@EntryValue">3</s:Int64>
+	<s:Int64 x:Key="/Default/CodeStyle/CppSortIncludes/UnmatchedHeaderOrder/@EntryValue">7</s:Int64>
 	<s:String x:Key="/Default/CodeStyle/Naming/CppNaming/Rules/=Macros/@EntryIndexedValue">&lt;NamingElement Priority="19"&gt;&lt;Descriptor Static="Indeterminate" Constexpr="Indeterminate" Const="Indeterminate" Volatile="Indeterminate" Accessibility="NOT_APPLICABLE"&gt;&lt;type Name="macro" /&gt;&lt;/Descriptor&gt;&lt;Policy Inspect="True" Prefix="" Suffix="" Style="AA_BB"&gt;&lt;ExtraRule Prefix="_" Suffix="" Style="aa_bb" /&gt;&lt;/Policy&gt;&lt;/NamingElement&gt;</s:String>
 	<s:String x:Key="/Default/CodeStyle/CodeFormatting/CppFormatting/NAMESPACE_DECLARATION_BRACES/@EntryValue">NEXT_LINE</s:String>
 	<s:String x:Key="/Default/CodeStyle/CodeFormatting/CppFormatting/EXPORT_DECLARATION_BRACES/@EntryValue">NEXT_LINE</s:String>

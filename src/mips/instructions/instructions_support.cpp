@@ -1,10 +1,12 @@
 #include "pch.hpp"
 #include "instructions_support.hpp"
 
+#include <common.hpp>
+
 
 namespace mips
 {
-	memory_hazards instructions::parse_sync_type(const uint8 type)
+	_nothrow memory_hazards instructions::parse_sync_type(const uint8 type) noexcept
 	{
 		xassert(type <= 0b11111);
 

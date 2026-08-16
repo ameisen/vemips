@@ -1,19 +1,22 @@
 // ReSharper disable CppClangTidyCertErr33C
 #include "tablegen.pch.hpp"
-
-#include "writers.hpp"
-
-#include "instructions/instructions.hpp"
-#include "instructions/instructions_common.hpp"
+#include "tablegen.hpp"
+#include <common.hpp>
 
 #include <algorithm>
-#include <functional>
-
 #include <cstdio>
+#include <cstring>
+#include <optional>
 #include <queue>
 #include <span>
-#include <optional>
-#include <mutex>
+#include <type_traits>
+#include <vector>
+#include <fmt/format.h>
+
+#include "writers.hpp"
+#include "mips/instructions/instructions.hpp"
+#include "mips/instructions/instructions_common.hpp"
+
 
 #if USE_STATIC_INSTRUCTION_SEARCH
 #	error TableGen requires 'USE_STATIC_INSTRUCTION_SEARCH' to be unset
@@ -21,13 +24,10 @@
 
 namespace mips::instructions {
 	extern void finish_map_build();
-#if !USE_STATIC_INSTRUCTION_SEARCH
-	extern StaticInitVars& GetStaticInitVars();
-#endif
 }
 
 namespace vemips::tablegen {
-	FILE* out_stream = stdout;
+	::FILE* out_stream = stdout;
 }
 
 using namespace vemips::tablegen;
@@ -40,6 +40,7 @@ namespace {
 	// We also need to figure out how to actually call the procedures. They are only described in source files and the symbols won't export.
 	// Will likely have to add simply-exported names that are pointers to the named procedures which we can extern.
 
+	[[nodiscard]]
 	static _nothrow std::vector<const info_t*> populate_proc_infos(const map_t * const map) {
 		std::vector<const info_t*> result;
 
@@ -60,7 +61,7 @@ namespace {
 				continue;
 			}
 
-			for (auto&& sub_map : current->Map) {
+			for (const auto& sub_map : current->Map) {
 				pending.push(sub_map.second);
 			}
 
@@ -75,11 +76,13 @@ namespace {
 	struct instruction_compare final {
 		using type = const info_t* __restrict;
 
-		_nothrow bool operator() (const type lhs, const type rhs) const __restrict {
+		[[nodiscard]]
+		_pure _nothrow bool operator() (const type lhs, const type rhs) const __restrict noexcept {
 			return std::strcmp(lhs->Name, rhs->Name) < 0;
 		}
 	};
 
+	[[nodiscard]]
 	static std::optional<options> parse_options(const std::span<char* const> args) {
 		crstring file_out = nullptr;
 		bool write_header = false;
@@ -88,15 +91,22 @@ namespace {
 		const auto extract_option = [&](char* __restrict arg) -> option {
 			{
 				crstring arg_temp = arg;
-				for (char c; (c = *arg_temp) != '\0'; ++arg_temp) {
-					if (c == '=' || c == ':') {
-						const size_t operand_index = size_t(arg_temp - arg);
-						arg[operand_index] = '\0';
-						return {
-							.tag = arg,
-							.value = arg + operand_index + 1
-						};
+				for (
+					char c;
+					(c = *arg_temp) != '\0';
+					++arg_temp
+				) {
+					if (c != '=' && c != ':')
+					{
+						continue;
 					}
+
+					const size_t operand_index = static_cast<size_t>(arg_temp - arg);
+					arg[operand_index] = '\0';
+					return {
+						.tag = arg,
+						.value = arg + operand_index + 1
+					};
 				}
 			}
 
@@ -112,7 +122,7 @@ namespace {
 			switch (fnv_hash(arg.tag)) {
 			case fnv_hash("--header"):
 				if (arg.value) {
-					fmt::print(stderr, "Argument does not take value: '{}' with '{}'", arg.tag, arg.value);
+					fmt::println(stderr, "Argument does not take value: '{}' with '{}'", arg.tag, arg.value);
 					return {};
 				}
 				write_header = true;
@@ -155,7 +165,7 @@ namespace {
 int main(const int argc, char* const* const argv) {
 	xassert(argc >= 0);
 
-	auto&& options_optional = parse_options({ argv, size_t(argc) });
+	auto&& options_optional = parse_options({ argv, static_cast<size_t>(argc) });
 	if (!options_optional) {
 		return -1;
 	}
@@ -165,14 +175,13 @@ int main(const int argc, char* const* const argv) {
 
 	auto&& proc_infos = populate_proc_infos(&mips::instructions::GetStaticInitVars().g_LookupMap);
 
-	std::stable_sort(proc_infos.begin(), proc_infos.end(), instruction_compare{});
+	std::ranges::stable_sort(proc_infos, instruction_compare{});
 
 	if (options.write_source) {
 		vemips::tablegen::writers::source(options, proc_infos);
 	}
 
-	if (options.write_header)
-	{
+	if (options.write_header) {
 		vemips::tablegen::writers::header(options, proc_infos);
 	}
 }

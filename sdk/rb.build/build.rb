@@ -160,7 +160,7 @@ OPTIONS = Hash.new
 		matches: ["configuration", "config"],
 		short_matches: 'C',
 		callback: proc { |arg|
-			found = find_configuration(arg)
+			found = Options.find_configuration(arg)
 			fail "Configuration '#{arg}' is not valid (valid configurations: [ #{Options::LEGAL_CONFIGURATIONS.join('; ')} ])" if found.nil?
 			Options::configuration = found
 		}
@@ -218,7 +218,7 @@ OPTIONS = Hash.new
 		short_matches: ['?'],
 		callback: proc { |arg|
 			def tputs(*msg)
-				puts *msg.map{ |m| "\t#{m}" }
+				puts *(msg.map{ |m| "\t#{m}" })
 			end
 
 			OPTIONS.each { |key, option|
@@ -277,15 +277,20 @@ proc {
 	post_flags = false
 	arg_index = 0
 
+	args = ARGV
+	if args[0] == '--'
+		args = args[1..-1]
+	end
+
 	pop_arg = lambda { |arg|
-		fail "No argument supplied for '#{arg}'" if arg_index >= ARGV.length
-		result = ARGV[arg_index]
+		fail "No argument supplied for '#{arg}'" if arg_index >= args.length
+		result = args[arg_index]
 		arg_index += 1
 		return result
 	}
 
-	while arg_index < ARGV.length
-		arg = ARGV[arg_index]
+	while arg_index < args.length
+		arg = args[arg_index]
 		arg_index += 1
 
 		unless post_flags
@@ -366,7 +371,7 @@ proc {
 					flag_match = is_short_flag ? flag : flag.downcase
 
 					option = OPTIONS[flag_match]
-					fail "Unknown Argument: '#{orig_arg}'" if option.nil?
+					fail "Unknown Argument2: '#{orig_arg}'" if option.nil?
 					if !flag_value.nil? && !option.takes_arg?
 						fail "Argument '#{orig_arg}' does not take an argument, but '#{flag_value}' provided"
 					end
@@ -482,7 +487,7 @@ while !to_build.empty?
 		end
 	end
 
-	puts "Processing '#{item.to_s.light_green}'".light_cyan
+	puts "Processing '#{item.to_s.light_green}' (#{Time.now.to_s.light_green})".light_cyan
 
 	Environment::configure(item, item.options, ALTERNATE_COMPILER_SETTING || !item.tool&.has_define_override?, unix_path: item.unix) {
 		if Options::tasks.include?('clean')
@@ -508,6 +513,8 @@ while !to_build.empty?
 
 			copy_artifact = lambda { |artifact, artifact_dst|
 				fail "Copy Artifact '#{artifact}' could not be found" unless File.exist?(artifact)
+
+				puts "Copying Artifacts '#{artifact}' to '#{artifact_dst}}]'"
 
 				def header_file?(path)
 					return false unless File.file?(path)
@@ -583,6 +590,8 @@ while !to_build.empty?
 				includes_dir.mkpath rescue nil
 				fail "Build Target directory '#{includes_dir}' does not exist and could not be created" unless includes_dir.directory?
 
+				puts "Copying Artifact '#{artifact}'"
+
 				target = includes_dir + item.copy_target + File.basename(artifact)
 				target = target.dirname if (artifact.directory? && target.directory?) || whole_directory
 				if whole_directory
@@ -626,5 +635,7 @@ while !to_build.empty?
 			built << item.name
 		end
 	}
+
+	puts "Completed '#{item.to_s.light_green}' (#{Time.now.to_s.light_green})".light_cyan
 
 end

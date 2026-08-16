@@ -9,8 +9,10 @@ EMULATED_SYSTEM_NAME_FULL = 'VeMIX'
 GENERIC_SYSTEM_NAME = GENERIC_SYSTEM_NAME_FULL.downcase
 EMULATED_SYSTEM_NAME = EMULATED_SYSTEM_NAME_FULL.downcase
 
-TRIPLE = "mipsisa32r6el-vemips-generic-musl" #mipsisa32r6el
-BASIC_TRIPLE = "mipsisa32r6el-vemips-generic-musl"
+ABI = "o32" # o32 is default
+ENVIRONMENT = "musl#{(ABI == "n32") ? 'abin32' : ''}"
+TRIPLE = "mipsisa32r6el-vemips-generic-#{ENVIRONMENT}" #mipsisa32r6el
+BASIC_TRIPLE = "mipsisa32r6el-vemips-generic-#{ENVIRONMENT}"
 CMAKE_SYSTEM_NAME = 'Generic'
 
 TARGET_ROOT = Pathname.new('[[target_root]]').freeze
@@ -179,8 +181,11 @@ class Target
 
 	def build(jobs)
 		build_path.mkpath if build_path.exist?
+		puts "Configuring #{@name.light_blue} (#{Time.now.to_s.light_green})..."
 		result = @tool.configure(build_path, @path, self)
 		return result unless result
+
+		puts "Building #{@name.light_blue} (#{Time.now.to_s.light_green})..."
 		result = @tool.build(build_path, @path, self)
 		return result
 	end
@@ -659,6 +664,9 @@ TARGETS = [
 		subpath: "../compiler-rt",
 		configure_flags: CMakeFlags.new({
 			'LLVM_ENABLE_RUNTIMES' => "compiler-rt",
+			'LLVM_ENABLE_PIC' => false,
+			'COMPILER_RT_BUILTINS_ENABLE_PIC' => false,
+			'CMAKE_POSITION_INDEPENDENT_CODE' => false,
 			'CMAKE_FIND_ROOT_PATH' => Directories::Intermediate::get(false)::PREFIX.concat(
 				[Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'lib']
 			).uniq.join(';'),
@@ -682,6 +690,9 @@ TARGETS = [
 		subpath: "../runtimes",
 		configure_flags: CMakeFlags.new({
 			'LLVM_ENABLE_RUNTIMES' => "libcxx;libcxxabi;libunwind",
+			'LLVM_ENABLE_PIC' => false,
+			'COMPILER_RT_BUILTINS_ENABLE_PIC' => false,
+			'CMAKE_POSITION_INDEPENDENT_CODE' => false,
 			'CMAKE_FIND_ROOT_PATH' => Directories::Intermediate::get(false)::PREFIX.concat(
 				[Directories::Intermediate::get(true)::ROOT + 'llvm-exe.stage1' + 'lib']
 			).uniq.join(';'),
@@ -747,6 +758,8 @@ TARGETS = [
 					end
 				}
 			}
+
+			puts "LLVM Stage 1 toolchain copied to `#{dst}`"
 
 			return true
 		}

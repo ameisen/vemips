@@ -1,30 +1,45 @@
 #include "pch.hpp"
 
 #include <bit>
+#include <limits>
+#include <optional>
+#include <tuple>
 
 #include "jit1.hpp"
-#include "../../processor.hpp"
-#include "coprocessor/coprocessor1/coprocessor1.hpp"
-#include "instructions/instructions.hpp"
-#include "instructions/instructions_common.hpp"
-#include "instructions/instructions_table.hpp"
-#include "instructions/coprocessor1_support.hpp"
-#include <cassert>
+#include "jit1_xbyak.hpp"
+#include "mips/mips_common.hpp"
+#include "mips/mmu.hpp"
+#include "mips/processor//processor.hpp"
+#include "mips/instructions/coprocessor1_support.hpp"
+#include "mips/instructions/instructions_common.hpp"
 #include "codegen.hpp"
 
 using namespace mips;
 
 namespace
 {
-	static uintptr mem_write_jit(processor * const __restrict proc, const uint32 address, const uint32 size) {
-		return proc->get_mem_write_jit(address, size);
+	[[nodiscard]]
+	VEMIPS_JIT_ABI static _nothrow uintptr VEMIPS_JIT_ABI_INFIX mem_write_jit(
+		processor& __restrict proc,
+		const uptr_guest address,
+		const usize_guest size
+	) noexcept {
+		return proc.get_mem_write_jit(address, size);
 	}
 
-	static uintptr mem_read_jit(processor * const __restrict proc, const uint32 address, const uint32 size) {
-		return proc->get_mem_read_jit(address, size);
+	[[nodiscard]]
+	VEMIPS_JIT_ABI static _nothrow uintptr VEMIPS_JIT_ABI_INFIX mem_read_jit(
+		processor& __restrict proc,
+		const uptr_guest address,
+		const usize_guest size
+	) noexcept
+	{
+		return proc.get_mem_read_jit(address, size);
 	}
 
-	static constexpr uint32 make_size_mask(const uint32 size)
+	[[nodiscard]]
+	_func_const
+	static constexpr _nothrow _forceinline uint32 make_size_mask(const uint8 size) noexcept
 	{
 		switch (size)
 		{
@@ -42,13 +57,19 @@ namespace
 	}
 }
 
-std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::ChunkOffset & __restrict chunk_offset, const uint32 address, const instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
+std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(
+	jit1::ChunkOffset& __restrict chunk_offset,
+	const uptr_guest address,
+	const instruction_t instruction,
+	const mips::instructions::InstructionInfo& __restrict instruction_info
+)
+{
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 
 	auto&& op_base = get_register_op32(base);
 
-	uint32 store_size;
+	uint8 store_size;
 	bool fpu = false;
 	bool e = false;
 
@@ -99,20 +120,29 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 		return {};
 	}
 
+	xassert(store_size >= 1 && store_size <= 8);
+
 	const auto mmu_type = jit_.processor_.mmu_type_;
 	
-	int32 offset;
+	ssize_guest offset;
 	if (!e) {
-		offset = instructions::TinyInt<16>(instruction).sextend<int32>();
+		offset = instructions::TinyInt<16>(instruction).sextend<ssize_guest>();
 	}
 	else {
-		offset = instructions::TinyInt<9>(instruction >> 7).sextend<int32>();
+		offset = instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>();
 	}
 
 	const auto misaligned_address_handler = jit_.processor_.get_misaligned_address_handling();
 
-	if (mmu_type == mmu::emulated) {
-		if (base.is_zero() && (offset & make_size_mask(store_size)) != 0U)
+	const bool static_offset = base.is_zero();
+
+	bool is_ll_aligned = static_offset ?
+		((offset & ~(processor::load_link_align - 1)) == 0) :
+		false;
+
+	if (mmu_type == mmu::emulated)
+	{
+		if (static_offset && (offset & make_size_mask(store_size)) != 0U)
 		{
 			switch (misaligned_address_handler)
 			{
@@ -137,7 +167,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 		lea(rcx, dword[rbp - 128]);
 		// 'rcx' is the first parameter (processor ptr)
 
-		if (!base.is_zero()) {
+		if (!static_offset) {
 			// The effective address is '[base] + offset'
 			if (offset && op_base.isREG())
 			{
@@ -176,23 +206,26 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 		else {
 			set(edx, offset);
 		}
+
 		// 'edx' is the second parameter (address)
 		set(r8d, store_size); // TODO = store_size - 1 would be more efficient
 		mov(r13d, edx); // store to non-volatile for after call if there's an exception.
 		// 'r8' is the third parameter (size)
-		std::ignore = call_ex<true>(ptr_cast(&mem_write_jit), rax);
+		std::ignore = call_ex<JumpFlags::ExternalCall>(ptr_cast(&mem_write_jit), rax);
 		// rax now has our destination pointer.
 		mov(r13, rax); // save the pointer off to non-volatile r13.
 		test(rax, rax);
 		jnz(valid_ptr, T_SHORT);
-		mov(eax, ecx);
+		set(eax, address); // TODO : was 'ecx' src, why?
 		mov(ecx, r13d);
 		jmp(intrinsics_.ades, T_NEAR);
 		L(valid_ptr);
 	}
-	else {
+	else
+	{
 		// This would be far faster if we could memory map easily. Then we could just wrap the address range around.
-		if (base.is_zero()) {
+		if (static_offset)
+		{
 			if ((offset & make_size_mask(store_size)) != 0U)
 			{
 				switch (misaligned_address_handler)
@@ -205,7 +238,11 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 						return except_result::always_throw;
 
 					case align:
-						offset &= ~make_size_mask(store_size);
+						offset = static_cast<uptr_guest>(offset) & ~make_size_mask(store_size);
+						if (store_size >= processor::load_link_align)
+						{
+							is_ll_aligned = true;
+						}
 						break;
 
 					case keep:
@@ -215,15 +252,17 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 
 			// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 			// Check for basic range things.
-			const uint32 start_address = uint32(offset);
-			const uint64 end_address = uint64(offset) + store_size;
+			const uptr_guest start_address = uptr_guest(offset);
+			using uptr_guest_bigger = uint_fitted<usize(std::numeric_limits<uptr_guest>::max()) + std::numeric_limits<usize_guest>::max()>;
+			const uptr_guest_bigger end_address = uptr_guest_bigger(offset) + store_size;
 
 			// quick error checking
 			if (mmu_type == mmu::none) {
 				// this checks if it is in range, or if it overflows and thus overwrites '0'
 				if (
 					(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
-					(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(store_size)) > 0x1'0000'0000ull
+					(uptr(offset) + usize(jit_.processor_.stack_size_) + usize(store_size)) > 0x1'0000'0000ull ||
+					start_address == 0u
 				)
 				{
 					set(eax, address);
@@ -234,7 +273,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 			}
 			else if (mmu_type == mmu::host) {
 				// I'm going to do this the dumb way.
-				for (uint64 addr = start_address; addr < end_address; ++addr) {
+				for (uptr addr = start_address; addr < end_address; ++addr) {
 					if (
 						addr == 0 ||
 						(
@@ -242,7 +281,8 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 							addr >= jit_.processor_.memory_size_ &&
 							addr < uint32(0x1'0000'0000ull - jit_.processor_.stack_size_)
 						)
-					) {
+					)
+					{
 						set(eax, address);
 						set(ecx, addr);
 						jmp(intrinsics_.ades, T_NEAR);
@@ -277,11 +317,20 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 					set(eax, address);
 					jmp(intrinsics_.ades, T_NEAR);
 					L(no_misalign);
+					
+					if (store_size >= processor::load_link_align)
+					{
+						is_ll_aligned = true;
+					}
 				}
 				break;
 
 				case align:
 					and_(eax, ~make_size_mask(store_size));
+					if (store_size >= processor::load_link_align)
+					{
+						is_ll_aligned = true;
+					}
 					break;
 
 				case keep:
@@ -316,24 +365,21 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 				else
 				{
 					// check for range
-					const int64 pow2_memsize = int64(std::bit_ceil(jit_.processor_.memory_size_));
-					const int32 addend = int32(pow2_memsize + (store_size - 1));
-					const int32 cmpand = int32(pow2_memsize + store_size);
+					const intptr pow2_memsize = intptr(std::bit_ceil(jit_.processor_.memory_size_));
+					const ssize_guest addend = ssize_guest(pow2_memsize + (store_size - 1));
+					const ssize_guest cmpand = ssize_guest(pow2_memsize + store_size);
 					lea(edx, dword[eax + addend]);
 					cmp(edx, cmpand);
 					jae(ades, T_SHORT);
 				}
 				const Xbyak::Label no_ades;
 				jbe(no_ades, T_SHORT);
+				if (jit_.processor_.stack_size_)
+				{
+					lea(eax, dword[eax - jit_.processor_.stack_size_]);
+				}
 				L(ades);
-				if (!jit_.processor_.stack_size_)
-				{
-					mov(ecx, eax);
-				}
-				else
-				{
-					lea(ecx, dword[eax - jit_.processor_.stack_size_]);
-				}
+				mov(ecx, eax);
 				set(eax, address);
 				jmp(intrinsics_.ades, T_NEAR);
 				L(no_ades);
@@ -424,7 +470,6 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 					get_sized_register_op(rt, store_size),
 					get_sized_register(rcx, store_size)
 				);
-
 			}
 		}
 		else {
@@ -470,6 +515,64 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 			mov(get_sized_address(r13, store_size), tmp);
 		}
 	}
+	
+	// emulated MMU already handles load-link stuff
+	if (mmu_type != mmu::emulated)
+	{
+		if (
+			jit_.processor_.llsc_type_ != llsc::none &&
+			jit_.processor_.llsc_type_ != llsc::coarse
+		)
+		{
+			xassert(jit_.processor_.llsc_type_ == llsc::fine);
+
+			if (static_offset)
+			{
+				const Xbyak::Label no_ll_match;
+
+				if (is_ll_aligned)
+				{
+					cmp(eax, dword[rbp + offsets.ll]);
+					jne(no_ll_match);
+				}
+				else
+				{
+					const uptr_guest aligned_offset = align_mask<processor::load_link_align>(offset);
+
+					cmp(dword[rbp + offsets.ll], aligned_offset);
+					jne(no_ll_match);
+				}
+
+				mov(dword[rbp + offsets.ll], 0);
+				L(no_ll_match);
+			}
+			else
+			{
+				const Xbyak::Label no_ll_match;
+
+				if (is_ll_aligned)
+				{
+					cmp(eax, dword[rbp + offsets.ll]);
+					jne(no_ll_match);
+				}
+				else
+				{
+					mov(ecx, dword[rbp + offsets.ll]);
+					xor_(ecx, eax); // non-matching bits are 1
+					and_(ecx, ~(processor::load_link_align - 1)); // will be zero if they're the same (after accounting for alignment)
+					test(ecx, ecx);
+					jnz(no_ll_match);
+				}
+
+				mov(dword[rbp + offsets.ll], 0);
+				L(no_ll_match);
+			}
+		}
+		else if (jit_.processor_.llsc_type_ == llsc::coarse)
+		{
+			mov(dword[rbp + offsets.ll], 0);
+		}
+	}
 
 	if (mmu_type == mmu::emulated && !jit_.processor_.readonly_exec_) {
 		const Xbyak::Label no_flush;
@@ -485,7 +588,13 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_STORE(jit1::Chunk
 	return except_result::can_throw;
 }
 
-std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkOffset & __restrict chunk_offset, uint32 address, instruction_t instruction, const mips::instructions::InstructionInfo & __restrict instruction_info) {
+std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(
+	jit1::ChunkOffset& __restrict chunk_offset,
+	const uptr_guest address,
+	const instruction_t instruction,
+	const mips::instructions::InstructionInfo& __restrict instruction_info
+)
+{
 	// rd = rs + rt
 	const instructions::GPRegister<21, 5> base(instruction, jit_.processor_);
 	const instructions::GPRegister<16, 5> rt(instruction, jit_.processor_);
@@ -502,9 +611,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 
 	const auto mmu_type = jit_.processor_.mmu_type_;
 
-	int32 nommu_offset = 0;
-
-	const auto get_address = [&](int32 offset, const uint32 load_size, bool alignment_check = true) {
+	const auto get_address = [&](ssize_guest offset, const uint8 load_size, const bool alignment_check = true) {
 		const Xbyak::Label valid_ptr;
 
 		if (mmu_type == mmu::emulated) {
@@ -577,14 +684,14 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 			set(r8d, load_size);
 			mov(r13d, edx); // store to non-volatile for after call if there's an exception.
 			// 'r8' is the third parameter (size)
-			std::ignore = call_ex<true>(ptr_cast(&mem_read_jit), rax);
+			std::ignore = call_ex<JumpFlags::ExternalCall>(ptr_cast(&mem_read_jit), rax);
 			// rax now has our destination pointer.
 			mov(r13, rax); // save the pointer off to non-volatile r13.
 			//cmp(rax, 0);
 			//jne(valid_ptr);
 			test(rax, rax);
 			jnz(valid_ptr, T_SHORT);
-			mov(eax, ecx);
+			set(eax, address); // was ecx source - why?
 			mov(ecx, r13d);
 			jmp(intrinsics_.adel, T_NEAR);
 			L(valid_ptr);
@@ -604,7 +711,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 							return false;
 
 						case align:
-							offset &= ~make_size_mask(load_size);
+							offset = static_cast<uint32>(offset) & ~make_size_mask(load_size);
 							break;
 
 						case keep:
@@ -614,15 +721,17 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 
 				// If base is 0, the address is just offset. This simplifies things, though we need to treat the offset as unsigned.
 				// Check for basic range things.
-				const uint32 start_address = uint32(offset);
-				const uint64 end_address = uint64(offset) + load_size;
+				const uptr_guest start_address = uptr_guest(offset);
+				using uptr_guest_bigger = uint_fitted<usize(std::numeric_limits<uptr_guest>::max()) + std::numeric_limits<usize_guest>::max()>;
+				const uptr_guest_bigger end_address = uptr_guest_bigger(offset) + load_size;
 
 				// quick error checking
 				if (mmu_type == mmu::none) {
 					// this checks if it is in range, or if it overflows and thus overwrites '0'
 					if (
 						(end_address + jit_.processor_.stack_size_) > jit_.processor_.memory_size_ ||
-						(uint64(offset) + uint64(jit_.processor_.stack_size_) + uint64(load_size)) > 0x100000000ull
+						(uptr(offset) + usize(jit_.processor_.stack_size_) + usize(load_size)) > 0x100000000ull ||
+						start_address == 0u
 					)
 					{
 						set(eax, address);
@@ -633,13 +742,13 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 				}
 				else if (mmu_type == mmu::host) {
 					// I'm going to do this the dumb way.
-					for (uint64 addr = start_address; addr < end_address; ++addr) {
+					for (uptr addr = start_address; addr < end_address; ++addr) {
 						if (
 							addr == 0 ||
 							(
 								jit_.processor_.stack_size_ &&
 								addr >= jit_.processor_.memory_size_ &&
-								addr < uint32(0x100000000 - jit_.processor_.stack_size_)
+								addr < uptr(0x1'0000'0000ull - jit_.processor_.stack_size_)
 							)
 						) {
 							set(eax, address);
@@ -724,16 +833,13 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 					cmp(eax, uint32((jit_.processor_.memory_size_ - load_size) /* - offset */));
 					const Xbyak::Label no_adel;
 					jbe(no_adel, T_SHORT);
+					if (jit_.processor_.stack_size_)
+					{
+						lea(eax, dword[eax - jit_.processor_.stack_size_]);
+					}
 					L(adel);
+					mov(ecx, eax);
 					set(eax, address);
-					if (!jit_.processor_.stack_size_)
-					{
-						mov(ecx, eax);
-					}
-					else
-					{
-						lea(ecx, dword[eax - jit_.processor_.stack_size_]);
-					}
 					jmp(intrinsics_.adel, T_NEAR);
 					L(no_adel);
 				}
@@ -750,56 +856,56 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 	if (mmu_type == mmu::emulated) {
 		try {
 			if (IS_INSTRUCTION(instruction_info, PROC_LB)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBU)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBUE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LH)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHU)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, word[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHUE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
@@ -818,21 +924,21 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LW)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[r13], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LDC1_v)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
@@ -843,7 +949,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 				mov(qword[r12 + ft_offset], rax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LWC1_v)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
@@ -856,7 +962,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWPC)) {
 				// load word PC relative - gets special offset handling.
 				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
-				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
+				const ssize_guest offset = instructions::TinyInt<21>(instruction << 2).sextend<ssize_guest>();
 
 				auto&& op_rs = get_register_op32(rs);
 
@@ -880,56 +986,56 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 			auto&& src = rdx + rax;
 
 			if (IS_INSTRUCTION(instruction_info, PROC_LB)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBU)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LBUE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 1)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 1)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, byte[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LH)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movsx_ex(op_rt, word[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHU)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = movzx_ex(op_rt, word[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LHUE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 2)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 2)) {
 					return except_result::always_throw;
 				}
 
@@ -948,21 +1054,21 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 				return {};
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LW)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWE)) {
-				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<9>(instruction >> 7).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
 				std::ignore = mov_ex(op_rt, dword[src], eax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LDC1_v)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
@@ -973,7 +1079,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 				mov(qword[r12 + ft_offset], rax);
 			}
 			else if (IS_INSTRUCTION(instruction_info, COP1_LWC1_v)) {
-				if (!get_address(instructions::TinyInt<16>(instruction).sextend<int32>(), 4)) {
+				if (!get_address(instructions::TinyInt<16>(instruction).sextend<ssize_guest>(), 4)) {
 					return except_result::always_throw;
 				}
 
@@ -986,7 +1092,7 @@ std::optional<Jit1_CodeGen::except_result> Jit1_CodeGen::write_LOAD(jit1::ChunkO
 			else if (IS_INSTRUCTION(instruction_info, PROC_LWPC)) {
 				// load word PC relative - gets special offset handling.
 				const instructions::GPRegister<21, 5> rs(instruction, jit_.processor_);
-				const int32 offset = instructions::TinyInt<21>(instruction << 2).sextend<int32>();
+				const ssize_guest offset = instructions::TinyInt<21>(instruction << 2).sextend<ssize_guest>();
 
 				auto&& op_rs = get_register_op32(rs);
 

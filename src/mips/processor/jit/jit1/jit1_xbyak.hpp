@@ -1,0 +1,10 @@
+#pragma once
+
+#ifdef XBYAK_STRICT_CHECK_MEM_REG_SIZE
+#	undef XBYAK_STRICT_CHECK_MEM_REG_SIZE
+#endif
+#define XBYAK_STRICT_CHECK_MEM_REG_SIZE 0
+
+#include <xbyak.h>
+
+#undef XBYAK_STRICT_CHECK_MEM_REG_SIZE

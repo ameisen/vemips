@@ -4,6 +4,7 @@ require 'shellwords'
 require 'io/console'
 require 'fileutils'
 require 'concurrent'
+require 'win32/process' if Platform::windows?
 
 SIGNALS = ["INT", "TERM", "ABRT"].freeze #"KILL", "STOP"
 
@@ -17,6 +18,25 @@ def smart_system(*cmd, do_yield: true)
 
 	begin
 		Open3.popen3(*cmd.map(&:to_s)) { |stdin, stdout, stderr, wait_thr|
+			begin
+			pid = wait_thr.pid
+			[
+				Process.const_defined?(:PRIO_PROCESS) ? Process::PRIO_PROCESS : nil,
+				Process::PRIO_PGRP,
+				Process::PRIO_USER
+			].each { |ptype|
+				next if ptype.nil?
+				if Platform::windows?
+					Process.setpriority(ptype, pid, Process::IDLE_PRIORITY_CLASS)
+				else
+					Process.setpriority(ptype, pid, 20)
+				end
+			}
+			rescue => ex
+				puts ex
+				exit 1
+			end
+
 			begin
 			SIGNALS.each { |signal|
 				Signal.trap(signal) {

@@ -10,6 +10,6 @@
     <ClCompile Include="..\..\src\elf\elf.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="cpp.hint" />
+    <None Include="..\..\src\cpp.hint" />
   </ItemGroup>
 </Project>

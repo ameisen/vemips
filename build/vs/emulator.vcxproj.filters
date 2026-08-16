@@ -9,6 +9,7 @@
     <ClInclude Include="..\..\src\emulator\options.hpp" />
     <ClInclude Include="..\..\src\emulator\main.hpp" />
     <ClInclude Include="..\..\src\emulator\changes.hpp" />
+    <ClInclude Include="..\..\src\emulator\string_utils.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\emulator\main.cpp" />
@@ -18,5 +19,9 @@
     <ClCompile Include="..\..\src\emulator\platform.cpp" />
     <ClCompile Include="..\..\src\emulator\options.cpp" />
     <ClCompile Include="..\..\src\emulator\changes.cpp" />
+    <ClCompile Include="..\..\src\emulator\string_utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\src\cpp.hint" />
   </ItemGroup>
 </Project>

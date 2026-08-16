@@ -1,21 +1,19 @@
 #include "pch.hpp"
 #include "instructions.hpp"
-#include "mips/processor/processor.hpp"
-#include "mips/coprocessor/coprocessor.hpp"
 
+#include <common.hpp>
+
+#if !USE_STATIC_INSTRUCTION_SEARCH
+#	include <limits>
+#	include <mutex>
+#	include <vector>
+#endif
+
+#include "instructions_common.hpp"
+#include "mips/mips_common.hpp"
 #if !VEMIPS_TABLEGEN
 #	include "instructions_table.hpp"
 #endif
-
-#include <cassert>
-
-#include <unordered_map>
-#include <unordered_set>
-#if !USE_STATIC_INSTRUCTION_SEARCH
-#	include <mutex>
-#endif
-
-#include "instructions_table.hpp"
 
 using namespace mips;
 
@@ -23,14 +21,19 @@ namespace mips::instructions
 {
 	// A significant amount of logic used to do lookups on instructions.
 #if !USE_STATIC_INSTRUCTION_SEARCH
-	StaticInitVars& GetStaticInitVars()
+	constexpr const bool reverse_mask_order = true;
+	
+	_nothrow StaticInitVars& GetStaticInitVars() noexcept
 	{
 		static StaticInitVars* const InitVarsPtr = new StaticInitVars;
 		xassert(InitVarsPtr != nullptr);
 		return *InitVarsPtr;
 	}
 
-	void populate_map(MapOrInfo &current_map, std::vector<FullProcInfo> &proc_infos)
+	static void populate_map(
+		MapOrInfo& current_map,
+		std::vector<FullProcInfo>& proc_infos
+	)
 	{
 		std::vector<FullProcInfo> next_tier;
 	
@@ -62,7 +65,7 @@ namespace mips::instructions
 			if (MaskFiltered)
 			{
 				current_map.Mask = ThisSigMask;//mask;
-				if (proc_infos.size())
+				if (!proc_infos.empty())
 				{
 					next_tier = proc_infos;
 					current_map.Default = new MapOrInfo;
@@ -98,10 +101,8 @@ namespace mips::instructions
 		ThisSigMask = uint32(-1);
 #endif
 
-		for (auto iter = proc_infos.begin(); iter != proc_infos.end(); ++iter)
+		for (const auto& procInfo : proc_infos)
 		{
-			const FullProcInfo &procInfo = *iter;
-
 			ThisSigMask &= procInfo.InstructionMask;
 		}
 		xassert(ThisSigMask != 0);
@@ -110,22 +111,34 @@ namespace mips::instructions
 
 		const auto FindGreatestMask = [&]() -> const FullProcInfo &
 		{
-			size_t bits = 0;
-			const FullProcInfo *match = nullptr;
-			for (const auto &procInfo : proc_infos)
+			size_t bits = reverse_mask_order ? std::numeric_limits<size_t>::max() : 0;
+			const FullProcInfo* match = nullptr;
+			for (const auto& procInfo : proc_infos)
 			{
-				size_t this_bits = 0;
+				size_t this_bits = reverse_mask_order ? std::numeric_limits<size_t>::max() : 0;
 				uint32 mask = procInfo.InstructionMask;
-				for (size_t i = 0; i < 32; ++i)
+				for (size_t i = 0; i < std::numeric_limits<decltype(mask)>::digits; ++i)
 				{
-					this_bits += ((mask >> i) & 1) ? 1 : 0;
+					const size_t mask_bits = ((mask >> i) & 1) ? 1 : 0;
+					if (reverse_mask_order)
+					{
+						this_bits -= mask_bits;
+					}
+					else
+					{
+						this_bits += mask_bits;
+					}
 				}
-				if (this_bits > bits)
+				if (
+					( reverse_mask_order && this_bits <= bits) ||
+					(!reverse_mask_order && this_bits >  bits)
+				)
 				{
 					bits = this_bits;
 					match = &procInfo;
 				}
 			}
+			xassert(match != nullptr);
 			return *match;
 		};
 
@@ -134,7 +147,7 @@ namespace mips::instructions
 			uint32 NewMask = uint32(-1);
 			bool SetNewMask = false;
 			bool AllMatch = true;
-			for (const auto &procInfo : proc_infos)
+			for (const auto& procInfo : proc_infos)
 			{
 				if (!SetNewMask || NewMask == (procInfo.RefMask & ThisSigMask))
 				{
@@ -153,7 +166,7 @@ namespace mips::instructions
 
 				for (auto iter = proc_infos.begin(); iter != proc_infos.end();)
 				{
-					const FullProcInfo &procInfo = *iter;
+					const FullProcInfo& procInfo = *iter;
 					if (procInfo.InstructionMask == NewMask2)
 					{
 						auto &next_map = current_map.Map[(procInfo.RefMask)];
@@ -169,7 +182,7 @@ namespace mips::instructions
 				}
 
 				current_map.Mask = NewMask2;//mask;
-				if (proc_infos.size())
+				if (!proc_infos.empty())
 				{
 					next_tier = proc_infos;
 					current_map.Default = new MapOrInfo;
@@ -180,34 +193,38 @@ namespace mips::instructions
 			}
 		}
 
-		while (proc_infos.size())
+		while (!proc_infos.empty())
 		{
 			uint32 NewMask = uint32(-1);
 			bool SetNewMask = false;
 
 			{
-				const FullProcInfo &procInfo = FindGreatestMask();
+				const FullProcInfo& procInfo = FindGreatestMask();
 				// get iter
 				if (!SetNewMask || NewMask == (procInfo.RefMask & ThisSigMask))
 				{
 					NewMask = (procInfo.RefMask & ThisSigMask);
 					SetNewMask = true;
 					next_tier.push_back(procInfo);
-					for (auto iter = proc_infos.begin(); iter != proc_infos.end();)
+					if (
+						const auto iter = std::ranges::find_if(
+							proc_infos,
+							[&procInfo](const FullProcInfo& __restrict item)
+							{
+								return item.InstructionMask == procInfo.InstructionMask && item.RefMask == procInfo.RefMask;	
+							}
+						);
+						iter != proc_infos.end()
+					)
 					{
-						if (iter->InstructionMask == procInfo.InstructionMask && iter->RefMask == procInfo.RefMask)
-						{
-							proc_infos.erase(iter);
-							break;
-						}
-						++iter;
+						proc_infos.erase(iter);						
 					}
 				}
 			}
 
 			for (auto iter = proc_infos.begin(); iter != proc_infos.end();)
 			{
-				const FullProcInfo &procInfo = *iter;
+				const FullProcInfo& procInfo = *iter;
 
 				if (!SetNewMask || NewMask == (procInfo.RefMask & ThisSigMask))
 				{
@@ -222,9 +239,9 @@ namespace mips::instructions
 				}
 			}
 
-			if (next_tier.size())
+			if (!next_tier.empty())
 			{
-				auto &next_map = current_map.Map[NewMask];
+				auto& next_map = current_map.Map[NewMask];
 				next_map = new MapOrInfo;
 				if (next_tier.size() == 1)
 				{
@@ -242,7 +259,7 @@ namespace mips::instructions
 
 	void finish_map_build()
 	{
-		static volatile bool AlreadyBuilt = false;
+		static bool AlreadyBuilt = false;
 		static std::mutex AlreadyBuiltLock;
 		{
 			std::unique_lock lock{AlreadyBuiltLock};
@@ -255,7 +272,7 @@ namespace mips::instructions
 		}
 
 		auto& staticInitVars = GetStaticInitVars();
-		std::vector<FullProcInfo> procInfos = staticInitVars.g_ProcInfos;
+		std::vector<FullProcInfo> procInfos = staticInitVars.g_ProcInfos; // by-copy is intentional, if I recall
 		staticInitVars.g_LookupMap.init_map();
 		populate_map(staticInitVars.g_LookupMap, procInfos);
 	}
@@ -265,20 +282,22 @@ namespace mips::instructions
 
 namespace mips
 {
-	const instructions::InstructionInfo * __restrict FindExecuteInstruction(instruction_t instruction)
+	_nothrow const instructions::InstructionInfo* FindExecuteInstruction(const instruction_t instruction) noexcept
 	{
 #if USE_STATIC_INSTRUCTION_SEARCH
 		return instructions::get_instruction(instruction);
 #else
-		const auto * __restrict current_map = &instructions::GetStaticInitVars().g_LookupMap;
+		const auto* __restrict current_map = &instructions::GetStaticInitVars().g_LookupMap;
 		while (current_map)
 		{
 			if (current_map->IsMap)
 			{
 				const uint32 mask = current_map->Mask;
 				const uint32 masked_instruction = instruction & mask;
-				auto fiter = current_map->Map.find(masked_instruction);
-				if (fiter != current_map->Map.end())
+				if (
+					auto fiter = current_map->Map.find(masked_instruction);
+					fiter != current_map->Map.end()
+				)
 				{
 					current_map = fiter->second;;
 				}

@@ -46,8 +46,11 @@
   <ItemGroup>
     <ClInclude Include="Header.h" />
     <ClInclude Include="interpreter.hpp" />
+    <ClInclude Include="malloc.h" />
+    <ClInclude Include="malloc_support.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="interpreter.cpp" />
+    <ClCompile Include="malloc.cpp" />
   </ItemGroup>
 </Project>

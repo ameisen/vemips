@@ -4,6 +4,7 @@
 
 #include "tablegen.hpp"
 
+
 namespace vemips::tablegen {
 	struct options;
 

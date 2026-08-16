@@ -4,11 +4,13 @@
     <LocalDebuggerCommandArguments>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>D:\Projects\MipsTest2\MipsTest\</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArgumentsHistory>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|x64'">
     <LocalDebuggerCommandArguments>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>D:\Projects\MipsTest2\MipsTest\</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArgumentsHistory>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Development|x64'">
     <LocalDebuggerCommandArguments>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin</LocalDebuggerCommandArguments>
@@ -19,16 +21,19 @@
     <LocalDebuggerCommandArguments>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>D:\Projects\MipsTest2\MipsTest\</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArgumentsHistory>D:\Projects\MipsTest2\MipsTest\MipsTest.vcxproj Release Win32 rebuild MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerCommandArguments>/sdk=D:\Projects\vemips\vemips_sdk\MipsTest\..\MIPS_SDK D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.vcxproj Release Win32 build MipsTest.bin</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>D:\Projects\vemips\vemips_sdk\MIPS_SDK</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArgumentsHistory>/sdk=D:\Projects\vemips\vemips_sdk\MipsTest\..\MIPS_SDK D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.vcxproj Release Win32 build MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-LLVM|x64'">
     <LocalDebuggerCommandArguments>/sdk=D:\Projects\vemips\vemips_sdk\MipsTest\..\MIPS_SDK D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.vcxproj Release Win32 build MipsTest.bin</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>D:\Projects\vemips\vemips_sdk\MIPS_SDK</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArgumentsHistory>/sdk=D:\Projects\vemips\vemips_sdk\MipsTest\..\MIPS_SDK D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.vcxproj Release Win32 build MipsTest.bin|</LocalDebuggerCommandArgumentsHistory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-ASan|x64'">
     <LocalDebuggerCommandArguments>/sdk=D:\Projects\vemips\vemips_sdk\MipsTest\..\MIPS_SDK D:\Projects\vemips\vemips_sdk\MipsTest\MipsTest.vcxproj Release Win32 build MipsTest.bin</LocalDebuggerCommandArguments>

@@ -3,6 +3,7 @@ build/vs/.vs
 build/vs/Int
 tools/vevcbridge/Int/
 *.bin
+*.vebin
 vemips_sdk/MipsTest/obj/interpreter.cpp.o
 vemips_sdk/MipsTest/.vs/
 vemips_sdk/MipsTest/obj/

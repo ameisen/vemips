@@ -1,37 +1,106 @@
 #include "pch.hpp"
 #include "jit1.hpp"
 
-#include <cassert>
-
 #include <algorithm>
+#include <functional>
+#include <memory>
 #include <mutex>
+#include <vector>
 
 #include "codegen.hpp"
+#include "debugger.hpp"
+#include "exception.hpp"
+#include "jit1_xbyak.hpp"
 #include "system.hpp"
 #include "instructions/instructions.hpp"
 #include "instructions/instructions_common.hpp"
 #include "instructions/instructions_table.hpp"
+#include "mips_common.hpp"
 #include "platform/platform_headers.hpp"
 #include "processor/processor.hpp"
 
 using namespace mips;
 
+#define JIT_DEBUGGING 0
+
 #define JIT_INSTRUCTION_SEPARATE 0
 #define JIT_INSERT_IDENTIFIERS 0
+#define JIT_TRACK_CURRENT_INSTRUCTION 0
+#define JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT 0
+
+#if JIT_DEBUGGING
+	#undef JIT_INSTRUCTION_SEPARATE
+	#define JIT_INSTRUCTION_SEPARATE 1
+	#undef JIT_INSERT_IDENTIFIERS
+	#define JIT_INSERT_IDENTIFIERS 1
+	#undef JIT_TRACK_CURRENT_INSTRUCTION
+	#define JIT_TRACK_CURRENT_INSTRUCTION 1
+	#undef JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT
+	#define JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT 32
+#endif
+
+#if JIT_TRACK_CURRENT_INSTRUCTION && (!defined(JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT) || JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT == 0)
+	#undef JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT
+	#define JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT 1
+#endif
+
 
 // this can and should be global to all JITs.
 namespace {
-	static constinit size_t global_exec_data_size = 0x1000;
+	static constexpr const size_t global_exec_data_size = 0x1000;
 	static std::mutex g_global_exec_data_lock;
 	static std::shared_ptr<char[]> g_global_exec_data;
 }
 
-extern "C" uintptr jit1_springboard(uintptr instruction, uintptr processor, uintptr pc_runner, uintptr, uintptr, uintptr);
-extern "C" void jit1_drop_signal();
+#if JIT_TRACK_CURRENT_INSTRUCTION
+namespace
+{
+	namespace debug
+	{
+		struct state
+		{
+			uint64 cycle = std::numeric_limits<uint64>::max();
+			uptr_guest address = 0U;
+			instruction_t instruction = {};
+			const instructions::InstructionInfo* instruction_info = nullptr;
+			std::array<uint32, 32> registers;
+		};
+		static std::array<state, JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT> stack;
+
+		static VEMIPS_JIT_ABI void VEMIPS_JIT_ABI_INFIX push_state(
+			const uptr_guest address,
+			const instruction_t instruction,
+			const instructions::InstructionInfo * const instruction_info,
+			const processor & __restrict processor
+		)
+		{
+			#if JIT_TRACK_PREVIOUS_INSTRUCTION_COUNT > 1
+			std::copy(
+				stack.begin(),
+				stack.end() - 1,
+				stack.begin() + 1
+			);
+			#endif
+			stack[0] = {
+				.cycle = processor.get_instruction_count(),
+	            .address = address,
+	            .instruction = instruction,
+	            .instruction_info = instruction_info,
+	            .registers = processor.get_register_file()
+			};
+		}
+	}
+}
+#endif
+
+extern "C" VEMIPS_JIT_ABI uintptr VEMIPS_JIT_ABI_INFIX jit1_springboard(uintptr instruction, uintptr processor, uintptr pc_runner, uintptr, uintptr, uintptr);
+extern "C" VEMIPS_JIT_ABI void VEMIPS_JIT_ABI_INFIX jit1_drop_signal();
 
 // todo: make either non-static or into a proper allocator 
 namespace {
 	_pragma_small_code
+	[[nodiscard]]
+	_func_const
 	static _nothrow size_t get_allocation_granularity() noexcept
 	{
 		SYSTEM_INFO info = {};
@@ -44,6 +113,7 @@ namespace {
 	static std::vector<void*> free_chunks;
 	static const size_t allocation_granularity = get_allocation_granularity();
 
+	[[nodiscard]]
 	_forceinline _result_noalias _nothrow static void* allocate_executable(const size_t size) noexcept {
 		void* result = VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 		xassert(result != nullptr);
@@ -52,6 +122,7 @@ namespace {
 	}
 
 	template <size_t ChunkSize>
+	[[nodiscard]]
 	_forceinline _result_noalias _nothrow static void* allocate_executable_chunk() noexcept {
 		{
 			std::unique_lock lock{free_chunks_lock};
@@ -98,11 +169,12 @@ namespace {
 	}
 }
 
+basic_allocator<jit1::ChunkOffset> jit1::m_chunkoffset_allocator;
+
 void jit1::initialize_chunk(chunk_data& __restrict chunk) {
 	if (!chunk.chunk) {
 		chunk.chunk.reset(new Chunk);
 
-		make_unique_inline(chunk.chunk->m_patches);
 		chunk.offset = m_chunkoffset_allocator.allocate();
 		chunk.offset->fill(0);
 	}
@@ -125,34 +197,39 @@ _forceinline jit1::chunk_data& jit1::MapLevel1::operator [] (uint32 idx) {
 #endif
 
 namespace {
-	_cold _nothrow void RI_Exception (instruction_t, processor & __restrict processor) noexcept
+	VEMIPS_JIT_ABI _cold _nothrow void VEMIPS_JIT_ABI_INFIX RI_Exception (instruction_t, processor & __restrict processor) noexcept
 	{
-		processor.set_trapped_exception({ CPU_Exception::Type::RI, processor.get_program_counter() });
+		processor.set_trapped_exception(CPU_Exception::Type::RI);
 	}
 
-	_cold _nothrow void OV_Exception (processor & __restrict processor) noexcept
+	VEMIPS_JIT_ABI _cold _nothrow void VEMIPS_JIT_ABI_INFIX OV_Exception (processor & __restrict processor) noexcept
 	{
-		processor.set_trapped_exception({ CPU_Exception::Type::Ov, processor.get_program_counter() });
+		processor.set_trapped_exception(CPU_Exception::Type::Ov);
 	}
 
-	_cold _nothrow void TR_Exception (uint32 code, processor & __restrict processor) noexcept
+	VEMIPS_JIT_ABI _cold _nothrow void VEMIPS_JIT_ABI_INFIX TR_Exception (uint32 code, processor & __restrict processor) noexcept
 	{
-		processor.set_trapped_exception({ CPU_Exception::Type::Tr, processor.get_program_counter(), code });
+		processor.set_trapped_exception(CPU_Exception::Type::Tr, code);
 	}
 
-	_cold _nothrow void CpU_Exception (uint32 code, processor & __restrict processor) noexcept
+	VEMIPS_JIT_ABI _cold _nothrow void VEMIPS_JIT_ABI_INFIX CpU_Exception (uint32 code, processor & __restrict processor) noexcept
 	{
-		processor.set_trapped_exception({ CPU_Exception::Type::CpU, processor.get_program_counter(), code });
+		processor.set_trapped_exception(CPU_Exception::Type::CpU, code);
 	}
 
-	_cold _nothrow void AdEL_Exception (uint32 address, processor & __restrict processor) noexcept
+	VEMIPS_JIT_ABI _cold _nothrow void VEMIPS_JIT_ABI_INFIX AdEL_Exception (uptr_guest address, processor & __restrict processor) noexcept
 	{
-		processor.set_trapped_exception({ CPU_Exception::Type::AdEL, processor.get_program_counter(), address });
+		processor.set_trapped_exception(CPU_Exception::Type::AdEL, address);
 	}
 
-	_cold _nothrow void AdES_Exception(uint32 address, processor & __restrict processor) noexcept
+	VEMIPS_JIT_ABI _cold _nothrow void VEMIPS_JIT_ABI_INFIX AdES_Exception(uptr_guest address, processor & __restrict processor) noexcept
 	{
-		processor.set_trapped_exception({ CPU_Exception::Type::AdES, processor.get_program_counter(), address });
+		processor.set_trapped_exception(CPU_Exception::Type::AdES, address);
+	}
+
+	VEMIPS_JIT_ABI _cold _nothrow void VEMIPS_JIT_ABI_INFIX InternalFlow_Exception(uint32 argument, processor & __restrict processor) noexcept
+	{
+		processor.set_trapped_exception(CPU_Exception::Type::InternalFlow, argument);
 	}
 	_pragma_default_code
 }
@@ -189,9 +266,9 @@ jit1::jit1(processor & __restrict _processor) : processor_(_processor)
 				cg.mov(cg.qword[cg.rbp + offsets.ic], cg.rdi);
 				cg.mov(cg.dword[cg.rbp + offsets.pc], cg.ecx);
 				cg.mov(cg.dword[cg.rbp + offsets.flags], cg.ebx);
-				cg.lea(cg.rdx, cg.qword[cg.rbp - 128]);
+				cg.lea(cg.rdx, cg.qword[cg.rbp + offsets.base]);
 				cg.mov(cg.rcx, cg.r9);
-				cg.call_ex<true>(cg.rax);
+				cg.call_ex<JumpFlags::ExternalCall>(cg.rax);
 				cg.test(cg.rax, cg.rax);
 				cg.jz(no_redirect);
 				{
@@ -219,43 +296,47 @@ jit1::~jit1() = default;
 
 namespace
 {
-	void increment_instruction_statistic(const char * __restrict instruction, processor & __restrict processor)
+	VEMIPS_JIT_ABI static _nothrow void VEMIPS_JIT_ABI_INFIX increment_instruction_statistic(const char * __restrict instruction, processor & __restrict processor) noexcept
 	{
 		processor.increment_instruction_statistic(instruction);
 	}
 
-	void increment_jit_emulated_instruction_statistic(const char * __restrict instruction, processor & __restrict processor)
+	VEMIPS_JIT_ABI static _nothrow void VEMIPS_JIT_ABI_INFIX increment_jit_emulated_instruction_statistic(const char * __restrict instruction, processor & __restrict processor) noexcept
 	{
 		processor.increment_jit_emulated_instruction_statistic(instruction);
 	}
 
-	static uint32 should_debug_break(const processor * __restrict proc)
+	VEMIPS_JIT_ABI static _nothrow uint32 VEMIPS_JIT_ABI_INFIX should_debug_break(const processor * __restrict proc) noexcept
 	{
 		return proc->get_guest_system()->get_debugger()->should_interrupt_execution();
 	}
 
 	struct cache_flusher final {
 		Jit1_CodeGen& codegen;
-		uint8* const start_address;
+		const void* const start_address;
 
-		cache_flusher(Jit1_CodeGen & codegen) : codegen(codegen), start_address(codegen.get_current_address()) {
+		_nothrow cache_flusher(Jit1_CodeGen & codegen) noexcept :
+			codegen(codegen),
+			start_address(codegen.getCurr()
+		) {
 		}
 
-		~cache_flusher() {
-			_clear_cache(start_address, codegen.get_current_address());
+		_nothrow ~cache_flusher() noexcept {
+			_clear_cache(start_address, codegen.getCurr());
 		}
 	};
 }
 
-void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, uint32 start_address, bool update) {
-	xassert((start_address % 4) == 0);
+void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1::Chunk & __restrict chunk, const uptr_guest start_address, bool update) {
+	xassert((start_address % 4U) == 0);
 
 	const auto& this_processor = jit_.processor_;
+	//const auto this_system = this_processor.get_guest_system();
 
 	cache_flusher scoped_cache_flusher(*this);
 
-	const uint32 base_address = start_address & ~(jit1::ChunkSize - 1);
-	const uint32 last_address = base_address + (jit1::ChunkSize - 1);
+	const uptr_guest base_address = start_address & ~(jit1::ChunkSize - 1);
+	const uptr_guest last_address = base_address + (jit1::ChunkSize - 1);
 
 	constexpr uint32 chunk_start_offset = 0;
 
@@ -279,10 +360,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 #endif
 
-		if (auto* patches = chunk.m_patches.get())
-		{
-			patches->clear();
-		}
+		chunk.patches.clear();
 	}
 	else
 	{
@@ -301,7 +379,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 	const instructions::InstructionInfo * __restrict prev_instruction_info_ptr = nullptr;
 	const instructions::InstructionInfo * __restrict instruction_info_ptr = nullptr;
-	instruction_t prev_instruction = 0;
+	std::optional<instruction_t> prev_instruction;
 	instruction_t instruction = 0;
 
 	static constexpr uint32 num_instructions = jit1::NumInstructionsChunk;
@@ -324,23 +402,15 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		bool possible_after_delaybranch_hazard = false;
 		bool store_handled = false;
 
-		const uint32 current_address = start_address;
+		const uint32 current_address = start_address + ((i - start_index) * 4u);
 
 		if (i == start_index)
 		{
-#if 0
-			// For the purpose of handling self-modifying code, we always emit delay branch logic for the first instruction of a chunk
-			// so that we do not potentially need to change it after the fact, causing a cascade of sorts.
-			// TODO : this really sucks since it will always make the first instruction an indeterminate branch,
-			// which is the slowest by a very large margin. It's probably faster to just rebuild adjacent chunks as well...
-			possible_after_delaybranch = true;
-			possible_after_delaybranch_hazard = true;
-#endif
-
 			if (const instruction_t * __restrict prev_ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address - 4))
 			{
-				prev_instruction = *prev_ptr;
-				prev_instruction_info_ptr = mips::FindExecuteInstruction(prev_instruction);
+				const instruction_t prev_instruction_val = *prev_ptr;
+				prev_instruction = prev_instruction_val;
+				prev_instruction_info_ptr = mips::FindExecuteInstruction(prev_instruction_val);
 			}
 		}
 
@@ -357,12 +427,28 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		nop(4, false);
 		L(id_label);
 #endif
-		
+
+#if JIT_TRACK_CURRENT_INSTRUCTION
+		{
+			const auto* current_instruction = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address);
+			const auto* current_instruction_info = current_instruction != nullptr ? mips::FindExecuteInstruction(*current_instruction) : nullptr;
+
+			mov(qword[rbp + offsets.ic], rdi);
+			set(ecx, current_address);
+			set(edx, current_instruction != nullptr ? *current_instruction : 0);
+			mov(r8, reinterpret_cast<uintptr>(current_instruction_info));
+			lea(r9, qword[rbp + offsets.base]);
+			std::ignore = call_ex<true>(ptr_cast(&debug::push_state), rax);
+		}
+#endif
+
 		if (this_processor.ticked_ && this_processor.debugging_)
 		{
+			// TODO : write is not needed. Can pass as an argument and update later
 			mov(dword[rbp + offsets.pc], current_address);
-			lea(rcx, qword[rbp - 128]);
-			std::ignore = call_ex<true>(ptr_cast(&should_debug_break), rax);
+			lea(rcx, qword[rbp + offsets.base]);
+			// TODO : At some point, this should be a bool that we directly access instead of a call.
+			std::ignore = call_ex<JumpFlags::ExternalCall>(ptr_cast(&should_debug_break), rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
 			cmp(rdi, r14);
@@ -370,9 +456,11 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 		else if (this_processor.debugging_)
 		{
+			// TODO : write is not needed. Can pass as an argument and update later
 			mov(dword[rbp + offsets.pc], current_address);
-			lea(rcx, qword[rbp - 128]);
-			std::ignore = call_ex<true>(ptr_cast(&should_debug_break), rax);
+			lea(rcx, qword[rbp + offsets.base]);
+			// TODO : At some point, this should be a bool that we directly access instead of a call.
+			std::ignore = call_ex<JumpFlags::ExternalCall>(ptr_cast(&should_debug_break), rax);
 			test(eax, eax);
 			jnz(intrinsics_.save_return, T_NEAR);
 		}
@@ -384,25 +472,49 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			je(intrinsics_.save_return_eax_pc, T_NEAR);
 		}
 
-		if (current_address >= 4)
+		if (current_address < 4) [[unlikely]]
 		{
-			const size_t ins_start_size = getSize();
+			// AdEL
+			set(ecx, current_address);
+			jmp(intrinsics_.adel_identity, T_NEAR);
+			exception_result = except_result::always_throw;
+			instruction = 0;
+			instruction_info_ptr = nullptr;
+		}
+		else
+		{
+			const usize ins_start_size = getSize();
 
 			if (prev_instruction_info_ptr != nullptr)
 			{
-				if (prev_instruction_info_ptr && instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::SetNoCTI))
+				if (instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::SetNoCTI))
 				{
 					cti_test = true;
 				}
-				if (prev_instruction_info_ptr && instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::DelayBranch))
+				if (instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::DelayBranch))
 				{
 					possible_after_delaybranch = true;
 					possible_after_delaybranch_hazard = instructions::HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::Hazard);
 				}
 			}
 
+			if (i == start_index)
+			{
+				chunk.last_chunk_last_instruction = prev_instruction;
+			}
+
 			const instruction_t * __restrict ptr = this_processor.safe_mem_fetch_exec<const instruction_t>(current_address);
-			if (ptr)
+
+			if (!ptr) [[unlikely]]
+			{
+				// AdEL
+				set(ecx, current_address);
+				jmp(intrinsics_.adel_identity, T_NEAR);
+				exception_result = except_result::always_throw;
+				instruction = 0;
+				instruction_info_ptr = nullptr;
+			}
+			else
 			{
 				instruction = *ptr;
 				instruction_info_ptr = mips::FindExecuteInstruction(instruction);
@@ -446,7 +558,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					// TODO : temporary for debugging
 					if (false)
 					{
-						exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
+						exception_result = insert_instruction_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 					}
 					else if (instructions::HasAnyFlags(instruction_info_ptr->OpFlags, instructions::OpFlags::RequiresCoP0) && !jit_.processor_.has_coprocessor0_support())
 					{
@@ -470,7 +582,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 								call(intrinsics_.emulated_stats);
 							}
 
-							exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
+							exception_result = insert_instruction_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 						}
 						else
 						{
@@ -495,7 +607,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 								call(intrinsics_.emulated_stats);
 							}
 
-							exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
+							exception_result = insert_instruction_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 						}
 						else
 						{
@@ -776,7 +888,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 							call(intrinsics_.emulated_stats);
 						}
 
-						exception_result = insert_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
+						exception_result = insert_instruction_procedure_check_hazard(current_address, *instruction_info_ptr, instruction);
 					}
 
 					cti = instruction_info_ptr->Flags.control;
@@ -789,28 +901,19 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 					exception_result = except_result::always_throw;
 				}
 			}
-			else
-			{
-				// AdEL
-				set(ecx, current_address);
-				jmp(intrinsics_.adel_identity, T_NEAR);
-				exception_result = except_result::always_throw;
-				instruction = 0;
-				instruction_info_ptr = nullptr;
-			}
 
 			const size_t ins_size = getSize() - ins_start_size;
-			jit_.largest_instruction_ = std::max(jit_.largest_instruction_, ins_size);
+			if (jit_.largest_instruction_.second > ins_size)
+			{
+				const char* instruction_name = nullptr;
+				if (instruction_info_ptr)
+				{
+					instruction_name = instruction_info_ptr->Name;
+				}
+				jit_.largest_instruction_ = {instruction_name, ins_size};
+			}
 		}
-		else
-		{
-			// AdEL
-			set(ecx, current_address);
-			jmp(intrinsics_.adel_identity, T_NEAR);
-			exception_result = except_result::always_throw;
-			instruction = 0;
-			instruction_info_ptr = nullptr;
-		}
+
 		// Epilog for store ops, as we need to test afterwards to see if they may have altered JIT memory.
 		//if (!terminate_instruction)
 		{
@@ -819,6 +922,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			// inc r8
 			inc(rdi);
 		}
+
+		// TODO : if an internal flow exception gets thrown, we shouldn't emit epilogues or even delay branch stuff for the following instruction
 
 		bool can_throw = (exception_result & (except_result::can_except | except_result::always_except)) != except_result::none;
 		bool terminate_instruction = (exception_result & (except_result::always_except | except_result::always_throw | except_result::always_exits)) != except_result::none;
@@ -863,7 +968,16 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 
 			if (possible_after_delaybranch)
 			{
-				handle_delay_branch(chunk, chunk_offset, current_address - 4, prev_instruction, *prev_instruction_info_ptr, possible_after_delaybranch_hazard);
+				xassert(prev_instruction.has_value());
+
+				handle_delay_branch(
+					chunk,
+					chunk_offset,
+					current_address - 4,
+					prev_instruction.value(),
+					*prev_instruction_info_ptr,
+					possible_after_delaybranch_hazard
+				);
 			}
 		}
 		else
@@ -887,18 +1001,69 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		}
 
 #if JIT_INSTRUCTION_SEPARATE
-		nop(8, false);
+		{
+			Xbyak::Label post_separate_label;
+			jmp(post_separate_label, T_SHORT);
+			nop(8, false);
+			L(post_separate_label);
+		}
 #endif
-
-		start_address += 4;
 	}
 
-	chunk.ends_with_delay_branch = prev_instruction_info_ptr && HasAnyFlags(prev_instruction_info_ptr->OpFlags, instructions::OpFlags::DelayBranch);
+	// Get next chunk info, and if it exists, we check against that to determine if it needs to be marked as dirty.
+	if (start_address != 0)
+	{
+		if (
+			const jit1::Chunk* const next_chunk = jit_.get_chunk(start_address + (num_instructions * 4));
+			next_chunk && (
+				(
+					prev_instruction.has_value() !=
+					next_chunk->last_chunk_last_instruction.has_value()
+				) ||
+				(
+					prev_instruction.has_value() &&
+					next_chunk->last_chunk_last_instruction.has_value() &&
+					prev_instruction.value() != next_chunk->last_chunk_last_instruction.value()
+				)
+			)
+		)
+		{
+			const instructions::InstructionInfo* old_last_instruction_info_ptr = nullptr;
+
+			if (next_chunk->last_chunk_last_instruction.has_value())
+			{
+				old_last_instruction_info_ptr = mips::FindExecuteInstruction(next_chunk->last_chunk_last_instruction.value());
+			}
+
+			const instructions::InstructionInfo * const last_instruction_info_ptr = prev_instruction_info_ptr;
+			if (old_last_instruction_info_ptr != last_instruction_info_ptr)
+			{
+				const instructions::OpFlags previous_last_flags = old_last_instruction_info_ptr ? old_last_instruction_info_ptr->OpFlags : instructions::OpFlags::None;
+				const instructions::OpFlags last_flags = last_instruction_info_ptr ? last_instruction_info_ptr->OpFlags : instructions::OpFlags::None;
+
+				constexpr instructions::OpFlags relevant_flags_mask =
+					instructions::OpFlags::ControlInstruction |
+					instructions::OpFlags::DelayBranch |
+					instructions::OpFlags::InstructionHazard;
+				const instructions::OpFlags previous_last_flags_relevant = previous_last_flags & relevant_flags_mask;
+				const instructions::OpFlags last_flags_relevant = last_flags & relevant_flags_mask;
+
+				// TODO : determine if subsequent chunk needs to be rebuilt.
+				if (
+					previous_last_flags_relevant != instructions::OpFlags::None ||
+					last_flags_relevant != instructions::OpFlags::None
+					// TODO : this check is suboptimal. There are many cases where the codegen will be identical. We should fetch enum values for that.
+				)
+				{
+					// TODO : mark subsequent chunk as dirty
+				}
+			}
+		}
+	}
 
 	intrinsic_write_patch_jump(
 		chunk,
-		last_address + 1,
-		edx,
+		last_address + 4,
 		true
 	);
 
@@ -906,6 +1071,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 		const Xbyak::Label save;
 
 		L(intrinsics_.intrinsic_start);
+
+		// TODO : Consider making an intrinsic for CALLs to reduce the overhead slightly - could remove add/sub 40
 
 		if (intrinsics_.ri.used) {
 			L(intrinsics_.ri);
@@ -930,7 +1097,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			L(intrinsics_.ades);
 			mov(dword[rbp + offsets.pc], eax);
 			set(rax, uintptr(AdES_Exception));
-			jmp(intrinsic_ex, T_SHORT);
+			jmp(intrinsic_ex_no_pc, T_SHORT);
 		}
 
 		if (intrinsics_.ov.used) {
@@ -953,6 +1120,12 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			jmp(intrinsic_ex, T_SHORT);
 		}
 
+		if (intrinsics_.internal_flow.used) {
+			L(intrinsics_.cpu);
+			set(rax, uintptr(InternalFlow_Exception));
+			jmp(intrinsic_ex, T_SHORT);
+		}
+
 		if (isReferenced(intrinsic_ex) || isReferenced(intrinsic_ex_no_pc)) {
 			if (isReferenced(intrinsic_ex)) {
 				L(intrinsic_ex);
@@ -960,8 +1133,8 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			}
 			L(intrinsic_ex_no_pc);
 			call(save);
-			lea(rdx, qword[rbp - 128]);
-			jmp_ex<true>(rax);
+			lea(rdx, qword[rbp + offsets.base]);
+			jmp_ex<JumpFlags::ExternalCall>(rax);
 		}
 
 		if (intrinsics_.check_ex.used) {
@@ -992,33 +1165,24 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 			// dispatch a stat call.
 			if (intrinsics_.stats.used) {
 				L(intrinsics_.stats);
-				lea(rdx, qword[rbp - 128]);
-				std::ignore = call_ex<true, 8>(ptr_cast(&increment_instruction_statistic), rax);
+				lea(rdx, qword[rbp + offsets.base]);
+				std::ignore = call_ex<JumpFlags::ExternalCall, 8>(ptr_cast(&increment_instruction_statistic), rax);
 				ret();
 			}
 
 			if (intrinsics_.emulated_stats.used) {
 				L(intrinsics_.emulated_stats);
-				lea(rdx, qword[rbp - 128]);
-				std::ignore = call_ex<true, 8>(ptr_cast(&increment_jit_emulated_instruction_statistic), rax);
+				lea(rdx, qword[rbp + offsets.base]);
+				std::ignore = call_ex<JumpFlags::ExternalCall, 8>(ptr_cast(&increment_jit_emulated_instruction_statistic), rax);
 				ret();
 			}
 		}
 	}
 
 	xassert(!hasUndefinedLabel());
-	const bool has_patches = [&chunk]
-	{
-		if (auto* patches = chunk.m_patches.get())
-		{
-			return !patches->empty();
-		}
-
-		return false;
-	}();
-	ready(has_patches ? PROTECT_RWE : PROTECT_RE);
+	ready((!chunk.patches.empty()) ? PROTECT_RWE : PROTECT_RE);
 	//chunk.m_datasize = getSize();
-	const uint8 * __restrict data = getCode();
+	//const uint8 * __restrict data = getCode();
 
 	//this->
 
@@ -1026,7 +1190,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	xassert(getSize() <= jit1::MaxChunkRealSize);
 
 	// Finalize the data stream and then allocate a new chunk for it, if necessary.
-	uint32 total_size = uint32(this->getSize()) + chunk_start_offset;
+	//uint32 total_size = uint32(this->getSize()) + chunk_start_offset;
 	// The current chunk is large enough for our data.
 	//memcpy((char *)chunk.m_data + chunk_start_offset, data, getSize());
 
@@ -1038,7 +1202,7 @@ void Jit1_CodeGen::write_chunk(jit1::ChunkOffset & __restrict chunk_offset, jit1
 	static_assert(xbyak_throws, "must implement error checks");
 }
 
-void jit1::populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, const uint32 start_address, const bool update)
+void jit1::populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, const uptr_guest start_address, const bool update)
 {
 	if (!chunk.m_data)
 	{
@@ -1086,10 +1250,8 @@ namespace
 	};
 }
 
-void jit1::execute_instruction(const uint32 address)
+void jit1::execute_instruction(const uptr_guest address)
 {
-	current_executing_chunk_address_ = address;
-
 	processor& processor = processor_;
 	const auto* guest = processor.get_guest_system();
 
@@ -1099,15 +1261,15 @@ void jit1::execute_instruction(const uint32 address)
 	{
 		uintptr coprocessor1;
 		uint32 flags;
-		uint32 delay_branch_target;
+		uptr_guest delay_branch_target;
 		uint64 target_instruction;
-		uint32 frame_pointer;
+		uptr_guest frame_pointer;
 	} parameter_pack = {
 		.coprocessor1 = uintptr(processor.get_coprocessor<1>()),
 		.flags = uint32(processor.flags_),
 		.delay_branch_target = processor.branch_target_,
 		.target_instruction = processor.target_instructions_,
-		.frame_pointer = processor.get_register<>(processor::named_registers::frame_pointer)
+		.frame_pointer = processor.get_register<>(processor::named_registers<processor::SystemAbi::O32>::frame_pointer)
 	};
 
 	processor.increment_jit_transition_statistic();
@@ -1118,8 +1280,9 @@ void jit1::execute_instruction(const uint32 address)
 	}();
 	if _unlikely(guest->is_execution_complete()) [[unlikely]]
 	{
+		processor.trapped_exception_ = {};
 		if _likely(guest->is_execution_success()) [[likely]] {
-			ExecutionCompleteException::throw_helper();
+			ExecutionCompleteException::throw_helper(guest->get_exit_code());
 		}
 		else {
 			ExecutionFailException::throw_helper();
@@ -1129,13 +1292,20 @@ void jit1::execute_instruction(const uint32 address)
 	{
 		// there was an exception.
 		processor.clear_flags(processor::flag::trapped_exception);
-		processor.trapped_exception_.rethrow_helper();
+		if (processor.trapped_exception_.m_ExceptionType == CPU_Exception::Type::InternalFlow) [[likely]]
+		{
+			//processor.set_flags(processor::flag::flushing_icache);
+		}
+		else
+		{
+			processor.trapped_exception_.rethrow_helper();
+		}
 	}
 }
 
-jit1::jit_instructionexec_t jit1::get_instruction(const uint32 address)
+VEMIPS_JIT_ABI jit1::jit_instructionexec_t VEMIPS_JIT_ABI_INFIX jit1::get_instruction(const uptr_guest address)
 {
-	const uint32 mapped_address = address & ~(ChunkSize - 1);
+	const uptr_guest mapped_address = address & ~(ChunkSize - 1);
 
 	Chunk * __restrict chunk;
 	ChunkOffset * __restrict chunk_offset;
@@ -1205,9 +1375,9 @@ jit1::jit_instructionexec_t jit1::get_instruction(const uint32 address)
 	return result;
 }
 
-jit1::jit_instructionexec_t jit1::fetch_instruction(const uint32 address)
+jit1::jit_instructionexec_t jit1::fetch_instruction(const uptr_guest address)
 {
-	const uint32 mapped_address = address & ~(ChunkSize - 1);
+	const uptr_guest mapped_address = address & ~(ChunkSize - 1);
 	const uint32 address_offset = (address - mapped_address) / 4u;
 
 	Chunk* __restrict chunk;
@@ -1259,10 +1429,10 @@ jit1::jit_instructionexec_t jit1::fetch_instruction(const uint32 address)
 	return std::bit_cast<jit_instructionexec_t>(chunk_instruction);
 }
 
-jit1::Chunk * jit1::get_chunk(const uint32 address) const
+jit1::Chunk* jit1::get_chunk(const uptr_guest address) const
 {
 #if USE_CACHE
-	const uint32 mapped_address = address & ~(ChunkSize - 1);
+	const uptr_guest mapped_address = address & ~(ChunkSize - 1);
 
 	for (const auto& cached : last_cached)
 	{
@@ -1285,6 +1455,21 @@ jit1::Chunk * jit1::get_chunk(const uint32 address) const
 
 		return result->chunk.get();
 	}
+}
+
+jit1::Chunk* jit1::get_chunk_by_pointer(const uptr ptr) const noexcept
+{
+	for (Chunk* chunk : chunks_)
+	{
+		const uptr start = uptr_cast(chunk->m_data);
+		const uptr end = start + chunk->m_datasize;
+		if (ptr >= start && ptr < end)
+		{
+			return chunk;
+		}
+	}
+
+	return nullptr;
 }
 
 _nothrow void jit1::Chunk::release() noexcept

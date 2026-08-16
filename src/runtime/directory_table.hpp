@@ -9,7 +9,7 @@
 #define USING_TABLE 1
 
 namespace mips {
-	template<typename T, size_t Size, size_t... Sizes>
+	template<typename T, usize Size, usize... Sizes>
 	class directory_table final {
 		static_assert(Size != 0);
 		static_assert(std::has_single_bit(Size));
@@ -22,7 +22,7 @@ namespace mips {
 		static constexpr const bool has_sub_tables = true;
 
 	private:
-		static constexpr const size_t levels = sizeof...(Sizes) + 1;
+		static constexpr const usize levels = sizeof...(Sizes) + 1;
 		static_assert(levels != 0);
 		static_assert((sizeof...(Sizes) + 1) == levels);
 		static_assert(Size != 0);
@@ -63,12 +63,13 @@ namespace mips {
 		}
 
 		[[nodiscard]]
-		_forceinline _nothrow bool contains_sub(const uint32 idx) const noexcept {
+		_pure _forceinline _nothrow bool contains_sub(const uint32 idx) const noexcept {
 			xassert(idx < Size);
 
 			return static_cast<bool>(data_[idx]);
 		}
 
+		[[nodiscard]]
 		_forceinline _nothrow sub_map_t& sub(const uint32 idx) noexcept {
 			xassert(idx < Size);
 
@@ -80,6 +81,8 @@ namespace mips {
 			return *result;
 		}
 
+		[[nodiscard]]
+		_pure // technically not pure because it can throw
 		_forceinline const sub_map_t& sub(const uint32 idx) const {
 			xassert(idx < Size);
 
@@ -91,7 +94,7 @@ namespace mips {
 		}
 
 		[[nodiscard]]
-		_forceinline _nothrow bool contains(const uint32 idx) const noexcept {
+		_pure _forceinline _nothrow bool contains(const uint32 idx) const noexcept {
 			const uint32 table_index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
 			xassert(table_index < Size);
 
@@ -106,6 +109,8 @@ namespace mips {
 
 		// second element is `true` if element existed
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline auto get(this Self&& self, const uint32 idx) noexcept(std::is_const_v<Self>) ->
 		std::pair<_make_qual(T&), bool> {
 			const uint32 table_index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
@@ -117,6 +122,8 @@ namespace mips {
 		}
 
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline _nothrow auto fetch(this Self&& self, const uint32 idx) noexcept -> _make_qual(T*) {
 			const uint32 table_index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
 			xassert(table_index < Size);
@@ -132,6 +139,8 @@ namespace mips {
 		}
 
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline auto operator [] (this Self&& self, const uint32 idx) noexcept(std::is_const_v<Self>) ->
 		_make_qual(T&) {
 			const uint32 table_index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
@@ -143,7 +152,7 @@ namespace mips {
 		}
 	};
 
-	template <typename T, size_t Size>
+	template <typename T, usize Size>
 	class directory_table<T, Size> final {
 		static_assert(Size != 0);
 		static_assert(std::has_single_bit(Size));
@@ -185,7 +194,7 @@ namespace mips {
 
 		[[nodiscard]]
 		// ReSharper disable once CppMemberFunctionMayBeStatic
-		_forceinline _nothrow bool contains_sub([[maybe_unused]] const uint32 idx) const noexcept {
+		_func_const _forceinline _nothrow bool contains_sub([[maybe_unused]] const uint32 idx) const noexcept {
 			return false;
 		}
 
@@ -196,7 +205,7 @@ namespace mips {
 		}
 
 		[[nodiscard]]
-		_forceinline _nothrow bool contains(const uint32 idx) const noexcept {
+		_pure _forceinline _nothrow bool contains(const uint32 idx) const noexcept {
 			const uint32 index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
 			xassert(index < Size);
 
@@ -205,6 +214,8 @@ namespace mips {
 
 		// second element is `true` if element existed
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline auto get(this Self&& self, const uint32 idx) noexcept(std::is_const_v<Self>) ->
 		std::pair<_make_qual(T&), bool> {
 			const uint32 index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
@@ -226,6 +237,8 @@ namespace mips {
 		}
 
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline _nothrow auto fetch(this Self&& self, const uint32 idx) noexcept -> _make_qual(T*) {
 			const uint32 index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
 			xassert(index < Size);
@@ -239,6 +252,8 @@ namespace mips {
 		}
 
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline auto operator [] (this Self&& self, const uint32 idx) noexcept(std::is_const_v<Self>) -> _make_qual(T&) {
 			const uint32 index = (idx >> (index_bits - size_bits - remaining_size_bits)) & index_mask;
 			xassert(index < Size);
@@ -258,7 +273,7 @@ namespace mips {
 		}
 	};
 
-	template<typename T, size_t Size [[maybe_unused]]>
+	template<typename T, usize Size>
 	class directory_std_map final
 	{
 		static_assert(Size != 0);
@@ -294,7 +309,7 @@ namespace mips {
 
 		[[nodiscard]]
 		// ReSharper disable once CppMemberFunctionMayBeStatic
-		_forceinline _nothrow bool contains_sub([[maybe_unused]] const uint32 idx) const noexcept {
+		_func_const _forceinline _nothrow bool contains_sub([[maybe_unused]] const uint32 idx) const noexcept {
 			return false;
 		}
 
@@ -305,12 +320,14 @@ namespace mips {
 		}
 
 		[[nodiscard]]
-		_forceinline _nothrow bool contains(const uint32 idx) const noexcept {
+		_pure _forceinline _nothrow bool contains(const uint32 idx) const noexcept {
 			return map_.contains(idx);
 		}
 
 		// second element is `true` if element existed
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline auto get(this Self&& self, const uint32 idx) noexcept(std::is_const_v<Self>) ->
 		std::pair<_make_qual(T&), bool> {
 
@@ -346,6 +363,8 @@ namespace mips {
 		}
 
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline _nothrow auto fetch(this Self&& self, const uint32 idx) noexcept -> _make_qual(T*) {
 			const auto&& f_iter = self.map_.find(idx);
 
@@ -358,16 +377,18 @@ namespace mips {
 		}
 
 		template <typename Self>
+		[[nodiscard]]
+		// _pure // only pure if const // technically not pure because it can throw
 		_forceinline auto operator [] (this Self&& self, const uint32 idx) noexcept(std::is_const_v<Self>) -> _make_qual(T&) {
 			return self.get(idx).first;
 		}
 	};
 
 #if USING_TABLE
-	template<typename T, size_t Size, size_t... Sizes>
+	template<typename T, usize Size, usize... Sizes>
 	using directory_map = directory_table<T, Size, Sizes...>;
 #else
-	template<typename T, size_t Size, [[maybe_unused]] size_t... Sizes>
+	template<typename T, usize Size, [[maybe_unused]] usize... Sizes>
 	using directory_map = directory_std_map<T, Size>;
 #endif
 

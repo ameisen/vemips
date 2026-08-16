@@ -2,11 +2,15 @@
 
 #include <common.hpp>
 
+#include <limits>
+#include <type_traits>
+#include <utility>
+
 
 namespace mips {
 	// TODO refactor
 
-	struct base_exception
+	struct _empty_bases base_exception
 	{
 	protected:
 		_pragma_small_code
@@ -15,7 +19,7 @@ namespace mips {
 	};
 
 	template <typename TException>
-	struct base_exception_templated : base_exception
+	struct _empty_bases base_exception_templated : base_exception
 	{
 	protected:
 		_pragma_small_code
@@ -23,12 +27,13 @@ namespace mips {
 		_pragma_default_code
 
 	public:
+		template <typename... ArgsT>
 		_pragma_small_code [[noreturn]]
-		static _cold _noinline void throw_helper()
+		static _cold _noinline void throw_helper(ArgsT&&... args)
 		{
 			static_assert(std::is_base_of_v<base_exception, TException>);
 
-			throw TException();
+			throw TException(std::forward<ArgsT>(args)...);
 		}
 		_pragma_default_code
 	};
@@ -64,8 +69,11 @@ namespace mips {
 			GE = 27,
 			Prot = 29,
 			CacheErr = 30,
+
+			// Internal exceptions used for JIT interactions and such
+			InternalFlow = std::numeric_limits<uint32>::max() - 0U,
 		} m_ExceptionType = {};
-		uint32 m_InstructionAddress = 0;
+		uptr_guest m_InstructionAddress = 0;
 		uint32 m_Code = 0;
 
 		_pragma_small_code
@@ -73,7 +81,7 @@ namespace mips {
 		_pragma_default_code
 
 		_pragma_small_code
-		_cold _nothrow CPU_Exception(const Type type, const uint32 address, const uint32 code = 0) noexcept
+		_cold _nothrow CPU_Exception(const Type type, const uptr_guest address, const uint32 code = 0) noexcept
 			: m_ExceptionType(type)
 			, m_InstructionAddress(address)
 			, m_Code(code)
@@ -81,23 +89,52 @@ namespace mips {
 		_pragma_default_code
 
 		_pragma_small_code [[noreturn]]
-		_cold _noinline void rethrow_helper() const
+		_cold _noinline void rethrow_helper() const _noreturn_post
 		{
 			throw *this;
 		}
 		_pragma_default_code
-
-		_pragma_small_code [[noreturn]]
-		static _cold _noinline void throw_helper(const Type type, const uint32 address, const uint32 code = 0)
+			
+		// TODO : add overload that pulls program counter from processor directly - forward declaration is insufficient
+		_pragma_small_code
+		template <Type ExceptionType>
+		[[noreturn]]
+		static _cold _noinline void throw_helper(const uptr_guest address, const uint32 code) _noreturn_post
 		{
-			throw CPU_Exception(type, address, code);
+			throw CPU_Exception(ExceptionType, address, code);
+		}
+		_pragma_default_code
+
+		_pragma_small_code
+		template <Type ExceptionType>
+		[[noreturn]]
+		static _cold _noinline void throw_helper(const uptr_guest address) _noreturn_post
+		{
+			throw CPU_Exception(ExceptionType, address, 0);
 		}
 		_pragma_default_code
 	};
 
-	struct ExecutionCompleteException final : base_exception_templated<ExecutionCompleteException>
-	{};
-	struct ExecutionFailException final : base_exception_templated<ExecutionFailException>
+	struct _empty_bases ExecutionEndedException : base_exception
+	{
+	public:
+		_pragma_small_code
+		_cold _nothrow ExecutionEndedException() noexcept = default;
+		_pragma_default_code
+	};
+
+	struct ExecutionCompleteException final : base_exception_templated<ExecutionCompleteException>, ExecutionEndedException
+	{
+		int32 result_code = 0;
+
+		_pragma_small_code
+		_cold _nothrow ExecutionCompleteException() noexcept = default;
+		_cold _nothrow ExecutionCompleteException(const int32 code) noexcept :
+			result_code(code)
+		{}
+		_pragma_default_code
+	};
+	struct ExecutionFailException final : base_exception_templated<ExecutionFailException>, ExecutionEndedException
 	{};
 
 	namespace exceptions

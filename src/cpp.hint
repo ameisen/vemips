@@ -1,0 +1,42 @@
+#define __prepacked
+#define _packed_struct struct
+#define _forceinline
+#define _nothrow
+#define _pure
+#define _flatten
+#define _noinline
+#define _used
+#define _func_const
+#define _segment(name)
+#define _noreturn_pre
+#define _noreturn_post
+#define _block_forceinline
+#define _empty_bases
+#define _no_unique
+#define _unlikely(...) (__VA_ARGS__)
+#define _likely(...) (__VA_ARGS__)
+#define VEMIPS_ITABLE_EXPORT
+#define MAKE_BITFLAG_ENUM(enum_type)
+#define _forceinline_lambda(...) __VA_ARGS__
+#define VEMIPS_JIT_ABI
+#define VEMIPS_JIT_ABI_INFIX
+#define _pragma_small_code
+#define _pragma_default_code
+#define _result_noalias
+#define _cold
+#define IS_INSTRUCTION(...) true
+#define xassert(...) __assume(__VA_ARGS__)
+#define xunreachable(...) __assume(false)
+#define _clear_cache(...)
+//#define Cop1InstructionDef(...)
+//#define ProcInstructionDef(...)
+#define THROWS_WITHOUT_COPROCESSOR_0 OpFlags::None
+#define WITH_COPROCESSOR_0 false
+#define COP1_NOEXCEPT(...)
+#define offsetof(...) 0
+#define _make_qual(type) type
+#define _SW_INVALID 0
+#define _SW_INEXACT 0
+#define stdin 0
+#define stdout 1
+#define stderr 2

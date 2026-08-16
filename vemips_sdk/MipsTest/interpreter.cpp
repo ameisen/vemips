@@ -15,6 +15,19 @@
 # define PRE_SCAN 0
 #endif
 
+#define WITH_CUSTOM_MALLOC (0 || _WIN32)
+
+#define DEF_NEW_DELETE WITH_CUSTOM_MALLOC
+#include "malloc.h"
+
+template <typename T>
+using test_allocator =
+#if DEF_NEW_DELETE
+  musl::allocator<T>;
+#else
+  std::allocator<T>;
+#endif
+
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -759,7 +772,7 @@ namespace {
             // r = special case [->+<] (*(ptr - 1) += *ptr; *ptr = 0
 
             loops.push_back(uint32(recoded.size() - 1));
-						
+
             const uint32 target = code.size_bytes();
             const uint32 match = 0;
 
@@ -872,14 +885,17 @@ namespace {
               *reinterpret_cast<uint8 *__restrict>(return_loc) = uint8(return_loc_val);
             }
             else if (compare_value <= std::numeric_limits<uint16>::max()) [[likely]] {
-              *reinterpret_cast<uint16 *__restrict>(return_loc) = uint16(return_loc_val);
+              std::memcpy(return_loc, &return_loc_val, sizeof(uint16));
+              //*reinterpret_cast<uint16 *__restrict>(return_loc) = uint16(return_loc_val);
             }
             else if (compare_value <= std::numeric_limits<uint32>::max()) [[unlikely]] {
-              *reinterpret_cast<uint32 *__restrict>(return_loc) = return_loc_val;
+              std::memcpy(return_loc, &return_loc_val, sizeof(uint32));
+              //*reinterpret_cast<uint32 *__restrict>(return_loc) = return_loc_val;
             }
             else {
               UNREACHABLE();
-              *reinterpret_cast<uint64 *__restrict>(return_loc) = return_loc_val;
+              //*reinterpret_cast<uint64 *__restrict>(return_loc) = return_loc_val;
+              std::memcpy(return_loc, &return_loc_val, sizeof(uint64));
             }
 #endif
           }  break;
@@ -887,7 +903,7 @@ namespace {
         ++instruction_pointer;
       }
     }
-		
+
 		recoded.shrink_to_fit();
 
     return recoded;
@@ -1463,13 +1479,13 @@ static constexpr int pow10i(int exponent)
 	{
 		return 0;
 	}
-	
+
 	int result = 1;
 	for(; exponent > 0; --exponent)
 	{
 		result *= 10;
 	}
-	
+
 	return result;
 }
 
@@ -1480,12 +1496,12 @@ static constexpr std::array<int, 3> split_version3(const int version, const unsi
 	const int major_version = (version / major_version_div);
 	const int minor_version = (version / minor_version_div) - (major_version * pow10i(major_shift - minor_shift));
 	const int build_version = (version) - (major_version * major_version_div) - (minor_version * minor_version_div);
-	
+
 	return { major_version, minor_version, build_version };
 }
 
 static void print_toolchain()
-{	
+{
 	#if defined(_MSC_VER) && !defined(__clang__)
 	{
 		const auto msvc_version = split_version3(_MSC_FULL_VER, 7, 5);
@@ -1507,7 +1523,7 @@ static void print_toolchain()
 	#else
 	std::puts("Toolchain: unknown");
 	#endif
-	
+
 	#if defined(__MUSL__)
 		#if defined(__MUSL_VER_MAJOR__)
 	fmt::println("       libc: musl {}.{}.{}", __MUSL_VER_MAJOR__, __MUSL_VER_MINOR__, __MUSL_VER_PATCH__);
@@ -1521,7 +1537,7 @@ static void print_toolchain()
 	#else
 	std::puts("       libc: unknown");
 	#endif
-	
+
 	#if defined(_LIBCPP_VERSION)
 	{
 		const auto libcpp_version = split_version3(_LIBCPP_VERSION, 4, 2);
@@ -1551,6 +1567,47 @@ static void print_toolchain()
 }
 
 int main() {
+#if 0
+	void* foo0 = musl::mmalloc(11);
+	void* foo1 = musl::mmalloc(11);
+	fmt::println("foo0: {}", foo0);
+	fmt::println("foo1: {}", foo1);
+	//free(foo1);
+	musl::mfree(foo0);
+	return 0;
+#elif 0
+  struct mem_pair {
+    void* address;
+    size_t size;
+  };
+
+  size_t total_size = 0;
+  std::vector<mem_pair, test_allocator<mem_pair>> test_vector;
+  for (size_t i = 0; i < 1'000'000'000; ++i) {
+    fmt::println("{}: {}\n", i, total_size);
+    if (rand() % 2 == 0) {
+      // alloc
+      size_t size = rand() % 200;
+      void* new_ptr = musl::mmalloc(size);
+      fmt::println("{:08X}\n", (uintptr_t)new_ptr);
+      test_vector.emplace_back(new_ptr, size);
+      total_size += size;
+    }
+    else {
+      // free
+      if (test_vector.empty()) {
+        continue;
+      }
+      size_t index = rand() % test_vector.size();
+      musl::mfree(test_vector[index].address);
+      total_size -= test_vector[index].size;
+      test_vector.erase(test_vector.begin() + index);
+    }
+  }
+
+  return 0;
+#endif
+  
   static constexpr const auto code = std::to_array(bench::program);
   check(code.size() <= std::numeric_limits<uint32>::max());
 
@@ -1559,7 +1616,7 @@ int main() {
   const auto matching_brackets = pre_scan(code);
 
 	std::puts("Brainfuck Test Interpreter");
-	
+
 	print_toolchain();
 
   fmt::println("Generating {} via Brainfuck", bench::name);

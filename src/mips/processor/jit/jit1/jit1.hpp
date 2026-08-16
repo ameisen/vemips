@@ -4,14 +4,14 @@
 #define USE_CACHE 1
 
 #include "common.hpp"
+#include "mips_common.hpp"
 
-#include <unordered_map>
 #include <bit>
 #include <array>
-#include "mips_common.hpp"
 #include <cassert>
-#include <list>
-#include <limits>
+
+#include "jit1_xbyak.hpp"
+#include "processor/jit/jit.hpp"
 
 #include "runtime/basic_allocator.hpp"
 #include "runtime/directory_table.hpp"
@@ -27,11 +27,15 @@ namespace {
 	namespace _detail {
 		using instruction_info = mips::instructions::InstructionInfo;
 
-		static inline bool is_instruction(const instruction_info &lhs, const instruction_info *rhs) {
+		[[nodiscard]]
+		_func_const
+		static inline _nothrow bool is_instruction(const instruction_info &lhs, const instruction_info *rhs) noexcept {
 			return &lhs == rhs;
 		}
 
-		static inline bool is_instruction(const instruction_info &lhs, const instruction_info &rhs) {
+		[[nodiscard]]
+		_func_const
+		static inline _nothrow bool is_instruction(const instruction_info &lhs, const instruction_info &rhs) noexcept {
 			return &lhs == &rhs;
 		}
 
@@ -40,12 +44,14 @@ namespace {
 			bool is_instruction = false;
 			bool is_hazard_barrier = false;
 
-			hazard_barrier_instruction(const bool _is_instruction, const bool _is_hazard_barrier)
+			_nothrow hazard_barrier_instruction(const bool _is_instruction, const bool _is_hazard_barrier) noexcept
 				: is_instruction(_is_instruction || _is_hazard_barrier)
 				, is_hazard_barrier(_is_hazard_barrier)
 			{}
 
-			operator bool() const
+			[[nodiscard]]
+			_pure // not really pure, but acts like it
+			_nothrow operator bool() const noexcept
 			{
 				return is_instruction;
 			}
@@ -54,12 +60,12 @@ namespace {
 }
 
 #define IS_INSTRUCTION(instr, ref) \
-	[&]() -> bool { \
+	[&] () noexcept -> bool { \
 		return _detail::is_instruction(mips::instructions::StaticProc_ ## ref, instr); \
 	}()
 
 #define IS_INSTRUCTION_HB(instr, ref) \
-	[&]() -> _detail::hazard_barrier_instruction { \
+	[&] () noexcept -> _detail::hazard_barrier_instruction { \
 		return { \
 			_detail::is_instruction(mips::instructions::StaticProc_ ## ref, instr), \
 			_detail::is_instruction(mips::instructions::StaticProc_ ## ref ## _HB, instr) \
@@ -68,7 +74,9 @@ namespace {
 
 namespace mips {
 	class processor;
-	class jit1 final {
+
+	class jit1 final : public jit_base
+	{
 		friend class Jit1_CodeGen;
 
 		static constexpr const uint32 ChunkSize = 0x100; // ChunkSize represents the size for MIPS memory.
@@ -78,25 +86,30 @@ namespace mips {
 		static constexpr const size_t ChunkSizeLog2 = std::bit_width(ChunkSize - 1UZ);
 		static constexpr const size_t RemainingLog2 = 32 - ChunkSizeLog2 - 8 - 8;
 		static constexpr const size_t NumInstructionsChunk = ChunkSize / 4;
-		using ChunkOffset = std::array<uint32, NumInstructionsChunk>;
-		struct Chunk final {
-			struct patch final {
-				uint32 offset;
-				uint32 target;
-				enum class types : uint8
-				{
-					full
-				} type;
-			};
 
+	public:
+		using ChunkOffset = std::array<uint32, NumInstructionsChunk>;
+
+		struct patch final {
+			uptr base_address;
+			uptr_guest target;
+			enum class types : uint8
+			{
+				indeterminate
+			} type;
+
+			bool set_pc : 1;
+
+		};
+	private:
+
+		struct Chunk final {
 			ChunkOffset * __restrict m_chunk_offset = nullptr;
 			uint8 * __restrict m_data = nullptr;
-			// TODO : replace with a chunked vector
-			std::unique_ptr<std::list<patch>> m_patches;
+			std::optional<instruction_t> last_chunk_last_instruction;
+			std::vector<patch> patches;
 			uint32 m_offset = 0;
 			uint32 m_datasize = 0;
-
-			bool ends_with_delay_branch : 1 = false;
 #if 0
 			// TODO there are better ways to handle this that don't require reconfiguring the entire chunk.
 			bool m_has_fixups = false;
@@ -108,7 +121,9 @@ namespace mips {
 
 		template <typename T>
 		struct identity_hash final {
-			_forceinline T operator()(T v) const __restrict {
+			[[nodiscard]]
+			_func_const
+			_forceinline _nothrow T operator()(T v) const __restrict noexcept {
 				return v;
 			}
 		};
@@ -116,13 +131,13 @@ namespace mips {
 		struct chunk_data;
 		static void initialize_chunk(chunk_data& __restrict chunk);
 
-		static inline basic_allocator<ChunkOffset> m_chunkoffset_allocator;
+		static basic_allocator<ChunkOffset> m_chunkoffset_allocator;
 
 		struct chunk_data final {
 		private:
 			struct chunk_deleter final
 			{
-				static void operator()(Chunk* __restrict chunk)
+				static _nothrow void operator()(Chunk* __restrict chunk) noexcept
 				{
 					chunk->release();
 					delete chunk;
@@ -155,6 +170,8 @@ namespace mips {
 
 			_nothrow void release() noexcept;
 
+			[[nodiscard]]
+			_pure
 			_forceinline _nothrow bool contained() const __restrict {
 				return static_cast<bool>(chunk);
 			}
@@ -170,6 +187,7 @@ namespace mips {
 			_forceinline bool contains(const uint32 idx) const {
 				return m_Data[idx].contained();
 			}
+			[[nodiscard]]
 			_forceinline chunk_data& operator [] (uint32 idx);
 		};
 
@@ -185,6 +203,7 @@ namespace mips {
 			_forceinline bool contains(const uint32 idx) const {
 				return m_Data[idx] != nullptr;
 			}
+			[[nodiscard]]
 			_forceinline MapLevel1 & operator [] (uint32 idx) {
 				MapLevel1 * __restrict &result = m_Data[idx];
 				if (!result) {
@@ -206,6 +225,7 @@ namespace mips {
 			_forceinline bool contains(const uint32 idx) const {
 				return m_Data[idx] != nullptr;
 			}
+			[[nodiscard]]
 			_forceinline MapLevel2 & operator [] (uint32 idx) {
 				MapLevel2 * __restrict &result = m_Data[idx];
 				if (!result) {
@@ -217,7 +237,10 @@ namespace mips {
 #endif
 
 	public:
-		using jit_instructionexec_t = uint64(*) (uint64 instruction, uint64 processor, uint32 pc_runner, uint64, uint64, uint64);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgcc-compat"
+		using jit_instructionexec_t = uint64 (VEMIPS_JIT_ABI_INFIX * VEMIPS_JIT_ABI) (uint64 instruction, uint64 processor, uint32 pc_runner, uint64, uint64, uint64);
+#pragma clang diagnostic pop
 
 	private:
 
@@ -232,47 +255,59 @@ namespace mips {
 		_no_unique
 		instruction_cache_t lookup_cache_;
 		processor& __restrict processor_;
-		#if USE_CACHE
+#if USE_CACHE
 		struct cache_element final
 		{
 			Chunk * __restrict chunk_ = nullptr;
 			ChunkOffset * __restrict chunk_offset_ = nullptr;
-			uint32 chunk_address_ = uint32(-1);
+			uptr_guest chunk_address_ = uptr_guest(-1);
 		};
 		std::array<cache_element, 6> last_cached;
 		uint32 last_cached_index = 0;
-		#endif
-		Chunk* __restrict flush_chunk_ = nullptr;
-		size_t largest_instruction_ = 0;
+#endif
+		std::pair<const char*, size_t> largest_instruction_ = { nullptr, 0 };
 		std::shared_ptr<char[]> global_exec_data;
-		uint32 current_executing_chunk_address_ = 0;
-		uint32 flush_address_ = 0;
 
-		void populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, uint32 start_address, bool update);
+		void populate_chunk(ChunkOffset & __restrict chunk_offset, Chunk & __restrict chunk, uptr_guest start_address, bool update);
 	public:
 		jit1(processor & __restrict _processor);
 		~jit1();
 
-		void execute_instruction(uint32 address);
-		jit_instructionexec_t get_instruction(uint32 address);
-		jit_instructionexec_t fetch_instruction(uint32 address);
-		Chunk * get_chunk(uint32 address) const;
+		void execute_instruction(uptr_guest address);
+		[[nodiscard]]
+		VEMIPS_JIT_ABI jit_instructionexec_t VEMIPS_JIT_ABI_INFIX get_instruction(uptr_guest address);
+		[[nodiscard]]
+		jit_instructionexec_t fetch_instruction(uptr_guest address);
+		[[nodiscard]]
+		Chunk* get_chunk(uptr_guest address) const;
+		[[nodiscard]]
+		Chunk* get_chunk_by_pointer(uptr ptr) const noexcept;
 
 		[[nodiscard]]
-		size_t get_max_instruction_size() const __restrict {
+		_pure
+		_nothrow std::pair<const char*, size_t> get_max_instruction_size() const __restrict noexcept {
 			return largest_instruction_;
 		}
 
 		[[nodiscard]]
+		_func_const
 		// ReSharper disable once CppMemberFunctionMayBeStatic
-		uint32 get_chunk_size() const __restrict {
+		_nothrow uint32 get_chunk_size() const __restrict noexcept {
 			return ChunkSize;
 		}
 
 		[[nodiscard]]
-		static uint32 get_static_chunk_size()
+		_func_const
+		static _nothrow uint32 get_static_chunk_size() noexcept
 		{
 			return ChunkSize;
+		}
+
+		[[nodiscard]]
+		_pure
+		_nothrow _forceinline processor& get_processor() const noexcept
+		{
+			return processor_;
 		}
 
 	private:

@@ -1,10 +1,5 @@
 #pragma once
 
-#ifndef FMT_HEADER_ONLY
-#	define FMT_HEADER_ONLY 1
-#	define FMT_HEADER_ONLY_DEFINED 1
-#endif
-
 #include <string_view>
 #include <cstdio>
 
@@ -74,8 +69,3 @@ namespace buildcarbide {
 #undef check
 // ReSharper disable once CppInconsistentNaming
 #define check(condition) carbide_check(condition)
-
-#ifdef FMT_HEADER_ONLY_DEFINED
-#	undef FMT_HEADER_ONLY
-#	undef FMT_HEADER_ONLY_DEFINED
-#endif

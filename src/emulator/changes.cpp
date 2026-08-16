@@ -1,10 +1,11 @@
 #include "pch.hpp"
 #include "changes.hpp"
+#include <common.hpp>
 
 #include <fmt/format.h>
 
 
-void vemips::print_changes()
+_nothrow void vemips::print_changes() noexcept
 {
 	fmt::println(
 		"Changelist:\n"
